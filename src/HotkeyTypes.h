@@ -90,10 +90,27 @@ struct HotkeyRule {
     static HotkeyRule fromJson(const QJsonObject &object);
 };
 
+struct LauncherItemAppearance {
+    int iconWidth = 48;
+    int iconHeight = 48;
+    int itemWidth = 64;
+    int itemHeight = 80;
+    QString fontFamily;
+    int fontPointSize = 8;
+    int horizontalSpacing = 0;
+    int verticalSpacing = 0;
+    bool multilineText = true;
+    bool showEllipsis = false;
+
+    QJsonObject toJson() const;
+    static LauncherItemAppearance fromJson(const QJsonObject &object);
+};
+
 struct AppSettings {
     QString language = "zh-CN";
     bool hotkeysEnabled = true;
     QString themeMode = "system";
+    LauncherItemAppearance itemAppearance;
 
     QJsonObject toJson() const;
     static AppSettings fromJson(const QJsonObject &object);

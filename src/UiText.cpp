@@ -34,6 +34,17 @@ QString text(const QString &language, Key key)
     case Key::ThemeSystem: return en ? "Follow system" : QString::fromUtf8("跟随系统");
     case Key::ThemeLight: return en ? "Light" : QString::fromUtf8("亮色");
     case Key::ThemeDark: return en ? "Dark" : QString::fromUtf8("暗色");
+    case Key::ItemAppearance: return en ? "Item appearance" : QString::fromUtf8("条目外观");
+    case Key::IconWidth: return en ? "Icon width" : QString::fromUtf8("图标宽度");
+    case Key::IconHeight: return en ? "Icon height" : QString::fromUtf8("图标高度");
+    case Key::ItemWidth: return en ? "Item width" : QString::fromUtf8("条目宽度");
+    case Key::ItemHeight: return en ? "Item height" : QString::fromUtf8("条目高度");
+    case Key::FontFamily: return en ? "Font" : QString::fromUtf8("字体");
+    case Key::FontPointSize: return en ? "Font size" : QString::fromUtf8("字号");
+    case Key::HorizontalSpacing: return en ? "Horizontal spacing" : QString::fromUtf8("水平间隔");
+    case Key::VerticalSpacing: return en ? "Vertical spacing" : QString::fromUtf8("垂直间隔");
+    case Key::MultilineText: return en ? "Multiline text" : QString::fromUtf8("多行文字");
+    case Key::ShowEllipsis: return en ? "Show ellipsis" : QString::fromUtf8("显示省略号");
     case Key::Chinese: return QString::fromUtf8("中文");
     case Key::English: return "English";
     case Key::Ok: return en ? "OK" : QString::fromUtf8("确定");

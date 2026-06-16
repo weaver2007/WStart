@@ -15,6 +15,7 @@
 #include <QRect>
 #include <QScrollArea>
 #include <QSet>
+#include <QTimer>
 #include <QButtonGroup>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -43,6 +44,8 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+    void showEvent(QShowEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
 private slots:
@@ -73,6 +76,10 @@ private:
     void setLanguage(const QString &language);
     void setThemeMode(const QString &themeMode);
     void applyTheme();
+    void showItemAppearanceDialog();
+    void applyItemAppearanceChange();
+    int fixedLauncherWidth() const;
+    void applyFixedLauncherWidth();
     bool effectiveDarkTheme() const;
     void upsertRule(const HotkeyRule &rule);
     void setStatus(const QString &message);
@@ -105,6 +112,14 @@ private:
     ResizeRegion resizeRegionAt(const QPoint &position) const;
     void updateResizeCursor(const QPoint &position);
     void performResize(const QPoint &globalPosition);
+    void finishInteractiveMove();
+    void snapToTopIfNeeded();
+    void setTopAutoHidden(bool hidden);
+    void revealFromTopAutoHide();
+    void updateTopAutoHide();
+    void setAlwaysOnTop(bool enabled);
+    QScreen *currentScreen() const;
+    QRect currentScreenAvailableGeometry() const;
 
     RuleStore m_store;
     ActionRunner m_runner;
@@ -132,9 +147,13 @@ private:
     QAction *m_themeSystemAction = nullptr;
     QAction *m_themeLightAction = nullptr;
     QAction *m_themeDarkAction = nullptr;
+    QAction *m_itemAppearanceAction = nullptr;
     QPoint m_dragPosition;
     QPoint m_resizeStartGlobal;
     QRect m_resizeStartGeometry;
     ResizeRegion m_resizeRegion = ResizeRegion::None;
     bool m_resizing = false;
+    QTimer m_autoHideTimer;
+    QRect m_autoHideShownGeometry;
+    bool m_topAutoHidden = false;
 };

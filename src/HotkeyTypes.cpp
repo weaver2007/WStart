@@ -4,6 +4,8 @@
 #include <QStringList>
 #include <QUuid>
 
+#include <algorithm>
+
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -295,8 +297,53 @@ QJsonObject AppSettings::toJson() const
     return {
         {"language", normalizedLanguage},
         {"hotkeysEnabled", hotkeysEnabled},
-        {"themeMode", normalizedTheme}
+        {"themeMode", normalizedTheme},
+        {"itemAppearance", itemAppearance.toJson()}
     };
+}
+
+QJsonObject LauncherItemAppearance::toJson() const
+{
+    LauncherItemAppearance normalized = LauncherItemAppearance::fromJson({
+        {"iconWidth", iconWidth},
+        {"iconHeight", iconHeight},
+        {"itemWidth", itemWidth},
+        {"itemHeight", itemHeight},
+        {"fontFamily", fontFamily},
+        {"fontPointSize", fontPointSize},
+        {"horizontalSpacing", horizontalSpacing},
+        {"verticalSpacing", verticalSpacing},
+        {"multilineText", multilineText},
+        {"showEllipsis", showEllipsis}
+    });
+    return {
+        {"iconWidth", normalized.iconWidth},
+        {"iconHeight", normalized.iconHeight},
+        {"itemWidth", normalized.itemWidth},
+        {"itemHeight", normalized.itemHeight},
+        {"fontFamily", normalized.fontFamily},
+        {"fontPointSize", normalized.fontPointSize},
+        {"horizontalSpacing", normalized.horizontalSpacing},
+        {"verticalSpacing", normalized.verticalSpacing},
+        {"multilineText", normalized.multilineText},
+        {"showEllipsis", normalized.showEllipsis}
+    };
+}
+
+LauncherItemAppearance LauncherItemAppearance::fromJson(const QJsonObject &object)
+{
+    LauncherItemAppearance appearance;
+    appearance.iconWidth = std::clamp(object.value("iconWidth").toInt(appearance.iconWidth), 16, 128);
+    appearance.iconHeight = std::clamp(object.value("iconHeight").toInt(appearance.iconHeight), 16, 128);
+    appearance.itemWidth = std::clamp(object.value("itemWidth").toInt(appearance.itemWidth), 40, 180);
+    appearance.itemHeight = std::clamp(object.value("itemHeight").toInt(appearance.itemHeight), 44, 220);
+    appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
+    appearance.fontPointSize = std::clamp(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.horizontalSpacing = std::clamp(object.value("horizontalSpacing").toInt(appearance.horizontalSpacing), 0, 40);
+    appearance.verticalSpacing = std::clamp(object.value("verticalSpacing").toInt(appearance.verticalSpacing), 0, 40);
+    appearance.multilineText = object.value("multilineText").toBool(appearance.multilineText);
+    appearance.showEllipsis = object.value("showEllipsis").toBool(appearance.showEllipsis);
+    return appearance;
 }
 
 AppSettings AppSettings::fromJson(const QJsonObject &object)
@@ -309,5 +356,6 @@ AppSettings AppSettings::fromJson(const QJsonObject &object)
     const QString themeValue = object.value("themeMode").toString(settings.themeMode);
     settings.themeMode = themeValue.compare("light", Qt::CaseInsensitive) == 0 ? "light" :
         themeValue.compare("dark", Qt::CaseInsensitive) == 0 ? "dark" : "system";
+    settings.itemAppearance = LauncherItemAppearance::fromJson(object.value("itemAppearance").toObject());
     return settings;
 }

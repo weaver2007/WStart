@@ -6,14 +6,20 @@
 #include <QActionGroup>
 #include <QAbstractButton>
 #include <QApplication>
+#include <QCheckBox>
 #include <QCloseEvent>
 #include <QBrush>
 #include <QCryptographicHash>
+#include <QCursor>
 #include <QDate>
+#include <QDialog>
 #include <QDialogButtonBox>
 #include <QFileInfo>
+#include <QFontComboBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGuiApplication>
+#include <QHideEvent>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QMenu>
@@ -22,9 +28,12 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QScreen>
+#include <QShowEvent>
 #include <QStatusBar>
 #include <QStyle>
 #include <QStyleHints>
+#include <QSpinBox>
 #include <QStyledItemDelegate>
 #include <QTextOption>
 #include <QTimer>
@@ -32,27 +41,43 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <utility>
+
+#ifdef Q_OS_WIN
+#    ifndef WIN32_LEAN_AND_MEAN
+#        define WIN32_LEAN_AND_MEAN
+#    endif
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    include <windows.h>
+#endif
 
 namespace {
 constexpr int RuleIdRole = Qt::UserRole + 2;
 constexpr int HeaderHeight = 50;
 constexpr int FixedIconColumns = 4;
-constexpr int MediumIconCellWidth = 64;
-constexpr int LauncherItemIconSize = 48;
-constexpr int LauncherItemCellHeight = 80;
+constexpr int WindowMinimumHeight = 560;
 constexpr int SectionHorizontalMargin = 8;
 constexpr int ScrollBarReserveWidth = 12;
-constexpr int FixedWindowWidth = FixedIconColumns * MediumIconCellWidth + SectionHorizontalMargin * 2 + ScrollBarReserveWidth;
+constexpr int AutoHideSnapDistance = 36;
+constexpr int AutoHideTriggerHeight = 4;
+constexpr int AutoHideRevealDistance = 4;
+constexpr int AutoHidePollIntervalMs = 80;
 
 class IconGridDelegate final : public QStyledItemDelegate {
 public:
-    using QStyledItemDelegate::QStyledItemDelegate;
+    explicit IconGridDelegate(LauncherItemAppearance appearance, QObject *parent = nullptr)
+        : QStyledItemDelegate(parent)
+        , m_appearance(std::move(appearance))
+    {
+    }
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
     {
         QStyleOptionViewItem opt(option);
         initStyleOption(&opt, index);
-        const QString text = opt.text;
+        const QString text = m_appearance.multilineText ? opt.text : opt.text.simplified();
         const QIcon icon = opt.icon;
         opt.text.clear();
         opt.icon = QIcon();
@@ -63,7 +88,7 @@ public:
         const QRect itemRect = option.rect.adjusted(2, 2, -2, -2);
         const QSize iconSize = option.decorationSize;
         const QRect iconRect(itemRect.left() + (itemRect.width() - iconSize.width()) / 2,
-                             itemRect.top() + 4,
+                             itemRect.top() + 3,
                              iconSize.width(),
                              iconSize.height());
 
@@ -83,12 +108,39 @@ public:
         } else {
             painter->setPen(opt.palette.color(QPalette::Text));
         }
+        QFont textFont = opt.font;
+        if (!m_appearance.fontFamily.isEmpty()) {
+            textFont.setFamily(m_appearance.fontFamily);
+        }
+        textFont.setPointSize(m_appearance.fontPointSize);
+        painter->setFont(textFont);
 
         QTextOption textOption(Qt::AlignHCenter | Qt::AlignTop);
-        textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-        painter->drawText(textRect, text, textOption);
+        textOption.setWrapMode(m_appearance.multilineText ? QTextOption::WrapAtWordBoundaryOrAnywhere : QTextOption::NoWrap);
+        if (m_appearance.showEllipsis) {
+            QFontMetrics metrics(textFont);
+            if (m_appearance.multilineText) {
+                const QString elided = metrics.elidedText(text.simplified(), Qt::ElideRight, textRect.width() * qMax(1, textRect.height() / qMax(1, metrics.lineSpacing())));
+                painter->drawText(textRect, elided, textOption);
+            } else {
+                const QString elided = metrics.elidedText(text.simplified(), Qt::ElideRight, textRect.width());
+                painter->drawText(textRect, elided, textOption);
+            }
+        } else {
+            painter->drawText(textRect, text, textOption);
+        }
         painter->restore();
     }
+
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        Q_UNUSED(option);
+        Q_UNUSED(index);
+        return {m_appearance.itemWidth, m_appearance.itemHeight};
+    }
+
+private:
+    LauncherItemAppearance m_appearance;
 };
 QVector<LauncherCategory> fixedCategories()
 {
@@ -478,12 +530,13 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowIcon(QIcon(":/app.svg"));
     setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
     setMouseTracking(true);
-    resize(FixedWindowWidth, 720);
-    setMinimumSize(FixedWindowWidth, 560);
-    setMaximumSize(FixedWindowWidth, QWIDGETSIZE_MAX);
-    setMaximumWidth(FixedWindowWidth);
+    resize(fixedLauncherWidth(), 720);
+    applyFixedLauncherWidth();
     buildUi();
+    setAlwaysOnTop(true);
     qApp->installEventFilter(this);
+    m_autoHideTimer.setInterval(AutoHidePollIntervalMs);
+    connect(&m_autoHideTimer, &QTimer::timeout, this, &MainWindow::updateTopAutoHide);
 
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this]() {
         if (m_document.settings.themeMode == "system") {
@@ -710,6 +763,9 @@ void MainWindow::buildSettingsMenu()
     connect(m_themeLightAction, &QAction::triggered, this, [this]() { setThemeMode("light"); });
     connect(m_themeDarkAction, &QAction::triggered, this, [this]() { setThemeMode("dark"); });
 
+    m_itemAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::ItemAppearance));
+    connect(m_itemAppearanceAction, &QAction::triggered, this, &MainWindow::showItemAppearanceDialog);
+
     retranslateUi();
 }
 
@@ -737,6 +793,9 @@ void MainWindow::retranslateUi()
     }
     if (m_settingsMenu && m_settingsMenu->actions().size() > 2 && m_settingsMenu->actions().at(2)->menu()) {
         m_settingsMenu->actions().at(2)->menu()->setTitle(uiText(UiText::Key::Theme));
+    }
+    if (m_itemAppearanceAction) {
+        m_itemAppearanceAction->setText(uiText(UiText::Key::ItemAppearance));
     }
     if (m_chineseAction) {
         const QSignalBlocker blocker(m_chineseAction);
@@ -771,6 +830,8 @@ void MainWindow::retranslateUi()
 void MainWindow::showSettings()
 {
     show();
+    setAlwaysOnTop(true);
+    revealFromTopAutoHide();
     raise();
     activateWindow();
 }
@@ -830,6 +891,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (!isVisible()) {
         return QMainWindow::eventFilter(watched, event);
     }
+    if (m_topAutoHidden) {
+        return QMainWindow::eventFilter(watched, event);
+    }
     if (event->type() != QEvent::MouseMove &&
         event->type() != QEvent::MouseButtonPress &&
         event->type() != QEvent::MouseButtonDblClick &&
@@ -851,6 +915,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true;
         }
         if (mouseEvent->buttons().testFlag(Qt::LeftButton) && !m_dragPosition.isNull()) {
+            if (m_topAutoHidden) {
+                revealFromTopAutoHide();
+                m_dragPosition = mouseEvent->globalPosition().toPoint() - frameGeometry().topLeft();
+            }
             move(mouseEvent->globalPosition().toPoint() - m_dragPosition);
             return true;
         }
@@ -892,6 +960,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     }
 
     if (event->type() == QEvent::MouseButtonRelease && mouseEvent->button() == Qt::LeftButton) {
+        const bool wasDraggingWindow = !m_dragPosition.isNull();
+        if (wasDraggingWindow) {
+            m_dragPosition = {};
+            finishInteractiveMove();
+            return true;
+        }
         QWidget *sectionHeader = widget;
         while (sectionHeader && sectionHeader->objectName() != "sectionHeader") {
             sectionHeader = sectionHeader->parentWidget();
@@ -908,6 +982,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
+    if (m_topAutoHidden) {
+        revealFromTopAutoHide();
+    }
     if (event->button() == Qt::LeftButton) {
         m_resizeRegion = resizeRegionAt(event->position().toPoint());
         if (m_resizeRegion != ResizeRegion::None) {
@@ -929,12 +1006,20 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 
 void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
+    if (m_topAutoHidden) {
+        QMainWindow::mouseMoveEvent(event);
+        return;
+    }
     if (m_resizing) {
         performResize(event->globalPosition().toPoint());
         event->accept();
         return;
     }
     if (event->buttons().testFlag(Qt::LeftButton) && !m_dragPosition.isNull()) {
+        if (m_topAutoHidden) {
+            revealFromTopAutoHide();
+            m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
+        }
         move(event->globalPosition().toPoint() - m_dragPosition);
         event->accept();
         return;
@@ -945,10 +1030,16 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
 
 void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 {
+    const bool wasDraggingWindow = !m_dragPosition.isNull();
     m_resizing = false;
     m_resizeRegion = ResizeRegion::None;
     m_dragPosition = {};
     updateResizeCursor(event->position().toPoint());
+    if (wasDraggingWindow) {
+        finishInteractiveMove();
+        event->accept();
+        return;
+    }
     QMainWindow::mouseReleaseEvent(event);
 }
 
@@ -957,6 +1048,26 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     QMainWindow::resizeEvent(event);
     rebuildNavItems();
     updateLauncherGrids();
+}
+
+void MainWindow::hideEvent(QHideEvent *event)
+{
+    if (m_topAutoHidden) {
+        m_topAutoHidden = false;
+        setMinimumHeight(WindowMinimumHeight);
+        setMaximumHeight(QWIDGETSIZE_MAX);
+        if (m_autoHideShownGeometry.isValid()) {
+            setGeometry(m_autoHideShownGeometry);
+        }
+    }
+    m_autoHideTimer.stop();
+    QMainWindow::hideEvent(event);
+}
+
+void MainWindow::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+    setAlwaysOnTop(true);
 }
 
 void MainWindow::leaveEvent(QEvent *event)
@@ -987,6 +1098,7 @@ void MainWindow::loadDocument()
     QString error;
     m_document = m_store.loadDocument(&error);
     m_document.settings.language = UiText::normalizeLanguage(m_document.settings.language);
+    applyFixedLauncherWidth();
     if (!error.isEmpty()) {
         setStatus(error);
     }
@@ -1155,13 +1267,19 @@ void MainWindow::rebuildSections()
                 list->setResizeMode(QListView::Adjust);
                 list->setSelectionMode(QAbstractItemView::SingleSelection);
                 list->setSpacing(0);
-                list->setWordWrap(true);
+                list->setWordWrap(m_document.settings.itemAppearance.multilineText);
                 list->setUniformItemSizes(true);
                 list->setContextMenuPolicy(Qt::CustomContextMenu);
                 list->setProperty("sectionId", section.id);
-                list->setTextElideMode(Qt::ElideNone);
+                list->setTextElideMode(m_document.settings.itemAppearance.showEllipsis ? Qt::ElideRight : Qt::ElideNone);
                 list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-                list->setItemDelegate(new IconGridDelegate(list));
+                list->setItemDelegate(new IconGridDelegate(m_document.settings.itemAppearance, list));
+                QFont itemFont = list->font();
+                if (!m_document.settings.itemAppearance.fontFamily.isEmpty()) {
+                    itemFont.setFamily(m_document.settings.itemAppearance.fontFamily);
+                }
+                itemFont.setPointSize(m_document.settings.itemAppearance.fontPointSize);
+                list->setFont(itemFont);
 
                 for (const HotkeyRule &rule : m_document.rules) {
                     if (rule.sectionId != section.id || !rulePassesFilters(rule)) {
@@ -1178,6 +1296,7 @@ void MainWindow::rebuildSections()
                         text = QString("%1\n ").arg(ruleTitle(rule));
                     }
                     auto *item = new QListWidgetItem(iconForRule(rule), text);
+                    item->setSizeHint(QSize(m_document.settings.itemAppearance.itemWidth, m_document.settings.itemAppearance.itemHeight));
                     item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
                     const QString hotkeyTip = rule.hotkey.isValid() ? rule.hotkey.displayText() : uiText(UiText::Key::UnboundHotkey);
                     item->setToolTip(QString("%1\n%2\n%3").arg(ruleTitle(rule), rule.action.target, hotkeyTip));
@@ -1214,6 +1333,11 @@ void MainWindow::rebuildSections()
 
 void MainWindow::updateLauncherGrids()
 {
+    const LauncherItemAppearance appearance = m_document.settings.itemAppearance;
+    const QSize iconSize(appearance.iconWidth, appearance.iconHeight);
+    const QSize gridSize(appearance.itemWidth + appearance.horizontalSpacing,
+                         appearance.itemHeight + appearance.verticalSpacing);
+
     for (QListWidget *list : std::as_const(m_sectionLists)) {
         if (!list) {
             continue;
@@ -1222,9 +1346,28 @@ void MainWindow::updateLauncherGrids()
         list->setViewMode(QListView::IconMode);
         list->setFlow(QListView::LeftToRight);
         list->setWrapping(true);
-        list->setIconSize(QSize(LauncherItemIconSize, LauncherItemIconSize));
-        list->setGridSize(QSize(MediumIconCellWidth, LauncherItemCellHeight));
-        list->setMinimumHeight(LauncherItemCellHeight + 4);
+        list->setSpacing(0);
+        list->setWordWrap(appearance.multilineText);
+        list->setTextElideMode(appearance.showEllipsis ? Qt::ElideRight : Qt::ElideNone);
+        list->setIconSize(iconSize);
+        list->setGridSize(gridSize);
+        for (int row = 0; row < list->count(); ++row) {
+            if (QListWidgetItem *item = list->item(row)) {
+                item->setSizeHint(QSize(appearance.itemWidth, appearance.itemHeight));
+            }
+        }
+        QFont itemFont = list->font();
+        if (!appearance.fontFamily.isEmpty()) {
+            itemFont.setFamily(appearance.fontFamily);
+        }
+        itemFont.setPointSize(appearance.fontPointSize);
+        list->setFont(itemFont);
+        auto *oldDelegate = dynamic_cast<IconGridDelegate *>(list->itemDelegate());
+        list->setItemDelegate(new IconGridDelegate(appearance, list));
+        if (oldDelegate) {
+            oldDelegate->deleteLater();
+        }
+        list->setMinimumHeight(gridSize.height() + 4);
         list->setMaximumHeight(QWIDGETSIZE_MAX);
     }
 }
@@ -1261,6 +1404,113 @@ void MainWindow::setThemeMode(const QString &themeMode)
     m_document.settings.themeMode = normalized;
     saveDocumentSilently();
     applyTheme();
+}
+
+void MainWindow::showItemAppearanceDialog()
+{
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(uiText(UiText::Key::ItemAppearance));
+    dialog->setModal(false);
+
+    auto *layout = new QVBoxLayout(dialog);
+    auto *form = new QFormLayout;
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    layout->addLayout(form);
+
+    auto makeSpin = [dialog](int minimum, int maximum, int value, bool pixelSuffix = true) {
+        auto *spin = new QSpinBox(dialog);
+        spin->setRange(minimum, maximum);
+        spin->setValue(value);
+        if (pixelSuffix) {
+            spin->setSuffix(" px");
+        }
+        return spin;
+    };
+
+    const LauncherItemAppearance appearance = m_document.settings.itemAppearance;
+    auto *iconWidth = makeSpin(16, 128, appearance.iconWidth);
+    auto *iconHeight = makeSpin(16, 128, appearance.iconHeight);
+    auto *itemWidth = makeSpin(40, 180, appearance.itemWidth);
+    auto *itemHeight = makeSpin(44, 220, appearance.itemHeight);
+    auto *fontFamily = new QFontComboBox(dialog);
+    if (!appearance.fontFamily.isEmpty()) {
+        fontFamily->setCurrentFont(QFont(appearance.fontFamily));
+    }
+    auto *fontPointSize = makeSpin(6, 18, appearance.fontPointSize, false);
+    auto *horizontalSpacing = makeSpin(0, 40, appearance.horizontalSpacing);
+    auto *verticalSpacing = makeSpin(0, 40, appearance.verticalSpacing);
+    auto *multilineText = new QCheckBox(dialog);
+    multilineText->setChecked(appearance.multilineText);
+    auto *showEllipsis = new QCheckBox(dialog);
+    showEllipsis->setChecked(appearance.showEllipsis);
+
+    form->addRow(uiText(UiText::Key::IconWidth), iconWidth);
+    form->addRow(uiText(UiText::Key::IconHeight), iconHeight);
+    form->addRow(uiText(UiText::Key::ItemWidth), itemWidth);
+    form->addRow(uiText(UiText::Key::ItemHeight), itemHeight);
+    form->addRow(uiText(UiText::Key::FontFamily), fontFamily);
+    form->addRow(uiText(UiText::Key::FontPointSize), fontPointSize);
+    form->addRow(uiText(UiText::Key::HorizontalSpacing), horizontalSpacing);
+    form->addRow(uiText(UiText::Key::VerticalSpacing), verticalSpacing);
+    form->addRow(uiText(UiText::Key::MultilineText), multilineText);
+    form->addRow(uiText(UiText::Key::ShowEllipsis), showEllipsis);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+
+    auto apply = [this, iconWidth, iconHeight, itemWidth, itemHeight, fontFamily, fontPointSize,
+                  horizontalSpacing, verticalSpacing, multilineText, showEllipsis]() {
+        LauncherItemAppearance next;
+        next.iconWidth = iconWidth->value();
+        next.iconHeight = iconHeight->value();
+        next.itemWidth = itemWidth->value();
+        next.itemHeight = itemHeight->value();
+        next.fontFamily = fontFamily->currentFont().family();
+        next.fontPointSize = fontPointSize->value();
+        next.horizontalSpacing = horizontalSpacing->value();
+        next.verticalSpacing = verticalSpacing->value();
+        next.multilineText = multilineText->isChecked();
+        next.showEllipsis = showEllipsis->isChecked();
+        m_document.settings.itemAppearance = LauncherItemAppearance::fromJson(next.toJson());
+        applyItemAppearanceChange();
+    };
+
+    for (QSpinBox *spin : {iconWidth, iconHeight, itemWidth, itemHeight, fontPointSize, horizontalSpacing, verticalSpacing}) {
+        connect(spin, &QSpinBox::valueChanged, this, apply);
+    }
+    connect(fontFamily, &QFontComboBox::currentFontChanged, this, apply);
+    connect(multilineText, &QCheckBox::toggled, this, apply);
+    connect(showEllipsis, &QCheckBox::toggled, this, apply);
+
+    dialog->resize(320, dialog->sizeHint().height());
+    dialog->show();
+}
+
+void MainWindow::applyItemAppearanceChange()
+{
+    applyFixedLauncherWidth();
+    saveDocumentSilently();
+    refreshLauncher();
+}
+
+int MainWindow::fixedLauncherWidth() const
+{
+    const LauncherItemAppearance appearance = m_document.settings.itemAppearance;
+    const int cellWidth = appearance.itemWidth + appearance.horizontalSpacing;
+    return FixedIconColumns * cellWidth + SectionHorizontalMargin * 2 + ScrollBarReserveWidth;
+}
+
+void MainWindow::applyFixedLauncherWidth()
+{
+    const int width = fixedLauncherWidth();
+    setMinimumSize(width, WindowMinimumHeight);
+    setMaximumSize(width, QWIDGETSIZE_MAX);
+    setMaximumWidth(width);
+    if (this->width() != width) {
+        resize(width, height());
+    }
 }
 
 bool MainWindow::effectiveDarkTheme() const
@@ -1906,4 +2156,158 @@ void MainWindow::performResize(const QPoint &globalPosition)
     }
 
     setGeometry(next);
+}
+
+void MainWindow::finishInteractiveMove()
+{
+    if (!m_resizing) {
+        snapToTopIfNeeded();
+    }
+}
+
+void MainWindow::snapToTopIfNeeded()
+{
+    if (m_topAutoHidden || !isVisible() || isMinimized()) {
+        return;
+    }
+
+    const QPoint cursorPosition = QCursor::pos();
+    QScreen *targetScreen = QGuiApplication::screenAt(cursorPosition);
+    const QRect screenGeometry = targetScreen ? targetScreen->availableGeometry() : currentScreenAvailableGeometry();
+    if (screenGeometry.isNull()) {
+        return;
+    }
+
+    const int windowTopDistance = qAbs(frameGeometry().top() - screenGeometry.top());
+    const int cursorTopDistance = qAbs(cursorPosition.y() - screenGeometry.top());
+    if (windowTopDistance > AutoHideSnapDistance && cursorTopDistance > AutoHideSnapDistance) {
+        m_autoHideShownGeometry = {};
+        m_autoHideTimer.stop();
+        return;
+    }
+
+    QRect next = geometry();
+    next.moveTop(screenGeometry.top());
+    next.moveLeft(qBound(screenGeometry.left(), next.left(), screenGeometry.right() - next.width() + 1));
+    setGeometry(next);
+    m_autoHideShownGeometry = geometry();
+    setAlwaysOnTop(true);
+    m_autoHideTimer.start();
+}
+
+void MainWindow::setTopAutoHidden(bool hidden)
+{
+    if (m_topAutoHidden == hidden) {
+        return;
+    }
+
+    if (hidden) {
+        m_autoHideShownGeometry = geometry();
+        const QRect screenGeometry = currentScreenAvailableGeometry();
+        QRect hiddenGeometry = m_autoHideShownGeometry;
+        hiddenGeometry.setHeight(AutoHideTriggerHeight);
+        hiddenGeometry.moveTop(screenGeometry.isNull() ? m_autoHideShownGeometry.top() : screenGeometry.top());
+        if (!screenGeometry.isNull()) {
+            hiddenGeometry.moveLeft(qBound(screenGeometry.left(), hiddenGeometry.left(), screenGeometry.right() - hiddenGeometry.width() + 1));
+        }
+        m_topAutoHidden = true;
+        setAlwaysOnTop(true);
+        setMinimumHeight(AutoHideTriggerHeight);
+        setMaximumHeight(AutoHideTriggerHeight);
+        setGeometry(hiddenGeometry);
+        unsetCursor();
+        m_autoHideTimer.start();
+        return;
+    }
+
+    m_topAutoHidden = false;
+    setAlwaysOnTop(true);
+    setMinimumHeight(WindowMinimumHeight);
+    setMaximumHeight(QWIDGETSIZE_MAX);
+    if (m_autoHideShownGeometry.isValid()) {
+        const QRect screenGeometry = currentScreenAvailableGeometry();
+        QRect shownGeometry = m_autoHideShownGeometry;
+        if (!screenGeometry.isNull()) {
+            shownGeometry.moveLeft(qBound(screenGeometry.left(), shownGeometry.left(), screenGeometry.right() - shownGeometry.width() + 1));
+            shownGeometry.moveTop(screenGeometry.top());
+        }
+        setGeometry(shownGeometry);
+    }
+}
+
+void MainWindow::revealFromTopAutoHide()
+{
+    if (m_topAutoHidden) {
+        setTopAutoHidden(false);
+    }
+}
+
+void MainWindow::updateTopAutoHide()
+{
+    if (!isVisible() || isMinimized()) {
+        m_autoHideTimer.stop();
+        return;
+    }
+
+    const QPoint cursorPosition = QCursor::pos();
+    if (m_topAutoHidden) {
+        setAlwaysOnTop(true);
+        const QRect triggerRect = geometry().adjusted(0, 0, 0, AutoHideRevealDistance);
+        if (triggerRect.contains(cursorPosition)) {
+            revealFromTopAutoHide();
+        }
+        return;
+    }
+
+    if (!m_autoHideShownGeometry.isValid()) {
+        m_autoHideTimer.stop();
+        return;
+    }
+
+    if (m_resizing || !m_dragPosition.isNull()) {
+        return;
+    }
+
+    if (!geometry().contains(cursorPosition)) {
+        setTopAutoHidden(true);
+    }
+}
+
+void MainWindow::setAlwaysOnTop(bool enabled)
+{
+#ifdef Q_OS_WIN
+    HWND hwnd = reinterpret_cast<HWND>(winId());
+    if (!hwnd) {
+        return;
+    }
+    const HWND insertAfter = enabled ? HWND_TOPMOST : HWND_NOTOPMOST;
+    SetWindowPos(hwnd,
+                 insertAfter,
+                 0,
+                 0,
+                 0,
+                 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+#else
+    Q_UNUSED(enabled);
+#endif
+}
+
+QScreen *MainWindow::currentScreen() const
+{
+    if (QScreen *windowScreen = screen()) {
+        return windowScreen;
+    }
+    return QGuiApplication::screenAt(frameGeometry().center());
+}
+
+QRect MainWindow::currentScreenAvailableGeometry() const
+{
+    if (QScreen *targetScreen = currentScreen()) {
+        return targetScreen->availableGeometry();
+    }
+    if (QScreen *primary = QGuiApplication::primaryScreen()) {
+        return primary->availableGeometry();
+    }
+    return {};
 }

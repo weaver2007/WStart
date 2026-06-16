@@ -19,6 +19,8 @@ private slots:
     void legacyFileRuleMigratesToProgramCategory();
     void appSettingsRoundTrip();
     void appSettingsDefaultsAndLanguageFallback();
+    void itemAppearanceRoundTrip();
+    void itemAppearanceDefaultsAndFallback();
     void conflictWarnings();
 };
 
@@ -125,11 +127,15 @@ void CoreTests::appSettingsRoundTrip()
     settings.language = "en-US";
     settings.hotkeysEnabled = false;
     settings.themeMode = "dark";
+    settings.itemAppearance.itemWidth = 88;
+    settings.itemAppearance.showEllipsis = true;
 
     const AppSettings parsed = AppSettings::fromJson(settings.toJson());
     QCOMPARE(parsed.language, QString("en-US"));
     QCOMPARE(parsed.hotkeysEnabled, false);
     QCOMPARE(parsed.themeMode, QString("dark"));
+    QCOMPARE(parsed.itemAppearance.itemWidth, 88);
+    QCOMPARE(parsed.itemAppearance.showEllipsis, true);
 }
 
 void CoreTests::appSettingsDefaultsAndLanguageFallback()
@@ -138,6 +144,8 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback()
     QCOMPARE(defaults.language, QString("zh-CN"));
     QCOMPARE(defaults.hotkeysEnabled, true);
     QCOMPARE(defaults.themeMode, QString("system"));
+    QCOMPARE(defaults.itemAppearance.iconWidth, 48);
+    QCOMPARE(defaults.itemAppearance.itemWidth, 64);
 
     QJsonObject invalid;
     invalid["language"] = "fr-FR";
@@ -147,6 +155,64 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback()
     QCOMPARE(parsed.language, QString("zh-CN"));
     QCOMPARE(parsed.hotkeysEnabled, false);
     QCOMPARE(parsed.themeMode, QString("system"));
+}
+
+void CoreTests::itemAppearanceRoundTrip()
+{
+    LauncherItemAppearance appearance;
+    appearance.iconWidth = 32;
+    appearance.iconHeight = 28;
+    appearance.itemWidth = 72;
+    appearance.itemHeight = 96;
+    appearance.fontFamily = "Segoe UI";
+    appearance.fontPointSize = 9;
+    appearance.horizontalSpacing = 4;
+    appearance.verticalSpacing = 6;
+    appearance.multilineText = false;
+    appearance.showEllipsis = true;
+
+    const LauncherItemAppearance parsed = LauncherItemAppearance::fromJson(appearance.toJson());
+    QCOMPARE(parsed.iconWidth, 32);
+    QCOMPARE(parsed.iconHeight, 28);
+    QCOMPARE(parsed.itemWidth, 72);
+    QCOMPARE(parsed.itemHeight, 96);
+    QCOMPARE(parsed.fontFamily, QString("Segoe UI"));
+    QCOMPARE(parsed.fontPointSize, 9);
+    QCOMPARE(parsed.horizontalSpacing, 4);
+    QCOMPARE(parsed.verticalSpacing, 6);
+    QCOMPARE(parsed.multilineText, false);
+    QCOMPARE(parsed.showEllipsis, true);
+}
+
+void CoreTests::itemAppearanceDefaultsAndFallback()
+{
+    const LauncherItemAppearance defaults = LauncherItemAppearance::fromJson({});
+    QCOMPARE(defaults.iconWidth, 48);
+    QCOMPARE(defaults.iconHeight, 48);
+    QCOMPARE(defaults.itemWidth, 64);
+    QCOMPARE(defaults.itemHeight, 80);
+    QCOMPARE(defaults.fontPointSize, 8);
+    QCOMPARE(defaults.multilineText, true);
+    QCOMPARE(defaults.showEllipsis, false);
+
+    QJsonObject invalid;
+    invalid["iconWidth"] = 1;
+    invalid["iconHeight"] = 999;
+    invalid["itemWidth"] = 10;
+    invalid["itemHeight"] = 500;
+    invalid["fontPointSize"] = 1;
+    invalid["horizontalSpacing"] = -1;
+    invalid["verticalSpacing"] = 999;
+    invalid["multilineText"] = false;
+    invalid["showEllipsis"] = true;
+    const LauncherItemAppearance parsed = LauncherItemAppearance::fromJson(invalid);
+    QVERIFY(parsed.iconWidth >= 16);
+    QVERIFY(parsed.iconHeight <= 128);
+    QVERIFY(parsed.itemWidth >= 40);
+    QVERIFY(parsed.itemHeight <= 220);
+    QVERIFY(parsed.fontPointSize >= 6);
+    QCOMPARE(parsed.multilineText, false);
+    QCOMPARE(parsed.showEllipsis, true);
 }
 
 void CoreTests::conflictWarnings()
