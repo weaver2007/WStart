@@ -1,0 +1,19 @@
+<RCC>
+    <qresource prefix="/">
+        <file>app.svg</file>
+        <file>icon-settings.svg</file>
+        <file>icon-globe.svg</file>
+        <file>icon-control-panel.svg</file>
+        <file>icon-task-manager.svg</file>
+        <file>icon-terminal.svg</file>
+        <file>icon-registry.svg</file>
+        <file>icon-services.svg</file>
+        <file>icon-device-manager.svg</file>
+        <file>icon-calculator.svg</file>
+        <file>icon-system-info.svg</file>
+        <file>icon-folder.svg</file>
+        <file>icon-desktop.svg</file>
+        <file>icon-documents.svg</file>
+        <file>icon-downloads.svg</file>
+    </qresource>
+</RCC>
