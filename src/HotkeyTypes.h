@@ -36,7 +36,6 @@ struct LauncherSection {
     int sortOrder = 0;
     bool encrypted = false;
     QString passwordHash;
-    QString viewMode = "mediumIcons";
     bool collapsed = false;
 
     bool isValid() const;

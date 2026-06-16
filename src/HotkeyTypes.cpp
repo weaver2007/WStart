@@ -188,8 +188,6 @@ QString LauncherSection::categoryName() const
 
 QJsonObject LauncherSection::toJson() const
 {
-    const QStringList validViewModes = {"largeIcons", "mediumIcons", "smallIcons", "list", "details"};
-    const QString normalizedViewMode = validViewModes.contains(viewMode) ? viewMode : QString("mediumIcons");
     return {
         {"id", id},
         {"category", categoryName()},
@@ -198,7 +196,6 @@ QJsonObject LauncherSection::toJson() const
         {"sortOrder", sortOrder},
         {"encrypted", encrypted},
         {"passwordHash", passwordHash},
-        {"viewMode", normalizedViewMode},
         {"collapsed", collapsed}
     };
 }
@@ -216,9 +213,6 @@ LauncherSection LauncherSection::fromJson(const QJsonObject &object)
     section.sortOrder = object.value("sortOrder").toInt();
     section.encrypted = object.value("encrypted").toBool(false);
     section.passwordHash = object.value("passwordHash").toString();
-    const QString viewModeValue = object.value("viewMode").toString("mediumIcons");
-    const QStringList validViewModes = {"largeIcons", "mediumIcons", "smallIcons", "list", "details"};
-    section.viewMode = validViewModes.contains(viewModeValue) ? viewModeValue : QString("mediumIcons");
     section.collapsed = object.value("collapsed").toBool(false);
     return section;
 }

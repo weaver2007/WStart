@@ -30,3 +30,23 @@ ctest --preset vs2026-msvc-release
 ```
 
 The `HotKeyManager` target runs `windeployqt` after build, so the required Qt DLLs and plugins are copied next to `HotKeyManager.exe`.
+
+## Static Qt / Single EXE
+
+The normal Qt installer package under `D:/Qt/6.10.1/msvc2022_64` is a shared Qt build. A single-file executable requires a separate static Qt build and the MSVC static runtime.
+
+Build and install a minimal static Qt for this project:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static-msvc.ps1
+```
+
+Then build the application against that static Qt:
+
+```powershell
+cmake --preset vs2026-msvc-static
+cmake --build --preset vs2026-msvc-static-release
+ctest --preset vs2026-msvc-static-release
+```
+
+The static preset uses `qt-static-msvc`, sets `HKM_STATIC_RUNTIME=ON` for `/MT`, requires a static Qt installation, disables `windeployqt`, and imports the required static Qt plugins into `HotKeyManager.exe`.

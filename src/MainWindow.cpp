@@ -38,6 +38,8 @@ constexpr int RuleIdRole = Qt::UserRole + 2;
 constexpr int HeaderHeight = 50;
 constexpr int FixedIconColumns = 4;
 constexpr int MediumIconCellWidth = 64;
+constexpr int LauncherItemIconSize = 48;
+constexpr int LauncherItemCellHeight = 80;
 constexpr int SectionHorizontalMargin = 8;
 constexpr int ScrollBarReserveWidth = 12;
 constexpr int FixedWindowWidth = FixedIconColumns * MediumIconCellWidth + SectionHorizontalMargin * 2 + ScrollBarReserveWidth;
@@ -48,12 +50,6 @@ public:
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
     {
-        const QString mode = option.widget ? option.widget->property("viewMode").toString() : QString();
-        if (mode == "list" || mode == "details") {
-            QStyledItemDelegate::paint(painter, option, index);
-            return;
-        }
-
         QStyleOptionViewItem opt(option);
         initStyleOption(&opt, index);
         const QString text = opt.text;
@@ -1163,7 +1159,6 @@ void MainWindow::rebuildSections()
                 list->setUniformItemSizes(true);
                 list->setContextMenuPolicy(Qt::CustomContextMenu);
                 list->setProperty("sectionId", section.id);
-                list->setProperty("viewMode", normalizeViewMode(section.viewMode));
                 list->setTextElideMode(Qt::ElideNone);
                 list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
                 list->setItemDelegate(new IconGridDelegate(list));
@@ -1176,19 +1171,14 @@ void MainWindow::rebuildSections()
                     if (!rule.enabled) {
                         subtitle = uiText(UiText::Key::Disabled);
                     }
-                    const QString mode = normalizeViewMode(section.viewMode);
                     QString text = ruleTitle(rule);
-                    if (mode == "details") {
-                        text = subtitle.isEmpty()
-                            ? QString("%1\n%2").arg(ruleTitle(rule), rule.action.target)
-                            : QString("%1\n%2\n%3").arg(ruleTitle(rule), subtitle, rule.action.target);
-                    } else if (!subtitle.isEmpty()) {
+                    if (!subtitle.isEmpty()) {
                         text = QString("%1\n%2").arg(ruleTitle(rule), subtitle);
-                    } else if (mode != "list") {
+                    } else {
                         text = QString("%1\n ").arg(ruleTitle(rule));
                     }
                     auto *item = new QListWidgetItem(iconForRule(rule), text);
-                    item->setTextAlignment(mode == "list" || mode == "details" ? Qt::AlignVCenter | Qt::AlignLeft : Qt::AlignHCenter | Qt::AlignTop);
+                    item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
                     const QString hotkeyTip = rule.hotkey.isValid() ? rule.hotkey.displayText() : uiText(UiText::Key::UnboundHotkey);
                     item->setToolTip(QString("%1\n%2\n%3").arg(ruleTitle(rule), rule.action.target, hotkeyTip));
                     item->setData(RuleIdRole, rule.id);
@@ -1228,33 +1218,13 @@ void MainWindow::updateLauncherGrids()
         if (!list) {
             continue;
         }
-        const QString mode = normalizeViewMode(list->property("viewMode").toString());
-        const int bodyWidth = list->parentWidget() ? list->parentWidget()->contentsRect().width() : 0;
-        const int scrollWidth = m_scrollArea && m_scrollArea->viewport() ? m_scrollArea->viewport()->width() : 0;
-        const int viewportWidth = qMax(qMax(bodyWidth, scrollWidth - SectionHorizontalMargin), 1);
-        if (mode == "list" || mode == "details") {
-            const int rowHeight = mode == "details" ? 58 : 34;
-            list->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-            list->setViewMode(QListView::ListMode);
-            list->setFlow(QListView::TopToBottom);
-            list->setWrapping(false);
-            list->setIconSize(mode == "details" ? QSize(24, 24) : QSize(22, 22));
-            list->setGridSize(QSize(qMax(240, viewportWidth - 8), rowHeight));
-            list->setMinimumHeight(rowHeight + 10);
-            list->setMaximumHeight(QWIDGETSIZE_MAX);
-            continue;
-        }
-
-        const int iconSize = mode == "largeIcons" ? 36 : mode == "smallIcons" ? 22 : 28;
-        const int cellHeight = mode == "largeIcons" ? 72 : mode == "smallIcons" ? 56 : 64;
-        const int actualCellWidth = mode == "largeIcons" ? 86 : mode == "smallIcons" ? 76 : MediumIconCellWidth;
         list->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         list->setViewMode(QListView::IconMode);
         list->setFlow(QListView::LeftToRight);
         list->setWrapping(true);
-        list->setIconSize(QSize(iconSize, iconSize));
-        list->setGridSize(QSize(actualCellWidth, cellHeight));
-        list->setMinimumHeight(cellHeight + 4);
+        list->setIconSize(QSize(LauncherItemIconSize, LauncherItemIconSize));
+        list->setGridSize(QSize(MediumIconCellWidth, LauncherItemCellHeight));
+        list->setMinimumHeight(LauncherItemCellHeight + 4);
         list->setMaximumHeight(QWIDGETSIZE_MAX);
     }
 }
@@ -1363,25 +1333,6 @@ void MainWindow::showSectionMenu(const QString &sectionId, const QPoint &globalP
     menu.addAction(uiText(UiText::Key::EncryptSection), this, [this, sectionId]() {
         encryptSection(sectionId);
     });
-    auto *viewMenu = menu.addMenu(uiText(UiText::Key::ViewMode));
-    auto *viewGroup = new QActionGroup(viewMenu);
-    viewGroup->setExclusive(true);
-    const QVector<QPair<QString, UiText::Key>> viewModes = {
-        {"largeIcons", UiText::Key::ViewLargeIcons},
-        {"mediumIcons", UiText::Key::ViewMediumIcons},
-        {"smallIcons", UiText::Key::ViewSmallIcons},
-        {"list", UiText::Key::ViewList},
-        {"details", UiText::Key::ViewDetails}
-    };
-    for (const auto &mode : viewModes) {
-        QAction *action = viewMenu->addAction(uiText(mode.second));
-        action->setCheckable(true);
-        action->setChecked(normalizeViewMode(m_document.sections[index].viewMode) == mode.first);
-        viewGroup->addAction(action);
-        connect(action, &QAction::triggered, this, [this, sectionId, viewMode = mode.first]() {
-            setSectionViewMode(sectionId, viewMode);
-        });
-    }
     if (m_document.sections[index].encrypted && !m_unlockedSectionIds.contains(sectionId)) {
         menu.addSeparator();
         menu.addAction(uiText(UiText::Key::UnlockSection), this, [this, sectionId]() {
@@ -1566,16 +1517,6 @@ void MainWindow::encryptSection(const QString &sectionId)
     } else {
         m_unlockedSectionIds.remove(sectionId);
     }
-    saveDocument();
-}
-
-void MainWindow::setSectionViewMode(const QString &sectionId, const QString &viewMode)
-{
-    const int index = sectionIndexById(sectionId);
-    if (index < 0) {
-        return;
-    }
-    m_document.sections[index].viewMode = normalizeViewMode(viewMode);
     saveDocument();
 }
 
@@ -1876,14 +1817,6 @@ QString MainWindow::ruleTitle(const HotkeyRule &rule) const
 QString MainWindow::categoryDisplayName(LauncherCategory category) const
 {
     return UiText::categoryName(language(), category);
-}
-
-QString MainWindow::normalizeViewMode(const QString &viewMode) const
-{
-    if (viewMode == "largeIcons" || viewMode == "smallIcons" || viewMode == "list" || viewMode == "details") {
-        return viewMode;
-    }
-    return "mediumIcons";
 }
 
 QString MainWindow::passwordHash(const QString &password) const

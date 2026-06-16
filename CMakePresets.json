@@ -10,6 +10,19 @@
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "D:/Qt/6.10.1/msvc2022_64"
       }
+    },
+    {
+      "name": "vs2026-msvc-static",
+      "displayName": "Visual Studio 2026 MSVC x64 Static Qt",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build-msvc-static",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/qt-static-msvc",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -22,12 +35,25 @@
       "name": "vs2026-msvc-debug",
       "configurePreset": "vs2026-msvc",
       "configuration": "Debug"
+    },
+    {
+      "name": "vs2026-msvc-static-release",
+      "configurePreset": "vs2026-msvc-static",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
     {
       "name": "vs2026-msvc-release",
       "configurePreset": "vs2026-msvc",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "vs2026-msvc-static-release",
+      "configurePreset": "vs2026-msvc-static",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true

@@ -1,6 +1,7 @@
 # Build directories
 build*/
 out/
+qt-static-msvc/
 
 # CMake / Qt generated files
 CMakeUserPresets.json

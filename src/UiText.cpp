@@ -47,12 +47,6 @@ QString text(const QString &language, Key key)
     case Key::DeleteSection: return en ? "Delete section" : QString::fromUtf8("删除栏目");
     case Key::EncryptSection: return en ? "Encrypt section" : QString::fromUtf8("栏目加密");
     case Key::UnlockSection: return en ? "Unlock section" : QString::fromUtf8("解锁栏目");
-    case Key::ViewMode: return en ? "View mode" : QString::fromUtf8("显示方式");
-    case Key::ViewLargeIcons: return en ? "Large icons" : QString::fromUtf8("大图标");
-    case Key::ViewMediumIcons: return en ? "Medium icons" : QString::fromUtf8("中图标");
-    case Key::ViewSmallIcons: return en ? "Small icons" : QString::fromUtf8("小图标");
-    case Key::ViewList: return en ? "List" : QString::fromUtf8("列表");
-    case Key::ViewDetails: return en ? "Details" : QString::fromUtf8("详细信息");
     case Key::AddItem: return en ? "Add item" : QString::fromUtf8("添加条目");
     case Key::Run: return en ? "Run" : QString::fromUtf8("运行");
     case Key::Edit: return en ? "Edit" : QString::fromUtf8("编辑");

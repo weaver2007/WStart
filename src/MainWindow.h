@@ -82,7 +82,6 @@ private:
     void editSection(const QString &sectionId);
     void deleteSection(const QString &sectionId);
     void encryptSection(const QString &sectionId);
-    void setSectionViewMode(const QString &sectionId, const QString &viewMode);
     void expandSectionOnly(const QString &sectionId);
     void toggleSectionCollapsed(const QString &sectionId);
     void enablePointerTracking(QWidget *widget);
@@ -101,7 +100,6 @@ private:
     bool rulePassesFilters(const HotkeyRule &rule) const;
     QString ruleTitle(const HotkeyRule &rule) const;
     QString categoryDisplayName(LauncherCategory category) const;
-    QString normalizeViewMode(const QString &viewMode) const;
     QString passwordHash(const QString &password) const;
     QString uiText(UiText::Key key) const;
     ResizeRegion resizeRegionAt(const QPoint &position) const;

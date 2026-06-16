@@ -72,7 +72,6 @@ void CoreTests::sectionJsonRoundTrip()
     section.sortOrder = 2;
     section.encrypted = true;
     section.passwordHash = "abc";
-    section.viewMode = "details";
     section.collapsed = true;
 
     const LauncherSection parsed = LauncherSection::fromJson(section.toJson());
@@ -83,12 +82,7 @@ void CoreTests::sectionJsonRoundTrip()
     QCOMPARE(parsed.sortOrder, section.sortOrder);
     QCOMPARE(parsed.encrypted, section.encrypted);
     QCOMPARE(parsed.passwordHash, section.passwordHash);
-    QCOMPARE(parsed.viewMode, section.viewMode);
     QCOMPARE(parsed.collapsed, section.collapsed);
-
-    QJsonObject invalid = section.toJson();
-    invalid["viewMode"] = "cards";
-    QCOMPARE(LauncherSection::fromJson(invalid).viewMode, QString("mediumIcons"));
 
     QJsonObject legacy = section.toJson();
     legacy.remove("collapsed");
