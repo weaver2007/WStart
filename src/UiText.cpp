@@ -73,6 +73,11 @@ QString text(const QString &language, Key key)
     case Key::UnlockSection: return en ? "Unlock section" : QString::fromUtf8("解锁栏目");
     case Key::AddItem: return en ? "Add item" : QString::fromUtf8("添加条目");
     case Key::Run: return en ? "Run" : QString::fromUtf8("运行");
+    case Key::RunAsAdmin: return en ? "Run as administrator" : QString::fromUtf8("以管理员权限运行");
+    case Key::ExplorerContextMenu: return en ? "Explorer context menu" : QString::fromUtf8("显示资源管理器菜单");
+    case Key::BrowseTarget: return en ? "Browse" : QString::fromUtf8("浏览");
+    case Key::CreateDesktopShortcut: return en ? "Desktop shortcut" : QString::fromUtf8("桌面快捷方式");
+    case Key::SetStartup: return en ? "Run at startup" : QString::fromUtf8("设置开机自启动");
     case Key::Edit: return en ? "Edit" : QString::fromUtf8("编辑");
     case Key::Delete: return en ? "Delete" : QString::fromUtf8("删除");
     case Key::LockedHint: return en ? "This section is encrypted. Right-click the section to unlock, edit, or delete it." : QString::fromUtf8("栏目已加密。右键栏目可解锁、修改或删除。");

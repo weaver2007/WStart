@@ -71,7 +71,7 @@ add_executable(HotKeyManager WIN32
     resources/resources.qrc
 )
 
-target_link_libraries(HotKeyManager PRIVATE Qt6::Widgets Qt6::Svg user32 shell32)
+target_link_libraries(HotKeyManager PRIVATE Qt6::Widgets Qt6::Svg user32 shell32 ole32 uuid)
 
 if(MSVC AND HKM_STATIC_RUNTIME)
     set_property(TARGET HotKeyManager PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")

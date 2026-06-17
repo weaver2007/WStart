@@ -15,6 +15,7 @@
 #include <QDate>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileIconProvider>
@@ -33,7 +34,9 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScreen>
 #include <QShowEvent>
@@ -51,6 +54,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <string>
 #include <utility>
 
 #ifdef Q_OS_WIN
@@ -61,6 +65,9 @@
 #        define NOMINMAX
 #    endif
 #    include <windows.h>
+#    include <shlobj.h>
+#    include <shobjidl.h>
+#    include <shellapi.h>
 #endif
 
 namespace {
@@ -300,6 +307,22 @@ QString passwordInput(QWidget *parent, const QString &language, const QString &t
 }
 
 #ifdef Q_OS_WIN
+struct ComInitializer {
+    ComInitializer()
+    {
+        result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    }
+
+    ~ComInitializer()
+    {
+        if (SUCCEEDED(result)) {
+            CoUninitialize();
+        }
+    }
+
+    HRESULT result = E_FAIL;
+};
+
 void forceWindowForeground(QWidget *widget)
 {
     if (!widget) {
@@ -335,6 +358,188 @@ void forceWindowForeground(QWidget *widget)
     if (foregroundThread != 0 && foregroundThread != currentThread) {
         AttachThreadInput(currentThread, foregroundThread, FALSE);
     }
+}
+
+void allowElevatedDragDrop(HWND hwnd)
+{
+    if (!hwnd) {
+        return;
+    }
+    using ChangeWindowMessageFilterExFn = BOOL (WINAPI *)(HWND, UINT, DWORD, PCHANGEFILTERSTRUCT);
+    auto *user32 = GetModuleHandleW(L"user32.dll");
+    auto *changeFilter = reinterpret_cast<ChangeWindowMessageFilterExFn>(
+        user32 ? GetProcAddress(user32, "ChangeWindowMessageFilterEx") : nullptr);
+    if (!changeFilter) {
+        return;
+    }
+    changeFilter(hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr);
+    changeFilter(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);
+    changeFilter(hwnd, 0x0049, MSGFLT_ALLOW, nullptr);
+}
+
+bool shellExecutePath(const QString &path, const wchar_t *verb, const QString &parameters = {}, const QString &workingDirectory = {})
+{
+    const std::wstring nativePath = QDir::toNativeSeparators(path).toStdWString();
+    const std::wstring nativeParameters = parameters.toStdWString();
+    const std::wstring nativeWorkingDirectory = QDir::toNativeSeparators(workingDirectory).toStdWString();
+
+    SHELLEXECUTEINFOW info = {};
+    info.cbSize = sizeof(info);
+    info.lpVerb = verb;
+    info.lpFile = nativePath.c_str();
+    info.lpParameters = nativeParameters.empty() ? nullptr : nativeParameters.c_str();
+    info.lpDirectory = nativeWorkingDirectory.empty() ? nullptr : nativeWorkingDirectory.c_str();
+    info.nShow = SW_SHOWNORMAL;
+    return ShellExecuteExW(&info);
+}
+
+bool revealInExplorer(const QString &path)
+{
+    const QFileInfo info(path);
+    if (!info.exists()) {
+        return false;
+    }
+    if (info.isDir()) {
+        return shellExecutePath(info.absoluteFilePath(), L"open");
+    }
+    return shellExecutePath("explorer.exe", L"open", QString("/select,\"%1\"").arg(QDir::toNativeSeparators(info.absoluteFilePath())));
+}
+
+QString desktopDirectoryPath()
+{
+    wchar_t path[MAX_PATH] = {};
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_DESKTOPDIRECTORY, nullptr, SHGFP_TYPE_CURRENT, path))) {
+        return QString::fromWCharArray(path);
+    }
+    return QDir::home().filePath("Desktop");
+}
+
+QString startupDirectoryPath()
+{
+    wchar_t path[MAX_PATH] = {};
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, SHGFP_TYPE_CURRENT, path))) {
+        return QString::fromWCharArray(path);
+    }
+    return QDir::home().filePath("AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup");
+}
+
+bool createShortcutFile(const QString &shortcutPath, const HotkeyRule &rule, const QString &title)
+{
+    ComInitializer com;
+    Q_UNUSED(com);
+
+    IShellLinkW *link = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkW, reinterpret_cast<void **>(&link));
+    if (FAILED(hr) || !link) {
+        return false;
+    }
+
+    const QString target = QDir::toNativeSeparators(rule.action.target);
+    const QString workingDirectory = QDir::toNativeSeparators(rule.action.workingDirectory);
+    const std::wstring targetW = target.toStdWString();
+    const std::wstring argumentsW = rule.action.arguments.toStdWString();
+    const std::wstring workingDirectoryW = workingDirectory.toStdWString();
+    const std::wstring descriptionW = title.toStdWString();
+
+    link->SetPath(targetW.c_str());
+    if (!argumentsW.empty()) {
+        link->SetArguments(argumentsW.c_str());
+    }
+    if (!workingDirectoryW.empty()) {
+        link->SetWorkingDirectory(workingDirectoryW.c_str());
+    }
+    link->SetDescription(descriptionW.c_str());
+
+    IPersistFile *persistFile = nullptr;
+    hr = link->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&persistFile));
+    if (FAILED(hr) || !persistFile) {
+        link->Release();
+        return false;
+    }
+
+    const std::wstring shortcutW = QDir::toNativeSeparators(shortcutPath).toStdWString();
+    hr = persistFile->Save(shortcutW.c_str(), TRUE);
+    persistFile->Release();
+    link->Release();
+    return SUCCEEDED(hr);
+}
+
+bool showShellContextMenu(QWidget *parent, const QString &path, const QPoint &globalPos)
+{
+    const QFileInfo info(path);
+    if (!info.exists()) {
+        return false;
+    }
+
+    ComInitializer com;
+    Q_UNUSED(com);
+
+    const QString absolutePath = QDir::toNativeSeparators(info.absoluteFilePath());
+    PIDLIST_ABSOLUTE absolutePidl = nullptr;
+    SFGAOF attributes = 0;
+    HRESULT hr = SHParseDisplayName(reinterpret_cast<const wchar_t *>(absolutePath.utf16()), nullptr, &absolutePidl, 0, &attributes);
+    if (FAILED(hr) || !absolutePidl) {
+        return false;
+    }
+
+    PCUITEMID_CHILD child = nullptr;
+    IShellFolder *parentFolder = nullptr;
+    hr = SHBindToParent(absolutePidl, IID_IShellFolder, reinterpret_cast<void **>(&parentFolder), &child);
+    if (FAILED(hr) || !parentFolder || !child) {
+        CoTaskMemFree(absolutePidl);
+        return false;
+    }
+
+    IContextMenu *contextMenu = nullptr;
+    hr = parentFolder->GetUIObjectOf(parent ? reinterpret_cast<HWND>(parent->winId()) : nullptr,
+                                     1,
+                                     &child,
+                                     IID_IContextMenu,
+                                     nullptr,
+                                     reinterpret_cast<void **>(&contextMenu));
+    if (FAILED(hr) || !contextMenu) {
+        parentFolder->Release();
+        CoTaskMemFree(absolutePidl);
+        return false;
+    }
+
+    HMENU menu = CreatePopupMenu();
+    if (!menu) {
+        contextMenu->Release();
+        parentFolder->Release();
+        CoTaskMemFree(absolutePidl);
+        return false;
+    }
+
+    constexpr UINT commandBase = 1;
+    constexpr UINT commandMax = 0x7FFF;
+    hr = contextMenu->QueryContextMenu(menu, 0, commandBase, commandMax, CMF_NORMAL);
+    if (SUCCEEDED(hr)) {
+        const UINT command = TrackPopupMenuEx(menu,
+                                             TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                             globalPos.x(),
+                                             globalPos.y(),
+                                             parent ? reinterpret_cast<HWND>(parent->winId()) : nullptr,
+                                             nullptr);
+        if (command >= commandBase) {
+            CMINVOKECOMMANDINFOEX invoke = {};
+            invoke.cbSize = sizeof(invoke);
+            invoke.fMask = CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE;
+            invoke.hwnd = parent ? reinterpret_cast<HWND>(parent->winId()) : nullptr;
+            invoke.lpVerb = MAKEINTRESOURCEA(command - commandBase);
+            invoke.lpVerbW = MAKEINTRESOURCEW(command - commandBase);
+            invoke.nShow = SW_SHOWNORMAL;
+            invoke.ptInvoke.x = globalPos.x();
+            invoke.ptInvoke.y = globalPos.y();
+            contextMenu->InvokeCommand(reinterpret_cast<LPCMINVOKECOMMANDINFO>(&invoke));
+        }
+    }
+
+    DestroyMenu(menu);
+    contextMenu->Release();
+    parentFolder->Release();
+    CoTaskMemFree(absolutePidl);
+    return SUCCEEDED(hr);
 }
 #endif
 
@@ -661,6 +866,7 @@ void MainWindow::buildUi()
 {
     auto *root = new QWidget(this);
     root->setObjectName("root");
+    root->setAcceptDrops(true);
     auto *layout = new QVBoxLayout(root);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -668,6 +874,7 @@ void MainWindow::buildUi()
     auto *header = new QFrame(root);
     header->setObjectName("topPanel");
     header->setFixedHeight(HeaderHeight);
+    header->setAcceptDrops(true);
     auto *headerLayout = new QVBoxLayout(header);
     headerLayout->setContentsMargins(14, 0, 10, 0);
     headerLayout->setSpacing(0);
@@ -722,12 +929,14 @@ void MainWindow::buildUi()
 
     auto *content = new QWidget(root);
     content->setObjectName("content");
+    content->setAcceptDrops(true);
     auto *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(0, 0, 0, 0);
     contentLayout->setSpacing(0);
 
     auto *searchBand = new QFrame(content);
     searchBand->setObjectName("searchBand");
+    searchBand->setAcceptDrops(true);
     auto *searchLayout = new QHBoxLayout(searchBand);
     searchLayout->setContentsMargins(12, 6, 12, 4);
     searchLayout->setSpacing(8);
@@ -738,6 +947,7 @@ void MainWindow::buildUi()
 
     m_navBar = new QWidget(content);
     m_navBar->setObjectName("navBar");
+    m_navBar->setAcceptDrops(true);
     auto *navBarLayout = new QHBoxLayout(m_navBar);
     navBarLayout->setContentsMargins(0, 0, 0, 0);
     navBarLayout->setSpacing(0);
@@ -769,9 +979,12 @@ void MainWindow::buildUi()
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scrollArea->setFrameShape(QFrame::NoFrame);
+    m_scrollArea->setAcceptDrops(true);
+    m_scrollArea->viewport()->setAcceptDrops(true);
 
     m_sectionsContainer = new QWidget(m_scrollArea);
     m_sectionsContainer->setObjectName("sectionsContainer");
+    m_sectionsContainer->setAcceptDrops(true);
     m_sectionsLayout = new QVBoxLayout(m_sectionsContainer);
     m_sectionsLayout->setContentsMargins(2, 12, 2, 12);
     m_sectionsLayout->setSpacing(10);
@@ -793,7 +1006,24 @@ void MainWindow::buildUi()
     layout->addWidget(statusBand);
     setCentralWidget(root);
     statusBar()->hide();
+    setAcceptDrops(true);
     enablePointerTracking(root);
+#ifdef Q_OS_WIN
+    DragAcceptFiles(reinterpret_cast<HWND>(winId()), TRUE);
+    DragAcceptFiles(reinterpret_cast<HWND>(root->winId()), TRUE);
+    DragAcceptFiles(reinterpret_cast<HWND>(header->winId()), TRUE);
+    DragAcceptFiles(reinterpret_cast<HWND>(content->winId()), TRUE);
+    DragAcceptFiles(reinterpret_cast<HWND>(m_scrollArea->winId()), TRUE);
+    DragAcceptFiles(reinterpret_cast<HWND>(m_scrollArea->viewport()->winId()), TRUE);
+    DragAcceptFiles(reinterpret_cast<HWND>(m_sectionsContainer->winId()), TRUE);
+    allowElevatedDragDrop(reinterpret_cast<HWND>(winId()));
+    allowElevatedDragDrop(reinterpret_cast<HWND>(root->winId()));
+    allowElevatedDragDrop(reinterpret_cast<HWND>(header->winId()));
+    allowElevatedDragDrop(reinterpret_cast<HWND>(content->winId()));
+    allowElevatedDragDrop(reinterpret_cast<HWND>(m_scrollArea->winId()));
+    allowElevatedDragDrop(reinterpret_cast<HWND>(m_scrollArea->viewport()->winId()));
+    allowElevatedDragDrop(reinterpret_cast<HWND>(m_sectionsContainer->winId()));
+#endif
 
     buildSettingsMenu();
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::refreshLauncher);
@@ -1007,19 +1237,30 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop) {
         auto *widget = qobject_cast<QWidget *>(watched);
-        const QString sectionId = widget ? widget->property("sectionId").toString() : QString();
-        if (!sectionId.isEmpty() && sectionIndexById(sectionId) >= 0) {
+        auto *dropBaseEvent = static_cast<QDropEvent *>(event);
+        QString sectionId = widget ? widget->property("sectionId").toString() : QString();
+        if (widget && (sectionId.isEmpty() || sectionIndexById(sectionId) < 0)) {
+            sectionId = sectionIdAtGlobalPosition(widget->mapToGlobal(dropBaseEvent->position().toPoint()));
+        }
+        if (sectionId.isEmpty()) {
+            sectionId = fallbackDropSectionId();
+        }
+        const int sectionIndex = sectionIndexById(sectionId);
+        if (sectionIndex >= 0 &&
+            m_document.sections[sectionIndex].category != LauncherCategory::Website) {
             if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
                 auto *dragEvent = static_cast<QDragMoveEvent *>(event);
                 if (dragEvent->mimeData() && dragEvent->mimeData()->hasUrls()) {
-                    dragEvent->acceptProposedAction();
+                    dragEvent->setDropAction(Qt::CopyAction);
+                    dragEvent->accept();
                     return true;
                 }
             } else {
                 auto *dropEvent = static_cast<QDropEvent *>(event);
                 if (dropEvent->mimeData() && dropEvent->mimeData()->hasUrls()) {
                     addDroppedPathsToSection(sectionId, dropEvent->mimeData()->urls());
-                    dropEvent->acceptProposedAction();
+                    dropEvent->setDropAction(Qt::CopyAction);
+                    dropEvent->accept();
                     return true;
                 }
             }
@@ -1117,6 +1358,61 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
     return QMainWindow::eventFilter(watched, event);
 }
+
+#ifdef Q_OS_WIN
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+{
+    Q_UNUSED(eventType);
+    auto *msg = static_cast<MSG *>(message);
+    if (!msg || msg->message != WM_DROPFILES) {
+        return QMainWindow::nativeEvent(eventType, message, result);
+    }
+
+    HDROP drop = reinterpret_cast<HDROP>(msg->wParam);
+    if (!drop) {
+        return QMainWindow::nativeEvent(eventType, message, result);
+    }
+
+    POINT clientPoint = {};
+    DragQueryPoint(drop, &clientPoint);
+    POINT screenPoint = clientPoint;
+    ClientToScreen(msg->hwnd, &screenPoint);
+    QString sectionId = sectionIdAtGlobalPosition(QPoint(screenPoint.x, screenPoint.y));
+    if (sectionId.isEmpty()) {
+        sectionId = fallbackDropSectionId();
+    }
+
+    QList<QUrl> urls;
+    const UINT count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+    for (UINT i = 0; i < count; ++i) {
+        const UINT length = DragQueryFileW(drop, i, nullptr, 0);
+        if (length == 0) {
+            continue;
+        }
+        std::wstring buffer(length + 1, L'\0');
+        if (DragQueryFileW(drop, i, buffer.data(), static_cast<UINT>(buffer.size())) > 0) {
+            urls.push_back(QUrl::fromLocalFile(QString::fromWCharArray(buffer.c_str())));
+        }
+    }
+    DragFinish(drop);
+
+    const int sectionIndex = sectionIndexById(sectionId);
+    if (sectionIndex >= 0 &&
+        m_document.sections[sectionIndex].category != LauncherCategory::Website &&
+        !urls.isEmpty()) {
+        addDroppedPathsToSection(sectionId, urls);
+        if (result) {
+            *result = 0;
+        }
+        return true;
+    }
+
+    if (result) {
+        *result = 0;
+    }
+    return true;
+}
+#endif
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
@@ -1348,12 +1644,15 @@ void MainWindow::rebuildSections()
     for (const LauncherSection &section : sections) {
         auto *sectionFrame = new QFrame(m_sectionsContainer);
         sectionFrame->setObjectName("sectionFrame");
+        sectionFrame->setAcceptDrops(true);
+        sectionFrame->setProperty("sectionId", section.id);
         auto *sectionLayout = new QVBoxLayout(sectionFrame);
         sectionLayout->setContentsMargins(0, 0, 0, 0);
         sectionLayout->setSpacing(0);
 
         auto *header = new QFrame(sectionFrame);
         header->setObjectName("sectionHeader");
+        header->setAcceptDrops(true);
         header->setContextMenuPolicy(Qt::CustomContextMenu);
         header->setProperty("sectionId", section.id);
         header->setProperty("collapsed", section.collapsed);
@@ -1398,6 +1697,8 @@ void MainWindow::rebuildSections()
         sectionLayout->addWidget(header);
 
         auto *body = new QWidget(sectionFrame);
+        body->setAcceptDrops(true);
+        body->setProperty("sectionId", section.id);
         auto *bodyLayout = new QVBoxLayout(body);
         bodyLayout->setContentsMargins(0, 0, 0, 0);
         bodyLayout->setSpacing(0);
@@ -1420,6 +1721,9 @@ void MainWindow::rebuildSections()
                 list->setWordWrap(m_document.settings.itemAppearance.multilineText);
                 list->setUniformItemSizes(true);
                 list->setAcceptDrops(true);
+                list->setDragDropMode(QAbstractItemView::DropOnly);
+                list->setDefaultDropAction(Qt::CopyAction);
+                list->setDropIndicatorShown(true);
                 list->viewport()->setAcceptDrops(true);
                 list->viewport()->installEventFilter(this);
                 list->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -1455,7 +1759,7 @@ void MainWindow::rebuildSections()
                 connect(list, &QListWidget::customContextMenuRequested, this, [this, list](const QPoint &pos) {
                     showListMenu(list->property("sectionId").toString(), list, pos);
                 });
-                connect(list, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
+                connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
                     runRule(item->data(RuleIdRole).toString());
                 });
 
@@ -2017,6 +2321,22 @@ void MainWindow::showListMenu(const QString &sectionId, QListWidget *list, const
         menu.addAction(uiText(UiText::Key::Run), this, [this, ruleId]() {
             runRule(ruleId);
         });
+        menu.addAction(uiText(UiText::Key::RunAsAdmin), this, [this, ruleId]() {
+            runRuleAsAdmin(ruleId);
+        });
+        menu.addAction(uiText(UiText::Key::ExplorerContextMenu), this, [this, ruleId, list, viewportPos]() {
+            showExplorerContextMenuForRule(ruleId, list->viewport()->mapToGlobal(viewportPos));
+        });
+        menu.addAction(uiText(UiText::Key::BrowseTarget), this, [this, ruleId]() {
+            browseRuleTarget(ruleId);
+        });
+        menu.addAction(uiText(UiText::Key::CreateDesktopShortcut), this, [this, ruleId]() {
+            createDesktopShortcutForRule(ruleId);
+        });
+        menu.addAction(uiText(UiText::Key::SetStartup), this, [this, ruleId]() {
+            setRuleStartupShortcut(ruleId);
+        });
+        menu.addSeparator();
         menu.addAction(uiText(UiText::Key::Edit), this, [this, ruleId]() {
             editRule(ruleId);
         });
@@ -2302,6 +2622,65 @@ void MainWindow::addDroppedPathsToSection(const QString &sectionId, const QList<
     }
 }
 
+QString MainWindow::sectionIdAtGlobalPosition(const QPoint &globalPos) const
+{
+    QWidget *widget = QApplication::widgetAt(globalPos);
+    while (widget) {
+        const QString sectionId = widget->property("sectionId").toString();
+        if (!sectionId.isEmpty() && sectionIndexById(sectionId) >= 0) {
+            return sectionId;
+        }
+        widget = widget->parentWidget();
+    }
+
+    for (auto it = m_sectionLists.constBegin(); it != m_sectionLists.constEnd(); ++it) {
+        QListWidget *list = it.value();
+        if (!list || !list->isVisible()) {
+            continue;
+        }
+        const QRect listRect(list->mapToGlobal(QPoint(0, 0)), list->size());
+        const QRect viewportRect(list->viewport()->mapToGlobal(QPoint(0, 0)), list->viewport()->size());
+        if (listRect.contains(globalPos) || viewportRect.contains(globalPos)) {
+            return it.key();
+        }
+    }
+
+    QWidget *container = m_sectionsContainer;
+    while (container) {
+        const QList<QWidget *> sectionFrames = container->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly);
+        for (QWidget *sectionFrame : sectionFrames) {
+            const QString sectionId = sectionFrame->property("sectionId").toString();
+            if (sectionId.isEmpty() || sectionIndexById(sectionId) < 0 || !sectionFrame->isVisible()) {
+                continue;
+            }
+            const QRect frameRect(sectionFrame->mapToGlobal(QPoint(0, 0)), sectionFrame->size());
+            if (frameRect.contains(globalPos)) {
+                return sectionId;
+            }
+        }
+        break;
+    }
+
+    return {};
+}
+
+QString MainWindow::fallbackDropSectionId() const
+{
+    QString firstSectionId;
+    for (const LauncherSection &section : m_document.sections) {
+        if (section.category != m_currentCategory) {
+            continue;
+        }
+        if (firstSectionId.isEmpty()) {
+            firstSectionId = section.id;
+        }
+        if (!section.collapsed) {
+            return section.id;
+        }
+    }
+    return firstSectionId;
+}
+
 void MainWindow::editRule(const QString &ruleId)
 {
     const int index = ruleIndexById(ruleId);
@@ -2362,6 +2741,92 @@ void MainWindow::runRule(const QString &ruleId)
         return;
     }
     onHotkeyTriggered(m_document.rules[index]);
+}
+
+void MainWindow::runRuleAsAdmin(const QString &ruleId)
+{
+    const int index = ruleIndexById(ruleId);
+    if (index < 0) {
+        return;
+    }
+    if (!ensureSectionUnlocked(m_document.rules[index].sectionId)) {
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    const HotkeyRule &rule = m_document.rules[index];
+    if (!shellExecutePath(rule.action.target, L"runas", rule.action.arguments, rule.action.workingDirectory)) {
+        setStatus(uiText(UiText::Key::LaunchFailed).arg(QString::number(GetLastError())));
+    }
+#else
+    runRule(ruleId);
+#endif
+}
+
+void MainWindow::showExplorerContextMenuForRule(const QString &ruleId, const QPoint &globalPos)
+{
+    const int index = ruleIndexById(ruleId);
+    if (index < 0) {
+        return;
+    }
+    if (!ensureSectionUnlocked(m_document.rules[index].sectionId)) {
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    showShellContextMenu(this, m_document.rules[index].action.target, globalPos);
+#else
+    Q_UNUSED(globalPos)
+#endif
+}
+
+void MainWindow::browseRuleTarget(const QString &ruleId)
+{
+    const int index = ruleIndexById(ruleId);
+    if (index < 0) {
+        return;
+    }
+    if (!ensureSectionUnlocked(m_document.rules[index].sectionId)) {
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    revealInExplorer(m_document.rules[index].action.target);
+#endif
+}
+
+void MainWindow::createDesktopShortcutForRule(const QString &ruleId)
+{
+    const int index = ruleIndexById(ruleId);
+    if (index < 0) {
+        return;
+    }
+    if (!ensureSectionUnlocked(m_document.rules[index].sectionId)) {
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    const HotkeyRule &rule = m_document.rules[index];
+    const QString shortcutName = QString("%1.lnk").arg(ruleTitle(rule)).replace(QRegularExpression(R"([\\/:*?"<>|])"), "_");
+    createShortcutFile(QDir(desktopDirectoryPath()).filePath(shortcutName), rule, ruleTitle(rule));
+#endif
+}
+
+void MainWindow::setRuleStartupShortcut(const QString &ruleId)
+{
+    const int index = ruleIndexById(ruleId);
+    if (index < 0) {
+        return;
+    }
+    if (!ensureSectionUnlocked(m_document.rules[index].sectionId)) {
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    const HotkeyRule &rule = m_document.rules[index];
+    const QString shortcutName = QString("HStart-%1.lnk").arg(ruleTitle(rule)).replace(QRegularExpression(R"([\\/:*?"<>|])"), "_");
+    createShortcutFile(QDir(startupDirectoryPath()).filePath(shortcutName), rule, ruleTitle(rule));
+#endif
 }
 
 bool MainWindow::ensureSectionUnlocked(const QString &sectionId)

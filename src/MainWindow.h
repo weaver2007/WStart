@@ -5,6 +5,7 @@
 #include "RuleStore.h"
 #include "UiText.h"
 
+#include <QByteArray>
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
@@ -39,6 +40,9 @@ signals:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+#ifdef Q_OS_WIN
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
     void closeEvent(QCloseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -100,9 +104,16 @@ private:
     void enablePointerTracking(QWidget *widget);
     void addRuleToSection(const QString &sectionId);
     void addDroppedPathsToSection(const QString &sectionId, const QList<QUrl> &urls);
+    QString sectionIdAtGlobalPosition(const QPoint &globalPos) const;
+    QString fallbackDropSectionId() const;
     void editRule(const QString &ruleId);
     void deleteRule(const QString &ruleId);
     void runRule(const QString &ruleId);
+    void runRuleAsAdmin(const QString &ruleId);
+    void showExplorerContextMenuForRule(const QString &ruleId, const QPoint &globalPos);
+    void browseRuleTarget(const QString &ruleId);
+    void createDesktopShortcutForRule(const QString &ruleId);
+    void setRuleStartupShortcut(const QString &ruleId);
     bool ensureSectionUnlocked(const QString &sectionId);
     bool isSectionUnlocked(const LauncherSection &section) const;
     int sectionIndexById(const QString &sectionId) const;
