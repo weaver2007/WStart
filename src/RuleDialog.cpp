@@ -5,6 +5,7 @@
 #include <QAbstractButton>
 #include <QDialogButtonBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
@@ -110,6 +111,12 @@ HotkeyRule RuleDialog::rule() const
     result.action.target = m_targetEdit->text().trimmed();
     result.action.arguments = m_category == LauncherCategory::Program ? m_argumentsEdit->text().trimmed() : QString();
     result.action.workingDirectory = m_category == LauncherCategory::Program ? m_workingDirectoryEdit->text().trimmed() : QString();
+    if (m_category == LauncherCategory::Program && result.action.workingDirectory.isEmpty()) {
+        const QFileInfo targetInfo(result.action.target);
+        if (targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && !targetInfo.absolutePath().isEmpty()) {
+            result.action.workingDirectory = targetInfo.absolutePath();
+        }
+    }
     result.description = m_descriptionEdit->text().trimmed();
     return result;
 }
@@ -126,6 +133,15 @@ void RuleDialog::browseTarget()
     }
     if (!selected.isEmpty()) {
         m_targetEdit->setText(selected);
+        if (m_category == LauncherCategory::Program) {
+            const QFileInfo selectedInfo(selected);
+            if (selectedInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && m_descriptionEdit->text().trimmed().isEmpty()) {
+                m_descriptionEdit->setText(selectedInfo.completeBaseName());
+            }
+            if (selectedInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && m_workingDirectoryEdit->text().trimmed().isEmpty()) {
+                m_workingDirectoryEdit->setText(selectedInfo.absolutePath());
+            }
+        }
     }
 }
 

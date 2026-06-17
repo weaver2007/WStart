@@ -79,6 +79,7 @@ private:
     void showItemAppearanceDialog();
     void showSectionAppearanceDialog();
     void showCategoryAppearanceDialog();
+    void showHotkeyListDialog();
     void applyItemAppearanceChange();
     void applySectionAppearanceChange();
     void applyCategoryAppearanceChange();
@@ -98,6 +99,7 @@ private:
     void toggleSectionCollapsed(const QString &sectionId);
     void enablePointerTracking(QWidget *widget);
     void addRuleToSection(const QString &sectionId);
+    void addDroppedPathsToSection(const QString &sectionId, const QList<QUrl> &urls);
     void editRule(const QString &ruleId);
     void deleteRule(const QString &ruleId);
     void runRule(const QString &ruleId);
@@ -155,6 +157,7 @@ private:
     QAction *m_itemAppearanceAction = nullptr;
     QAction *m_sectionAppearanceAction = nullptr;
     QAction *m_categoryAppearanceAction = nullptr;
+    QAction *m_hotkeyListAction = nullptr;
     QPoint m_dragPosition;
     QPoint m_resizeStartGlobal;
     QRect m_resizeStartGeometry;

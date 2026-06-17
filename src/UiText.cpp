@@ -37,6 +37,12 @@ QString text(const QString &language, Key key)
     case Key::ItemAppearance: return en ? "Item appearance" : QString::fromUtf8("条目外观");
     case Key::SectionAppearance: return en ? "Section appearance" : QString::fromUtf8("分栏外观");
     case Key::CategoryAppearance: return en ? "Category appearance" : QString::fromUtf8("分组外观");
+    case Key::HotkeyList: return en ? "Hotkey list" : QString::fromUtf8("快捷键列表");
+    case Key::HotkeyListEmpty: return en ? "No hotkeys are configured in HStart." : QString::fromUtf8("HStart 中尚未配置快捷键。");
+    case Key::HotkeyListCategory: return en ? "Category" : QString::fromUtf8("分类");
+    case Key::HotkeyListItem: return en ? "Item" : QString::fromUtf8("条目");
+    case Key::HotkeyListHotkey: return en ? "Hotkey" : QString::fromUtf8("快捷键");
+    case Key::HotkeyListTarget: return en ? "Target" : QString::fromUtf8("目标");
     case Key::SectionHeight: return en ? "Section height" : QString::fromUtf8("分栏高度");
     case Key::CategoryHeight: return en ? "Category height" : QString::fromUtf8("分组高度");
     case Key::IconWidth: return en ? "Icon width" : QString::fromUtf8("图标宽度");

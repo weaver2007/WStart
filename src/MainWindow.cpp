@@ -15,6 +15,9 @@
 #include <QDate>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QFileIconProvider>
 #include <QFileInfo>
 #include <QFontComboBox>
 #include <QFormLayout>
@@ -22,10 +25,12 @@
 #include <QGuiApplication>
 #include <QHideEvent>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLineEdit>
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
@@ -37,8 +42,11 @@
 #include <QStyleHints>
 #include <QSpinBox>
 #include <QStyledItemDelegate>
+#include <QTableWidget>
+#include <QTableWidgetItem>
 #include <QTextOption>
 #include <QTimer>
+#include <QUrl>
 #include <QUuid>
 #include <QVBoxLayout>
 
@@ -823,6 +831,8 @@ void MainWindow::buildSettingsMenu()
     m_hotkeysEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeysEnabled));
     m_hotkeysEnabledAction->setCheckable(true);
     connect(m_hotkeysEnabledAction, &QAction::toggled, this, &MainWindow::applyHotkeysEnabled);
+    m_hotkeyListAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeyList));
+    connect(m_hotkeyListAction, &QAction::triggered, this, &MainWindow::showHotkeyListDialog);
 
     auto *languageMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Language));
     auto *languageGroup = new QActionGroup(languageMenu);
@@ -883,11 +893,14 @@ void MainWindow::retranslateUi()
         m_hotkeysEnabledAction->setText(uiText(UiText::Key::HotkeysEnabled));
         m_hotkeysEnabledAction->setChecked(m_document.settings.hotkeysEnabled);
     }
-    if (m_settingsMenu && m_settingsMenu->actions().size() > 1 && m_settingsMenu->actions().at(1)->menu()) {
-        m_settingsMenu->actions().at(1)->menu()->setTitle(uiText(UiText::Key::Language));
+    if (m_hotkeyListAction) {
+        m_hotkeyListAction->setText(uiText(UiText::Key::HotkeyList));
     }
     if (m_settingsMenu && m_settingsMenu->actions().size() > 2 && m_settingsMenu->actions().at(2)->menu()) {
-        m_settingsMenu->actions().at(2)->menu()->setTitle(uiText(UiText::Key::Theme));
+        m_settingsMenu->actions().at(2)->menu()->setTitle(uiText(UiText::Key::Language));
+    }
+    if (m_settingsMenu && m_settingsMenu->actions().size() > 3 && m_settingsMenu->actions().at(3)->menu()) {
+        m_settingsMenu->actions().at(3)->menu()->setTitle(uiText(UiText::Key::Theme));
     }
     if (m_itemAppearanceAction) {
         m_itemAppearanceAction->setText(uiText(UiText::Key::ItemAppearance));
@@ -992,6 +1005,27 @@ void MainWindow::enablePointerTracking(QWidget *widget)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop) {
+        auto *widget = qobject_cast<QWidget *>(watched);
+        const QString sectionId = widget ? widget->property("sectionId").toString() : QString();
+        if (!sectionId.isEmpty() && sectionIndexById(sectionId) >= 0) {
+            if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
+                auto *dragEvent = static_cast<QDragMoveEvent *>(event);
+                if (dragEvent->mimeData() && dragEvent->mimeData()->hasUrls()) {
+                    dragEvent->acceptProposedAction();
+                    return true;
+                }
+            } else {
+                auto *dropEvent = static_cast<QDropEvent *>(event);
+                if (dropEvent->mimeData() && dropEvent->mimeData()->hasUrls()) {
+                    addDroppedPathsToSection(sectionId, dropEvent->mimeData()->urls());
+                    dropEvent->acceptProposedAction();
+                    return true;
+                }
+            }
+        }
+    }
+
     if (!isVisible()) {
         return QMainWindow::eventFilter(watched, event);
     }
@@ -1385,8 +1419,12 @@ void MainWindow::rebuildSections()
                 list->setSpacing(0);
                 list->setWordWrap(m_document.settings.itemAppearance.multilineText);
                 list->setUniformItemSizes(true);
+                list->setAcceptDrops(true);
+                list->viewport()->setAcceptDrops(true);
+                list->viewport()->installEventFilter(this);
                 list->setContextMenuPolicy(Qt::CustomContextMenu);
                 list->setProperty("sectionId", section.id);
+                list->viewport()->setProperty("sectionId", section.id);
                 list->setTextElideMode(m_document.settings.itemAppearance.showEllipsis ? Qt::ElideRight : Qt::ElideNone);
                 list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
                 list->setItemDelegate(new IconGridDelegate(m_document.settings.itemAppearance, list));
@@ -1401,16 +1439,7 @@ void MainWindow::rebuildSections()
                     if (rule.sectionId != section.id || !rulePassesFilters(rule)) {
                         continue;
                     }
-                    QString subtitle = rule.hotkey.isValid() ? rule.hotkey.displayText() : QString();
-                    if (!rule.enabled) {
-                        subtitle = uiText(UiText::Key::Disabled);
-                    }
                     QString text = ruleTitle(rule);
-                    if (!subtitle.isEmpty()) {
-                        text = QString("%1\n%2").arg(ruleTitle(rule), subtitle);
-                    } else {
-                        text = QString("%1\n ").arg(ruleTitle(rule));
-                    }
                     auto *item = new QListWidgetItem(iconForRule(rule), text);
                     item->setSizeHint(QSize(m_document.settings.itemAppearance.itemWidth, m_document.settings.itemAppearance.itemHeight));
                     item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
@@ -1520,6 +1549,56 @@ void MainWindow::setThemeMode(const QString &themeMode)
     m_document.settings.themeMode = normalized;
     saveDocumentSilently();
     applyTheme();
+}
+
+void MainWindow::showHotkeyListDialog()
+{
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(uiText(UiText::Key::HotkeyList));
+    dialog->setModal(false);
+
+    auto *layout = new QVBoxLayout(dialog);
+    auto *table = new QTableWidget(dialog);
+    table->setColumnCount(4);
+    table->setHorizontalHeaderLabels({
+        uiText(UiText::Key::HotkeyListCategory),
+        uiText(UiText::Key::HotkeyListItem),
+        uiText(UiText::Key::HotkeyListHotkey),
+        uiText(UiText::Key::HotkeyListTarget)
+    });
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setSelectionMode(QAbstractItemView::SingleSelection);
+    table->verticalHeader()->setVisible(false);
+    table->horizontalHeader()->setStretchLastSection(true);
+
+    for (const HotkeyRule &rule : m_document.rules) {
+        if (!rule.hotkey.isValid()) {
+            continue;
+        }
+        const int row = table->rowCount();
+        table->insertRow(row);
+        table->setItem(row, 0, new QTableWidgetItem(categoryDisplayName(rule.category)));
+        table->setItem(row, 1, new QTableWidgetItem(ruleTitle(rule)));
+        table->setItem(row, 2, new QTableWidgetItem(rule.hotkey.displayText()));
+        table->setItem(row, 3, new QTableWidgetItem(rule.action.target));
+    }
+    table->resizeColumnsToContents();
+
+    layout->addWidget(table, 1);
+    if (table->rowCount() == 0) {
+        auto *emptyLabel = new QLabel(uiText(UiText::Key::HotkeyListEmpty), dialog);
+        emptyLabel->setObjectName("emptyHint");
+        emptyLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(emptyLabel);
+    }
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+    layout->addWidget(buttons);
+
+    dialog->resize(620, 420);
+    dialog->show();
 }
 
 void MainWindow::showItemAppearanceDialog()
@@ -2171,6 +2250,58 @@ void MainWindow::addRuleToSection(const QString &sectionId)
     upsertRule(rule);
 }
 
+void MainWindow::addDroppedPathsToSection(const QString &sectionId, const QList<QUrl> &urls)
+{
+    const int sectionIndex = sectionIndexById(sectionId);
+    if (sectionIndex < 0 || urls.isEmpty()) {
+        return;
+    }
+    const LauncherSection section = m_document.sections[sectionIndex];
+    if (!ensureSectionUnlocked(sectionId)) {
+        return;
+    }
+
+    int addedCount = 0;
+    for (const QUrl &url : urls) {
+        if (!url.isLocalFile()) {
+            continue;
+        }
+        const QFileInfo info(url.toLocalFile());
+        if (!info.exists()) {
+            continue;
+        }
+
+        HotkeyRule rule;
+        rule.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        rule.enabled = true;
+        rule.category = section.category;
+        rule.sectionId = section.id;
+        rule.action.target = info.absoluteFilePath();
+        rule.description = info.isDir() ? info.fileName() : info.completeBaseName();
+
+        if (section.category == LauncherCategory::Website || (section.category == LauncherCategory::Program && info.isDir())) {
+            continue;
+        }
+        if (section.category == LauncherCategory::Folder) {
+            rule.action.type = info.isDir() ? LaunchActionType::Folder : LaunchActionType::File;
+        } else {
+            rule.action.type = info.isFile() && info.suffix().compare("exe", Qt::CaseInsensitive) == 0
+                ? LaunchActionType::Application
+                : LaunchActionType::File;
+        }
+        if (rule.action.type == LaunchActionType::Application) {
+            rule.action.workingDirectory = info.absolutePath();
+        }
+
+        m_document.rules.push_back(rule);
+        ++addedCount;
+    }
+
+    if (addedCount > 0) {
+        saveDocument();
+    }
+}
+
 void MainWindow::editRule(const QString &ruleId)
 {
     const int index = ruleIndexById(ruleId);
@@ -2312,9 +2443,29 @@ QIcon MainWindow::iconForRule(const HotkeyRule &rule) const
         if (target == "msinfo32.exe" || title.contains(QString::fromUtf8("系统信息")) || title.contains("system info")) {
             return themedIcon("system-info");
         }
+        const QFileInfo targetInfo(rule.action.target);
+        if (targetInfo.isFile() && targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0) {
+            const QIcon fileIcon = QFileIconProvider().icon(targetInfo);
+            if (!fileIcon.isNull()) {
+                return fileIcon;
+            }
+        }
+        if (rule.action.type == LaunchActionType::File && targetInfo.exists()) {
+            const QIcon fileIcon = QFileIconProvider().icon(targetInfo);
+            if (!fileIcon.isNull()) {
+                return fileIcon;
+            }
+        }
         return style()->standardIcon(QStyle::SP_ComputerIcon);
     }
     case LauncherCategory::Folder: {
+        const QFileInfo targetInfo(rule.action.target);
+        if (rule.action.type == LaunchActionType::File && targetInfo.exists()) {
+            const QIcon fileIcon = QFileIconProvider().icon(targetInfo);
+            if (!fileIcon.isNull()) {
+                return fileIcon;
+            }
+        }
         const QString target = QFileInfo(rule.action.target).fileName().toLower();
         const QString title = rule.description.toLower();
         if (target == "desktop" || title.contains(QString::fromUtf8("桌面")) || title.contains("desktop")) {
