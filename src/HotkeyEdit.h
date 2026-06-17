@@ -26,12 +26,16 @@ protected:
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
 
 private:
     void startCaptureHook();
     void stopCaptureHook();
     void captureNativeHotkey(int virtualKey, HotkeyModifiers modifiers);
+    void finishRecording(bool suppressCurrentChord);
+    int virtualKeyFromEvent(const QKeyEvent *event) const;
+    HotkeyModifiers modifiersFromEvent(const QKeyEvent *event) const;
     bool shouldCapture() const;
     HotkeyCombination m_hotkey;
     bool m_recording = false;
@@ -40,6 +44,7 @@ private:
 #ifdef Q_OS_WIN
     static bool isModifierVirtualKey(int virtualKey);
     static bool hasAnyCapturedModifier();
+    static HotkeyModifiers nativeModifierSnapshot();
     static void updateCapturedModifierState(int virtualKey, bool pressed);
     static LRESULT CALLBACK captureProc(int code, WPARAM wParam, LPARAM lParam);
     HHOOK m_captureHook = nullptr;

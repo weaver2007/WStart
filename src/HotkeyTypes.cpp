@@ -1,5 +1,6 @@
 #include "HotkeyTypes.h"
 
+#include <QColor>
 #include <QKeySequence>
 #include <QStringList>
 #include <QUuid>
@@ -9,6 +10,20 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
+
+namespace {
+
+QString normalizedOptionalColor(const QString &value)
+{
+    const QString trimmed = value.trimmed();
+    if (trimmed.isEmpty()) {
+        return {};
+    }
+    const QColor color(trimmed);
+    return color.isValid() ? color.name(QColor::HexRgb) : QString();
+}
+
+}
 
 bool HotkeyCombination::isValid() const
 {
@@ -298,7 +313,9 @@ QJsonObject AppSettings::toJson() const
         {"language", normalizedLanguage},
         {"hotkeysEnabled", hotkeysEnabled},
         {"themeMode", normalizedTheme},
-        {"itemAppearance", itemAppearance.toJson()}
+        {"itemAppearance", itemAppearance.toJson()},
+        {"sectionAppearance", sectionAppearance.toJson()},
+        {"categoryAppearance", categoryAppearance.toJson()}
     };
 }
 
@@ -346,6 +363,70 @@ LauncherItemAppearance LauncherItemAppearance::fromJson(const QJsonObject &objec
     return appearance;
 }
 
+QJsonObject LauncherSectionAppearance::toJson() const
+{
+    LauncherSectionAppearance normalized = LauncherSectionAppearance::fromJson({
+        {"iconWidth", iconWidth},
+        {"iconHeight", iconHeight},
+        {"headerHeight", headerHeight},
+        {"fontFamily", fontFamily},
+        {"fontPointSize", fontPointSize},
+        {"textColor", textColor}
+    });
+    return {
+        {"iconWidth", normalized.iconWidth},
+        {"iconHeight", normalized.iconHeight},
+        {"headerHeight", normalized.headerHeight},
+        {"fontFamily", normalized.fontFamily},
+        {"fontPointSize", normalized.fontPointSize},
+        {"textColor", normalized.textColor}
+    };
+}
+
+LauncherSectionAppearance LauncherSectionAppearance::fromJson(const QJsonObject &object)
+{
+    LauncherSectionAppearance appearance;
+    appearance.iconWidth = std::clamp(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
+    appearance.iconHeight = std::clamp(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
+    appearance.headerHeight = std::clamp(object.value("headerHeight").toInt(appearance.headerHeight), 24, 96);
+    appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
+    appearance.fontPointSize = std::clamp(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.textColor = normalizedOptionalColor(object.value("textColor").toString(appearance.textColor));
+    return appearance;
+}
+
+QJsonObject LauncherCategoryAppearance::toJson() const
+{
+    LauncherCategoryAppearance normalized = LauncherCategoryAppearance::fromJson({
+        {"iconWidth", iconWidth},
+        {"iconHeight", iconHeight},
+        {"buttonHeight", buttonHeight},
+        {"fontFamily", fontFamily},
+        {"fontPointSize", fontPointSize},
+        {"textColor", textColor}
+    });
+    return {
+        {"iconWidth", normalized.iconWidth},
+        {"iconHeight", normalized.iconHeight},
+        {"buttonHeight", normalized.buttonHeight},
+        {"fontFamily", normalized.fontFamily},
+        {"fontPointSize", normalized.fontPointSize},
+        {"textColor", normalized.textColor}
+    };
+}
+
+LauncherCategoryAppearance LauncherCategoryAppearance::fromJson(const QJsonObject &object)
+{
+    LauncherCategoryAppearance appearance;
+    appearance.iconWidth = std::clamp(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
+    appearance.iconHeight = std::clamp(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
+    appearance.buttonHeight = std::clamp(object.value("buttonHeight").toInt(appearance.buttonHeight), 24, 96);
+    appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
+    appearance.fontPointSize = std::clamp(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.textColor = normalizedOptionalColor(object.value("textColor").toString(appearance.textColor));
+    return appearance;
+}
+
 AppSettings AppSettings::fromJson(const QJsonObject &object)
 {
     AppSettings settings;
@@ -357,5 +438,7 @@ AppSettings AppSettings::fromJson(const QJsonObject &object)
     settings.themeMode = themeValue.compare("light", Qt::CaseInsensitive) == 0 ? "light" :
         themeValue.compare("dark", Qt::CaseInsensitive) == 0 ? "dark" : "system";
     settings.itemAppearance = LauncherItemAppearance::fromJson(object.value("itemAppearance").toObject());
+    settings.sectionAppearance = LauncherSectionAppearance::fromJson(object.value("sectionAppearance").toObject());
+    settings.categoryAppearance = LauncherCategoryAppearance::fromJson(object.value("categoryAppearance").toObject());
     return settings;
 }

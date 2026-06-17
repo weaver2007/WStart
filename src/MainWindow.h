@@ -77,7 +77,12 @@ private:
     void setThemeMode(const QString &themeMode);
     void applyTheme();
     void showItemAppearanceDialog();
+    void showSectionAppearanceDialog();
+    void showCategoryAppearanceDialog();
     void applyItemAppearanceChange();
+    void applySectionAppearanceChange();
+    void applyCategoryAppearanceChange();
+    void applyCategoryAppearance();
     int fixedLauncherWidth() const;
     void applyFixedLauncherWidth();
     bool effectiveDarkTheme() const;
@@ -148,6 +153,8 @@ private:
     QAction *m_themeLightAction = nullptr;
     QAction *m_themeDarkAction = nullptr;
     QAction *m_itemAppearanceAction = nullptr;
+    QAction *m_sectionAppearanceAction = nullptr;
+    QAction *m_categoryAppearanceAction = nullptr;
     QPoint m_dragPosition;
     QPoint m_resizeStartGlobal;
     QRect m_resizeStartGeometry;

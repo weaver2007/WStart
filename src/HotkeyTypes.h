@@ -106,11 +106,37 @@ struct LauncherItemAppearance {
     static LauncherItemAppearance fromJson(const QJsonObject &object);
 };
 
+struct LauncherSectionAppearance {
+    int iconWidth = 18;
+    int iconHeight = 18;
+    int headerHeight = 32;
+    QString fontFamily;
+    int fontPointSize = 8;
+    QString textColor;
+
+    QJsonObject toJson() const;
+    static LauncherSectionAppearance fromJson(const QJsonObject &object);
+};
+
+struct LauncherCategoryAppearance {
+    int iconWidth = 32;
+    int iconHeight = 32;
+    int buttonHeight = 30;
+    QString fontFamily;
+    int fontPointSize = 10;
+    QString textColor;
+
+    QJsonObject toJson() const;
+    static LauncherCategoryAppearance fromJson(const QJsonObject &object);
+};
+
 struct AppSettings {
     QString language = "zh-CN";
     bool hotkeysEnabled = true;
     QString themeMode = "system";
     LauncherItemAppearance itemAppearance;
+    LauncherSectionAppearance sectionAppearance;
+    LauncherCategoryAppearance categoryAppearance;
 
     QJsonObject toJson() const;
     static AppSettings fromJson(const QJsonObject &object);

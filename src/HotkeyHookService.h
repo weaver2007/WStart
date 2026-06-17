@@ -3,6 +3,7 @@
 #include "HotkeyTypes.h"
 
 #include <QObject>
+#include <QHash>
 #include <QSet>
 #include <QVector>
 
@@ -34,11 +35,25 @@ private:
     LRESULT handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTRUCT *event);
     HotkeyModifiers currentModifiers(int eventKey) const;
     const HotkeyRule *matchingRule(int virtualKey, HotkeyModifiers modifiers) const;
+    bool isTrackedSuppressedKey(int virtualKey) const;
+    bool isModifierKey(int virtualKey) const;
+    bool isWinKey(int virtualKey) const;
+    bool hasEnabledWinHotkey() const;
+    void updatePressedModifierState(int virtualKey, bool pressed);
+    bool winModifierPressed() const;
+    void trackSuppressedChord(const HotkeyCombination &hotkey);
+    void clearSuppressedKey(int virtualKey);
 
     HHOOK m_hook = nullptr;
     static HotkeyHookService *s_instance;
 #endif
     QVector<HotkeyRule> m_rules;
     QSet<QString> m_activeTriggers;
+#ifdef Q_OS_WIN
+    QSet<int> m_suppressedKeys;
+    QHash<int, QString> m_suppressedTriggerIds;
+    HotkeyModifiers m_pressedModifiers = ModifierNone;
+    bool m_interceptingWinChord = false;
+#endif
     bool m_paused = false;
 };

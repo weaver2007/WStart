@@ -9,6 +9,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QBrush>
+#include <QColorDialog>
 #include <QCryptographicHash>
 #include <QCursor>
 #include <QDate>
@@ -21,6 +22,7 @@
 #include <QGuiApplication>
 #include <QHideEvent>
 #include <QHBoxLayout>
+#include <QLineEdit>
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
@@ -224,6 +226,56 @@ bool confirm(QWidget *parent, const QString &language, const QString &title, con
     return box.exec() == QMessageBox::Yes;
 }
 
+QString cssQuoted(const QString &value)
+{
+    QString escaped = value;
+    escaped.replace("\\", "\\\\");
+    escaped.replace("\"", "\\\"");
+    return QString("\"%1\"").arg(escaped);
+}
+
+QString textAppearanceStyleSheet(const QString &fontFamily, int fontPointSize, const QString &textColor, int fontWeight)
+{
+    QStringList rules;
+    if (!fontFamily.trimmed().isEmpty()) {
+        rules << QString("font-family: %1;").arg(cssQuoted(fontFamily.trimmed()));
+    }
+    rules << QString("font-size: %1pt;").arg(fontPointSize);
+    rules << QString("font-weight: %1;").arg(fontWeight);
+    if (!textColor.trimmed().isEmpty()) {
+        rules << QString("color: %1;").arg(textColor.trimmed());
+    }
+    return rules.join(' ');
+}
+
+void applyTextAppearanceFont(QWidget *widget, const QString &fontFamily, int fontPointSize, QFont::Weight fontWeight)
+{
+    if (!widget) {
+        return;
+    }
+    QFont font = widget->font();
+    if (!fontFamily.trimmed().isEmpty()) {
+        font.setFamily(fontFamily.trimmed());
+    }
+    font.setPointSize(fontPointSize);
+    font.setWeight(fontWeight);
+    widget->setFont(font);
+}
+
+void updateColorButton(QPushButton *button, const QString &language, const QString &color)
+{
+    if (!button) {
+        return;
+    }
+    if (color.trimmed().isEmpty()) {
+        button->setText(UiText::text(language, UiText::Key::DefaultColor));
+        button->setStyleSheet({});
+        return;
+    }
+    button->setText(color.trimmed());
+    button->setStyleSheet(QString("QPushButton { color: %1; font-weight: 700; }").arg(color.trimmed()));
+}
+
 QString passwordInput(QWidget *parent, const QString &language, const QString &title, const QString &prompt, bool *ok)
 {
     QInputDialog dialog(parent);
@@ -238,6 +290,45 @@ QString passwordInput(QWidget *parent, const QString &language, const QString &t
     }
     return accepted ? dialog.textValue() : QString();
 }
+
+#ifdef Q_OS_WIN
+void forceWindowForeground(QWidget *widget)
+{
+    if (!widget) {
+        return;
+    }
+
+    const HWND hwnd = reinterpret_cast<HWND>(widget->winId());
+    if (!hwnd) {
+        return;
+    }
+
+    ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
+
+    const DWORD foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), nullptr);
+    const DWORD targetThread = GetWindowThreadProcessId(hwnd, nullptr);
+    const DWORD currentThread = GetCurrentThreadId();
+
+    if (foregroundThread != 0 && foregroundThread != currentThread) {
+        AttachThreadInput(currentThread, foregroundThread, TRUE);
+    }
+    if (targetThread != 0 && targetThread != currentThread) {
+        AttachThreadInput(currentThread, targetThread, TRUE);
+    }
+
+    BringWindowToTop(hwnd);
+    SetForegroundWindow(hwnd);
+    SetActiveWindow(hwnd);
+    SetFocus(hwnd);
+
+    if (targetThread != 0 && targetThread != currentThread) {
+        AttachThreadInput(currentThread, targetThread, FALSE);
+    }
+    if (foregroundThread != 0 && foregroundThread != currentThread) {
+        AttachThreadInput(currentThread, foregroundThread, FALSE);
+    }
+}
+#endif
 
 QString lightStyleSheet()
 {
@@ -652,7 +743,6 @@ void MainWindow::buildUi()
         button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         button->setIcon(iconForCategory(category));
         button->setText(categoryDisplayName(category));
-        button->setIconSize(QSize(32, 32));
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         button->setProperty("category", static_cast<int>(category));
         m_navGroup->addButton(button);
@@ -717,6 +807,7 @@ void MainWindow::rebuildNavItems()
             button->setToolTip(categoryDisplayName(category));
         }
     }
+    applyCategoryAppearance();
 }
 
 void MainWindow::buildSettingsMenu()
@@ -765,6 +856,10 @@ void MainWindow::buildSettingsMenu()
 
     m_itemAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::ItemAppearance));
     connect(m_itemAppearanceAction, &QAction::triggered, this, &MainWindow::showItemAppearanceDialog);
+    m_sectionAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::SectionAppearance));
+    connect(m_sectionAppearanceAction, &QAction::triggered, this, &MainWindow::showSectionAppearanceDialog);
+    m_categoryAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::CategoryAppearance));
+    connect(m_categoryAppearanceAction, &QAction::triggered, this, &MainWindow::showCategoryAppearanceDialog);
 
     retranslateUi();
 }
@@ -796,6 +891,12 @@ void MainWindow::retranslateUi()
     }
     if (m_itemAppearanceAction) {
         m_itemAppearanceAction->setText(uiText(UiText::Key::ItemAppearance));
+    }
+    if (m_sectionAppearanceAction) {
+        m_sectionAppearanceAction->setText(uiText(UiText::Key::SectionAppearance));
+    }
+    if (m_categoryAppearanceAction) {
+        m_categoryAppearanceAction->setText(uiText(UiText::Key::CategoryAppearance));
     }
     if (m_chineseAction) {
         const QSignalBlocker blocker(m_chineseAction);
@@ -829,11 +930,14 @@ void MainWindow::retranslateUi()
 
 void MainWindow::showSettings()
 {
-    show();
+    showNormal();
     setAlwaysOnTop(true);
     revealFromTopAutoHide();
     raise();
     activateWindow();
+#ifdef Q_OS_WIN
+    forceWindowForeground(this);
+#endif
 }
 
 QString MainWindow::language() const
@@ -1219,13 +1323,25 @@ void MainWindow::rebuildSections()
         header->setContextMenuPolicy(Qt::CustomContextMenu);
         header->setProperty("sectionId", section.id);
         header->setProperty("collapsed", section.collapsed);
+        const LauncherSectionAppearance sectionAppearance = m_document.settings.sectionAppearance;
+        header->setFixedHeight(sectionAppearance.headerHeight);
         auto *headerLayout = new QHBoxLayout(header);
-        headerLayout->setContentsMargins(8, 6, 8, 6);
+        const int headerVerticalMargin = qMax(2, (sectionAppearance.headerHeight - qMax(sectionAppearance.iconHeight, sectionAppearance.fontPointSize + 8)) / 2);
+        headerLayout->setContentsMargins(8, headerVerticalMargin, 8, headerVerticalMargin);
 
         auto *iconLabel = new QLabel(header);
-        iconLabel->setPixmap(iconForSection(section).pixmap(18, 18));
+        iconLabel->setPixmap(iconForSection(section).pixmap(sectionAppearance.iconWidth, sectionAppearance.iconHeight));
+        iconLabel->setFixedSize(sectionAppearance.iconWidth, sectionAppearance.iconHeight);
+        iconLabel->setScaledContents(false);
+        iconLabel->setAlignment(Qt::AlignCenter);
         auto *title = new QLabel(sectionDisplayName(language(), section), header);
         title->setObjectName("sectionTitle");
+        applyTextAppearanceFont(title, sectionAppearance.fontFamily, sectionAppearance.fontPointSize, QFont::DemiBold);
+        title->setStyleSheet(textAppearanceStyleSheet(
+            sectionAppearance.fontFamily,
+            sectionAppearance.fontPointSize,
+            sectionAppearance.textColor,
+            700));
         const int itemCount = std::count_if(m_document.rules.cbegin(), m_document.rules.cend(), [&section](const HotkeyRule &rule) {
             return rule.sectionId == section.id;
         });
@@ -1488,11 +1604,226 @@ void MainWindow::showItemAppearanceDialog()
     dialog->show();
 }
 
+void MainWindow::showSectionAppearanceDialog()
+{
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(uiText(UiText::Key::SectionAppearance));
+    dialog->setModal(false);
+
+    auto *layout = new QVBoxLayout(dialog);
+    auto *form = new QFormLayout;
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    layout->addLayout(form);
+
+    auto makeSpin = [dialog](int minimum, int maximum, int value, bool pixelSuffix = true) {
+        auto *spin = new QSpinBox(dialog);
+        spin->setRange(minimum, maximum);
+        spin->setValue(value);
+        if (pixelSuffix) {
+            spin->setSuffix(" px");
+        }
+        return spin;
+    };
+
+    const LauncherSectionAppearance appearance = m_document.settings.sectionAppearance;
+    auto *iconWidth = makeSpin(12, 96, appearance.iconWidth);
+    auto *iconHeight = makeSpin(12, 96, appearance.iconHeight);
+    auto *headerHeight = makeSpin(24, 96, appearance.headerHeight);
+    auto *fontFamily = new QFontComboBox(dialog);
+    if (!appearance.fontFamily.isEmpty()) {
+        fontFamily->setCurrentFont(QFont(appearance.fontFamily));
+    }
+    auto *fontPointSize = makeSpin(6, 18, appearance.fontPointSize, false);
+    auto *colorButton = new QPushButton(dialog);
+    auto *defaultColorButton = new QPushButton(uiText(UiText::Key::DefaultColor), dialog);
+    updateColorButton(colorButton, language(), appearance.textColor);
+
+    auto *colorLayout = new QHBoxLayout;
+    colorLayout->setContentsMargins(0, 0, 0, 0);
+    colorLayout->addWidget(colorButton, 1);
+    colorLayout->addWidget(defaultColorButton);
+    auto *colorWidget = new QWidget(dialog);
+    colorWidget->setLayout(colorLayout);
+
+    form->addRow(uiText(UiText::Key::IconWidth), iconWidth);
+    form->addRow(uiText(UiText::Key::IconHeight), iconHeight);
+    form->addRow(uiText(UiText::Key::SectionHeight), headerHeight);
+    form->addRow(uiText(UiText::Key::FontFamily), fontFamily);
+    form->addRow(uiText(UiText::Key::FontPointSize), fontPointSize);
+    form->addRow(uiText(UiText::Key::TextColor), colorWidget);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+
+    auto apply = [this, iconWidth, iconHeight, headerHeight, fontFamily, fontPointSize, colorButton]() {
+        LauncherSectionAppearance next;
+        next.iconWidth = iconWidth->value();
+        next.iconHeight = iconHeight->value();
+        next.headerHeight = headerHeight->value();
+        next.fontFamily = fontFamily->currentFont().family();
+        next.fontPointSize = fontPointSize->value();
+        next.textColor = colorButton->property("selectedColor").toString();
+        m_document.settings.sectionAppearance = LauncherSectionAppearance::fromJson(next.toJson());
+        applySectionAppearanceChange();
+    };
+    colorButton->setProperty("selectedColor", appearance.textColor);
+
+    for (QSpinBox *spin : {iconWidth, iconHeight, headerHeight, fontPointSize}) {
+        connect(spin, &QSpinBox::valueChanged, this, apply);
+    }
+    connect(fontFamily, &QFontComboBox::currentFontChanged, this, apply);
+    connect(colorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
+        const QString currentColor = colorButton->property("selectedColor").toString();
+        const QColor initial = currentColor.isEmpty() ? palette().color(QPalette::Text) : QColor(currentColor);
+        const QColor selected = QColorDialog::getColor(initial, this, uiText(UiText::Key::ChooseColor));
+        if (!selected.isValid()) {
+            return;
+        }
+        const QString color = selected.name(QColor::HexRgb);
+        colorButton->setProperty("selectedColor", color);
+        updateColorButton(colorButton, language(), color);
+        apply();
+    });
+    connect(defaultColorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
+        colorButton->setProperty("selectedColor", QString());
+        updateColorButton(colorButton, language(), QString());
+        apply();
+    });
+
+    dialog->resize(320, dialog->sizeHint().height());
+    dialog->show();
+}
+
+void MainWindow::showCategoryAppearanceDialog()
+{
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(uiText(UiText::Key::CategoryAppearance));
+    dialog->setModal(false);
+
+    auto *layout = new QVBoxLayout(dialog);
+    auto *form = new QFormLayout;
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    layout->addLayout(form);
+
+    auto makeSpin = [dialog](int minimum, int maximum, int value, bool pixelSuffix = true) {
+        auto *spin = new QSpinBox(dialog);
+        spin->setRange(minimum, maximum);
+        spin->setValue(value);
+        if (pixelSuffix) {
+            spin->setSuffix(" px");
+        }
+        return spin;
+    };
+
+    const LauncherCategoryAppearance appearance = m_document.settings.categoryAppearance;
+    auto *iconWidth = makeSpin(12, 96, appearance.iconWidth);
+    auto *iconHeight = makeSpin(12, 96, appearance.iconHeight);
+    auto *buttonHeight = makeSpin(24, 96, appearance.buttonHeight);
+    auto *fontFamily = new QFontComboBox(dialog);
+    if (!appearance.fontFamily.isEmpty()) {
+        fontFamily->setCurrentFont(QFont(appearance.fontFamily));
+    }
+    auto *fontPointSize = makeSpin(6, 18, appearance.fontPointSize, false);
+    auto *colorButton = new QPushButton(dialog);
+    auto *defaultColorButton = new QPushButton(uiText(UiText::Key::DefaultColor), dialog);
+    updateColorButton(colorButton, language(), appearance.textColor);
+
+    auto *colorLayout = new QHBoxLayout;
+    colorLayout->setContentsMargins(0, 0, 0, 0);
+    colorLayout->addWidget(colorButton, 1);
+    colorLayout->addWidget(defaultColorButton);
+    auto *colorWidget = new QWidget(dialog);
+    colorWidget->setLayout(colorLayout);
+
+    form->addRow(uiText(UiText::Key::IconWidth), iconWidth);
+    form->addRow(uiText(UiText::Key::IconHeight), iconHeight);
+    form->addRow(uiText(UiText::Key::CategoryHeight), buttonHeight);
+    form->addRow(uiText(UiText::Key::FontFamily), fontFamily);
+    form->addRow(uiText(UiText::Key::FontPointSize), fontPointSize);
+    form->addRow(uiText(UiText::Key::TextColor), colorWidget);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+
+    auto apply = [this, iconWidth, iconHeight, buttonHeight, fontFamily, fontPointSize, colorButton]() {
+        LauncherCategoryAppearance next;
+        next.iconWidth = iconWidth->value();
+        next.iconHeight = iconHeight->value();
+        next.buttonHeight = buttonHeight->value();
+        next.fontFamily = fontFamily->currentFont().family();
+        next.fontPointSize = fontPointSize->value();
+        next.textColor = colorButton->property("selectedColor").toString();
+        m_document.settings.categoryAppearance = LauncherCategoryAppearance::fromJson(next.toJson());
+        applyCategoryAppearanceChange();
+    };
+    colorButton->setProperty("selectedColor", appearance.textColor);
+
+    for (QSpinBox *spin : {iconWidth, iconHeight, buttonHeight, fontPointSize}) {
+        connect(spin, &QSpinBox::valueChanged, this, apply);
+    }
+    connect(fontFamily, &QFontComboBox::currentFontChanged, this, apply);
+    connect(colorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
+        const QString currentColor = colorButton->property("selectedColor").toString();
+        const QColor initial = currentColor.isEmpty() ? palette().color(QPalette::Text) : QColor(currentColor);
+        const QColor selected = QColorDialog::getColor(initial, this, uiText(UiText::Key::ChooseColor));
+        if (!selected.isValid()) {
+            return;
+        }
+        const QString color = selected.name(QColor::HexRgb);
+        colorButton->setProperty("selectedColor", color);
+        updateColorButton(colorButton, language(), color);
+        apply();
+    });
+    connect(defaultColorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
+        colorButton->setProperty("selectedColor", QString());
+        updateColorButton(colorButton, language(), QString());
+        apply();
+    });
+
+    dialog->resize(320, dialog->sizeHint().height());
+    dialog->show();
+}
+
 void MainWindow::applyItemAppearanceChange()
 {
     applyFixedLauncherWidth();
     saveDocumentSilently();
     refreshLauncher();
+}
+
+void MainWindow::applySectionAppearanceChange()
+{
+    saveDocumentSilently();
+    refreshLauncher();
+}
+
+void MainWindow::applyCategoryAppearanceChange()
+{
+    saveDocumentSilently();
+    applyCategoryAppearance();
+    rebuildNavItems();
+}
+
+void MainWindow::applyCategoryAppearance()
+{
+    const LauncherCategoryAppearance appearance = m_document.settings.categoryAppearance;
+    for (QToolButton *button : std::as_const(m_navButtons)) {
+        if (!button) {
+            continue;
+        }
+        button->setFixedHeight(appearance.buttonHeight);
+        button->setIconSize(QSize(appearance.iconWidth, appearance.iconHeight));
+        applyTextAppearanceFont(button, appearance.fontFamily, appearance.fontPointSize, QFont::DemiBold);
+        button->setStyleSheet(textAppearanceStyleSheet(
+            appearance.fontFamily,
+            appearance.fontPointSize,
+            appearance.textColor,
+            700));
+    }
 }
 
 int MainWindow::fixedLauncherWidth() const
@@ -1531,6 +1862,7 @@ bool MainWindow::effectiveDarkTheme() const
 void MainWindow::applyTheme()
 {
     setStyleSheet(effectiveDarkTheme() ? darkStyleSheet() : lightStyleSheet());
+    applyCategoryAppearance();
     if (m_themeSystemAction) {
         const QSignalBlocker blocker(m_themeSystemAction);
         m_themeSystemAction->setChecked(m_document.settings.themeMode == "system");
@@ -1819,7 +2151,11 @@ void MainWindow::addRuleToSection(const QString &sectionId)
 
     RuleDialog dialog(language(), this);
     dialog.setContext(section.category, section.id);
-    if (dialog.exec() != QDialog::Accepted) {
+    const bool hookWasPaused = m_hookService.isPaused();
+    m_hookService.setPaused(true);
+    const int dialogResult = dialog.exec();
+    m_hookService.setPaused(hookWasPaused);
+    if (dialogResult != QDialog::Accepted) {
         return;
     }
 
@@ -1847,7 +2183,11 @@ void MainWindow::editRule(const QString &ruleId)
 
     RuleDialog dialog(language(), this);
     dialog.setRule(m_document.rules[index]);
-    if (dialog.exec() != QDialog::Accepted) {
+    const bool hookWasPaused = m_hookService.isPaused();
+    m_hookService.setPaused(true);
+    const int dialogResult = dialog.exec();
+    m_hookService.setPaused(hookWasPaused);
+    if (dialogResult != QDialog::Accepted) {
         return;
     }
 

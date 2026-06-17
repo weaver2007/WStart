@@ -40,6 +40,7 @@ endif()
 set(HKM_SOURCES
     src/ActionRunner.cpp
     src/HotkeyEdit.cpp
+    src/HotkeyConflictDetector.cpp
     src/HotkeyHookService.cpp
     src/HotkeyTypes.cpp
     src/MainWindow.cpp
@@ -52,6 +53,7 @@ set(HKM_SOURCES
 set(HKM_HEADERS
     src/ActionRunner.h
     src/HotkeyEdit.h
+    src/HotkeyConflictDetector.h
     src/HotkeyHookService.h
     src/HotkeyTypes.h
     src/MainWindow.h
@@ -114,6 +116,7 @@ endif()
 
 add_executable(HotKeyManagerTests
     tests/test_core.cpp
+    src/HotkeyConflictDetector.cpp
     src/HotkeyTypes.cpp
     src/RuleStore.cpp
     src/UiText.cpp

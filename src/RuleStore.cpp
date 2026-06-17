@@ -1,5 +1,6 @@
 #include "RuleStore.h"
 
+#include "HotkeyConflictDetector.h"
 #include "UiText.h"
 
 #include <QDir>
@@ -135,12 +136,7 @@ QStringList RuleStore::warningsForRule(const HotkeyRule &rule, const QVector<Hot
             }
         }
 
-        const QString display = rule.hotkey.displayText();
-        const QStringList knownSystemHotkeys = {
-            "Win+E", "Win+R", "Win+D", "Win+Tab", "Alt+Tab", "Alt+F4",
-            "Ctrl+Esc", "Ctrl+Shift+Esc", "Win+L"
-        };
-        if (knownSystemHotkeys.contains(display, Qt::CaseInsensitive)) {
+        if (HotkeyConflictDetector::isKnownSystemHotkey(rule.hotkey)) {
             warnings << UiText::text(language, UiText::Key::HotkeySystemShortcutWarning);
         }
     }

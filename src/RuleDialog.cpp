@@ -1,9 +1,13 @@
 #include "RuleDialog.h"
 
+#include "HotkeyConflictDetector.h"
+
+#include <QAbstractButton>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QUuid>
 #include <QVBoxLayout>
@@ -27,6 +31,8 @@ RuleDialog::RuleDialog(const QString &language, QWidget *parent)
 
     auto *recordButton = new QPushButton(uiText(UiText::Key::Record), this);
     connect(recordButton, &QPushButton::clicked, m_hotkeyEdit, &HotkeyEdit::beginRecording);
+    auto *checkHotkeyButton = new QPushButton(uiText(UiText::Key::HotkeyCheck), this);
+    connect(checkHotkeyButton, &QPushButton::clicked, this, &RuleDialog::checkHotkeyOccupancy);
 
     m_browseButton = new QPushButton(uiText(UiText::Key::Browse), this);
     connect(m_browseButton, &QPushButton::clicked, this, &RuleDialog::browseTarget);
@@ -34,6 +40,7 @@ RuleDialog::RuleDialog(const QString &language, QWidget *parent)
     auto *hotkeyLayout = new QHBoxLayout;
     hotkeyLayout->addWidget(m_hotkeyEdit, 1);
     hotkeyLayout->addWidget(recordButton);
+    hotkeyLayout->addWidget(checkHotkeyButton);
 
     auto *targetLayout = new QHBoxLayout;
     targetLayout->addWidget(m_targetEdit);
@@ -120,6 +127,19 @@ void RuleDialog::browseTarget()
     if (!selected.isEmpty()) {
         m_targetEdit->setText(selected);
     }
+}
+
+void RuleDialog::checkHotkeyOccupancy()
+{
+    const HotkeyConflictDetector::Result result = HotkeyConflictDetector::check(m_hotkeyEdit->hotkey(), m_language);
+    const QMessageBox::Icon icon = result.availability == HotkeyConflictDetector::Availability::Available
+        ? QMessageBox::Information
+        : QMessageBox::Warning;
+    QMessageBox box(icon, uiText(UiText::Key::HotkeyCheck), result.notes.join("\n"), QMessageBox::Ok, this);
+    if (QAbstractButton *button = box.button(QMessageBox::Ok)) {
+        button->setText(uiText(UiText::Key::Ok));
+    }
+    box.exec();
 }
 
 QString RuleDialog::uiText(UiText::Key key) const

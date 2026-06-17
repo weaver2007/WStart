@@ -22,6 +22,7 @@ public:
 
 private slots:
     void browseTarget();
+    void checkHotkeyOccupancy();
 
 private:
     QString uiText(UiText::Key key) const;

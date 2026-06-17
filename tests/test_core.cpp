@@ -1,4 +1,5 @@
 #include "../src/HotkeyTypes.h"
+#include "../src/HotkeyConflictDetector.h"
 #include "../src/RuleStore.h"
 
 #include <QTemporaryDir>
@@ -21,6 +22,8 @@ private slots:
     void appSettingsDefaultsAndLanguageFallback();
     void itemAppearanceRoundTrip();
     void itemAppearanceDefaultsAndFallback();
+    void sectionAndCategoryAppearanceRoundTrip();
+    void sectionAndCategoryAppearanceDefaultsAndFallback();
     void conflictWarnings();
 };
 
@@ -129,6 +132,14 @@ void CoreTests::appSettingsRoundTrip()
     settings.themeMode = "dark";
     settings.itemAppearance.itemWidth = 88;
     settings.itemAppearance.showEllipsis = true;
+    settings.sectionAppearance.iconWidth = 22;
+    settings.sectionAppearance.headerHeight = 40;
+    settings.sectionAppearance.fontPointSize = 9;
+    settings.sectionAppearance.textColor = "#123456";
+    settings.categoryAppearance.iconWidth = 36;
+    settings.categoryAppearance.buttonHeight = 42;
+    settings.categoryAppearance.fontPointSize = 11;
+    settings.categoryAppearance.textColor = "#abcdef";
 
     const AppSettings parsed = AppSettings::fromJson(settings.toJson());
     QCOMPARE(parsed.language, QString("en-US"));
@@ -136,6 +147,14 @@ void CoreTests::appSettingsRoundTrip()
     QCOMPARE(parsed.themeMode, QString("dark"));
     QCOMPARE(parsed.itemAppearance.itemWidth, 88);
     QCOMPARE(parsed.itemAppearance.showEllipsis, true);
+    QCOMPARE(parsed.sectionAppearance.iconWidth, 22);
+    QCOMPARE(parsed.sectionAppearance.headerHeight, 40);
+    QCOMPARE(parsed.sectionAppearance.fontPointSize, 9);
+    QCOMPARE(parsed.sectionAppearance.textColor, QString("#123456"));
+    QCOMPARE(parsed.categoryAppearance.iconWidth, 36);
+    QCOMPARE(parsed.categoryAppearance.buttonHeight, 42);
+    QCOMPARE(parsed.categoryAppearance.fontPointSize, 11);
+    QCOMPARE(parsed.categoryAppearance.textColor, QString("#abcdef"));
 }
 
 void CoreTests::appSettingsDefaultsAndLanguageFallback()
@@ -146,6 +165,12 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback()
     QCOMPARE(defaults.themeMode, QString("system"));
     QCOMPARE(defaults.itemAppearance.iconWidth, 48);
     QCOMPARE(defaults.itemAppearance.itemWidth, 64);
+    QCOMPARE(defaults.sectionAppearance.iconWidth, 18);
+    QCOMPARE(defaults.sectionAppearance.headerHeight, 32);
+    QCOMPARE(defaults.sectionAppearance.fontPointSize, 8);
+    QCOMPARE(defaults.categoryAppearance.iconWidth, 32);
+    QCOMPARE(defaults.categoryAppearance.buttonHeight, 30);
+    QCOMPARE(defaults.categoryAppearance.fontPointSize, 10);
 
     QJsonObject invalid;
     invalid["language"] = "fr-FR";
@@ -215,6 +240,79 @@ void CoreTests::itemAppearanceDefaultsAndFallback()
     QCOMPARE(parsed.showEllipsis, true);
 }
 
+void CoreTests::sectionAndCategoryAppearanceRoundTrip()
+{
+    LauncherSectionAppearance section;
+    section.iconWidth = 24;
+    section.iconHeight = 20;
+    section.headerHeight = 38;
+    section.fontFamily = "Microsoft YaHei UI";
+    section.fontPointSize = 9;
+    section.textColor = "#336699";
+
+    const LauncherSectionAppearance parsedSection = LauncherSectionAppearance::fromJson(section.toJson());
+    QCOMPARE(parsedSection.iconWidth, 24);
+    QCOMPARE(parsedSection.iconHeight, 20);
+    QCOMPARE(parsedSection.headerHeight, 38);
+    QCOMPARE(parsedSection.fontFamily, QString("Microsoft YaHei UI"));
+    QCOMPARE(parsedSection.fontPointSize, 9);
+    QCOMPARE(parsedSection.textColor, QString("#336699"));
+
+    LauncherCategoryAppearance category;
+    category.iconWidth = 40;
+    category.iconHeight = 36;
+    category.buttonHeight = 44;
+    category.fontFamily = "Segoe UI";
+    category.fontPointSize = 11;
+    category.textColor = "#663399";
+
+    const LauncherCategoryAppearance parsedCategory = LauncherCategoryAppearance::fromJson(category.toJson());
+    QCOMPARE(parsedCategory.iconWidth, 40);
+    QCOMPARE(parsedCategory.iconHeight, 36);
+    QCOMPARE(parsedCategory.buttonHeight, 44);
+    QCOMPARE(parsedCategory.fontFamily, QString("Segoe UI"));
+    QCOMPARE(parsedCategory.fontPointSize, 11);
+    QCOMPARE(parsedCategory.textColor, QString("#663399"));
+}
+
+void CoreTests::sectionAndCategoryAppearanceDefaultsAndFallback()
+{
+    const LauncherSectionAppearance sectionDefaults = LauncherSectionAppearance::fromJson({});
+    QCOMPARE(sectionDefaults.iconWidth, 18);
+    QCOMPARE(sectionDefaults.iconHeight, 18);
+    QCOMPARE(sectionDefaults.headerHeight, 32);
+    QCOMPARE(sectionDefaults.fontPointSize, 8);
+    QCOMPARE(sectionDefaults.textColor, QString());
+
+    const LauncherCategoryAppearance categoryDefaults = LauncherCategoryAppearance::fromJson({});
+    QCOMPARE(categoryDefaults.iconWidth, 32);
+    QCOMPARE(categoryDefaults.iconHeight, 32);
+    QCOMPARE(categoryDefaults.buttonHeight, 30);
+    QCOMPARE(categoryDefaults.fontPointSize, 10);
+    QCOMPARE(categoryDefaults.textColor, QString());
+
+    QJsonObject invalid;
+    invalid["iconWidth"] = 1;
+    invalid["iconHeight"] = 999;
+    invalid["headerHeight"] = 1;
+    invalid["buttonHeight"] = 999;
+    invalid["fontPointSize"] = 100;
+    invalid["textColor"] = "not-a-color";
+    const LauncherSectionAppearance parsedSection = LauncherSectionAppearance::fromJson(invalid);
+    QVERIFY(parsedSection.iconWidth >= 12);
+    QVERIFY(parsedSection.iconHeight <= 96);
+    QVERIFY(parsedSection.headerHeight >= 24);
+    QVERIFY(parsedSection.fontPointSize <= 18);
+    QCOMPARE(parsedSection.textColor, QString());
+
+    const LauncherCategoryAppearance parsedCategory = LauncherCategoryAppearance::fromJson(invalid);
+    QVERIFY(parsedCategory.iconWidth >= 12);
+    QVERIFY(parsedCategory.iconHeight <= 96);
+    QVERIFY(parsedCategory.buttonHeight <= 96);
+    QVERIFY(parsedCategory.fontPointSize <= 18);
+    QCOMPARE(parsedCategory.textColor, QString());
+}
+
 void CoreTests::conflictWarnings()
 {
     RuleStore store;
@@ -236,6 +334,17 @@ void CoreTests::conflictWarnings()
 
     const QStringList warnings = store.warningsForRule(second, {first});
     QVERIFY(!warnings.isEmpty());
+
+    HotkeyRule shellShortcut = first;
+    shellShortcut.id = "shell-search";
+    shellShortcut.hotkey.modifiers = ModifierWin;
+#ifdef Q_OS_WIN
+    shellShortcut.hotkey.key = 'S';
+#else
+    shellShortcut.hotkey.key = 83;
+#endif
+    QVERIFY(HotkeyConflictDetector::isKnownSystemHotkey(shellShortcut.hotkey));
+    QVERIFY(!store.warningsForRule(shellShortcut, {}).isEmpty());
 
     HotkeyRule noHotkey = first;
     noHotkey.id = "three";
