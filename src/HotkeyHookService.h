@@ -34,7 +34,7 @@ private:
 #ifdef Q_OS_WIN
     static LRESULT CALLBACK keyboardProc(int code, WPARAM wParam, LPARAM lParam);
     LRESULT handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTRUCT *event);
-    HotkeyModifiers currentModifiers(int eventKey) const;
+    HotkeyModifiers currentModifiers(int eventKey, bool isKeyDown);
     const HotkeyRule *matchingRule(int virtualKey, HotkeyModifiers modifiers) const;
     bool isTrackedSuppressedKey(int virtualKey) const;
     bool isModifierKey(int virtualKey) const;

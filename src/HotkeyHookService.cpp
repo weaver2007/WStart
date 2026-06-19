@@ -139,7 +139,7 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
         return 1;
     }
 
-    const HotkeyModifiers modifiers = currentModifiers(virtualKey);
+    const HotkeyModifiers modifiers = currentModifiers(virtualKey, isKeyDown);
     const HotkeyRule *rule = matchingRule(virtualKey, modifiers);
     if (!rule) {
         if (isKeyUp && isModifier) {
@@ -171,25 +171,12 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
     return 1;
 }
 
-HotkeyModifiers HotkeyHookService::currentModifiers(int eventKey) const
+HotkeyModifiers HotkeyHookService::currentModifiers(int eventKey, bool isKeyDown)
 {
-    HotkeyModifiers modifiers = m_pressedModifiers;
+    HotkeyModifiers modifiers = ModifierNone;
 
-    if (eventKey == VK_CONTROL || eventKey == VK_LCONTROL || eventKey == VK_RCONTROL) {
-        modifiers |= ModifierCtrl;
-    }
-    if (eventKey == VK_MENU || eventKey == VK_LMENU || eventKey == VK_RMENU) {
-        modifiers |= ModifierAlt;
-    }
-    if (eventKey == VK_SHIFT || eventKey == VK_LSHIFT || eventKey == VK_RSHIFT) {
-        modifiers |= ModifierShift;
-    }
-    if (eventKey == VK_LWIN || eventKey == VK_RWIN) {
-        modifiers |= ModifierWin;
-    }
-
-    auto pressed = [eventKey](int key) {
-        if (eventKey == key) {
+    auto pressed = [eventKey, isKeyDown](int key) {
+        if (isKeyDown && eventKey == key) {
             return true;
         }
         return (GetAsyncKeyState(key) & 0x8000) != 0;
@@ -207,6 +194,7 @@ HotkeyModifiers HotkeyHookService::currentModifiers(int eventKey) const
     if (pressed(VK_LWIN) || pressed(VK_RWIN)) {
         modifiers |= ModifierWin;
     }
+    m_pressedModifiers = modifiers;
     return modifiers;
 }
 
