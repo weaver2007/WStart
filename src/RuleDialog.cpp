@@ -1,6 +1,7 @@
 #include "RuleDialog.h"
 
 #include "HotkeyConflictDetector.h"
+#include "QtCompat.h"
 
 #include <QAbstractButton>
 #include <QDialogButtonBox>
@@ -31,12 +32,12 @@ RuleDialog::RuleDialog(const QString &language, QWidget *parent)
     m_descriptionEdit = new QLineEdit(this);
 
     auto *recordButton = new QPushButton(uiText(UiText::Key::Record), this);
-    connect(recordButton, &QPushButton::clicked, m_hotkeyEdit, &HotkeyEdit::beginRecording);
+    connect(recordButton, SIGNAL(clicked()), m_hotkeyEdit, SLOT(beginRecording()));
     auto *checkHotkeyButton = new QPushButton(uiText(UiText::Key::HotkeyCheck), this);
-    connect(checkHotkeyButton, &QPushButton::clicked, this, &RuleDialog::checkHotkeyOccupancy);
+    connect(checkHotkeyButton, SIGNAL(clicked()), this, SLOT(checkHotkeyOccupancy()));
 
     m_browseButton = new QPushButton(uiText(UiText::Key::Browse), this);
-    connect(m_browseButton, &QPushButton::clicked, this, &RuleDialog::browseTarget);
+    connect(m_browseButton, SIGNAL(clicked()), this, SLOT(browseTarget()));
 
     auto *hotkeyLayout = new QHBoxLayout;
     hotkeyLayout->addWidget(m_hotkeyEdit, 1);
@@ -64,11 +65,11 @@ RuleDialog::RuleDialog(const QString &language, QWidget *parent)
     form->addRow(uiText(UiText::Key::WorkingDirectory), m_workingDirectoryRow);
     form->addRow(uiText(UiText::Key::Hotkey), hotkeyLayout);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, this);
     buttons->button(QDialogButtonBox::Ok)->setText(uiText(UiText::Key::Ok));
     buttons->button(QDialogButtonBox::Cancel)->setText(uiText(UiText::Key::Cancel));
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
+    connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
 
     auto *layout = new QVBoxLayout(this);
     layout->addLayout(form);
@@ -101,7 +102,7 @@ HotkeyRule RuleDialog::rule() const
 {
     HotkeyRule result = m_rule;
     if (result.id.isEmpty()) {
-        result.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        result.id = QtCompat::uuidWithoutBraces();
     }
     result.enabled = true;
     result.category = m_category;

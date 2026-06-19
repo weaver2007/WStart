@@ -5,24 +5,17 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QDesktopWidget>
+#include <QFont>
 #include <QIcon>
 #include <QLockFile>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QMessageBox>
-#include <QThread>
 #include <QSystemTrayIcon>
 #include <QStandardPaths>
-#include <QtPlugin>
 
-#include <memory>
-
-#if defined(HKM_IMPORT_QT5_STATIC_PLUGINS)
-Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin)
-Q_IMPORT_PLUGIN(QSvgIconPlugin)
-Q_IMPORT_PLUGIN(QSvgPlugin)
-Q_IMPORT_PLUGIN(QICOPlugin)
-#endif
+#include <windows.h>
 
 namespace {
 QString singleInstanceServerName()
@@ -44,7 +37,7 @@ bool notifyExistingInstance()
             return true;
         }
         socket.abort();
-        QThread::msleep(50);
+        Sleep(50);
     }
     return false;
 }
@@ -53,6 +46,13 @@ bool notifyExistingInstance()
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    const int dpi = QApplication::desktop() ? QApplication::desktop()->logicalDpiX() : 96;
+    if (dpi > 96) {
+        QFont font = app.font();
+        const int pointSize = font.pointSize() > 0 ? font.pointSize() : 9;
+        font.setPointSize(qBound(9, (pointSize * dpi + 48) / 96, 20));
+        app.setFont(font);
+    }
     QApplication::setApplicationName("HotKeyManager");
     QApplication::setOrganizationName("HotKeyManager");
     QApplication::setWindowIcon(AppIcon::launcherIcon());
@@ -63,8 +63,8 @@ int main(int argc, char *argv[])
         QDir().mkpath(lockDirectory);
     }
 
-    std::unique_ptr<QLockFile> lockFile(new QLockFile(QDir(lockDirectory.isEmpty() ? QDir::tempPath() : lockDirectory).filePath("HotKeyManager.lock")));
-    if (!lockFile->tryLock(0)) {
+    QLockFile lockFile(QDir(lockDirectory.isEmpty() ? QDir::tempPath() : lockDirectory).filePath("HotKeyManager.lock"));
+    if (!lockFile.tryLock(0)) {
         if (notifyExistingInstance()) {
             return 0;
         }
@@ -78,20 +78,12 @@ int main(int argc, char *argv[])
     }
 
     MainWindow window;
-    TrayController tray(&window);
+    TrayController tray(&window, &window);
 
-    QObject::connect(&server, &QLocalServer::newConnection, &app, [&]() {
-        while (server.hasPendingConnections()) {
-            if (QLocalSocket *socket = server.nextPendingConnection()) {
-                window.showSettings();
-                socket->disconnectFromServer();
-                socket->deleteLater();
-            }
-        }
-    });
+    QObject::connect(&server, SIGNAL(newConnection()), &window, SLOT(showSettings()));
 
     if (!QSystemTrayIcon::isSystemTrayAvailable()) {
-        QMessageBox::warning(nullptr, "HotKeyManager", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
+        QMessageBox::warning(0, "HotKeyManager", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
     }
 
     window.show();

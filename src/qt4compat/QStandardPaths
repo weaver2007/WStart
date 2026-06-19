@@ -1,0 +1,23 @@
+#pragma once
+
+#include <QDesktopServices>
+#include <QDir>
+#include <QString>
+
+class QStandardPaths {
+public:
+    enum StandardLocation {
+        AppConfigLocation,
+        AppLocalDataLocation
+    };
+
+    static QString writableLocation(StandardLocation location)
+    {
+        Q_UNUSED(location);
+        const QString data = QDesktopServices::storageLocation(QDesktopServices::DataLocation);
+        if (!data.isEmpty()) {
+            return data;
+        }
+        return QDir::home().filePath(".HotKeyManager");
+    }
+};

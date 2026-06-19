@@ -28,6 +28,7 @@ public:
 signals:
     void hotkeyTriggered(const HotkeyRule &rule);
     void hookError(const QString &message);
+    void queuedHotkeyTriggered(const HotkeyRule &rule);
 
 private:
 #ifdef Q_OS_WIN
@@ -37,10 +38,7 @@ private:
     const HotkeyRule *matchingRule(int virtualKey, HotkeyModifiers modifiers) const;
     bool isTrackedSuppressedKey(int virtualKey) const;
     bool isModifierKey(int virtualKey) const;
-    bool isWinKey(int virtualKey) const;
-    bool hasEnabledWinHotkey() const;
     void updatePressedModifierState(int virtualKey, bool pressed);
-    bool winModifierPressed() const;
     void trackSuppressedChord(const HotkeyCombination &hotkey);
     void clearSuppressedKey(int virtualKey);
 
@@ -53,7 +51,6 @@ private:
     QSet<int> m_suppressedKeys;
     QHash<int, QString> m_suppressedTriggerIds;
     HotkeyModifiers m_pressedModifiers = ModifierNone;
-    bool m_interceptingWinChord = false;
 #endif
     bool m_paused = false;
 };

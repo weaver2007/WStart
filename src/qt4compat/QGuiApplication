@@ -1,0 +1,26 @@
+#pragma once
+
+#include "QScreen"
+
+#include <QList>
+#include <QPoint>
+
+class QGuiApplication {
+public:
+    static QScreen *primaryScreen()
+    {
+        static QScreen screen;
+        return &screen;
+    }
+
+    static QList<QScreen *> screens()
+    {
+        return QList<QScreen *>() << primaryScreen();
+    }
+
+    static QScreen *screenAt(const QPoint &point)
+    {
+        Q_UNUSED(point);
+        return primaryScreen();
+    }
+};

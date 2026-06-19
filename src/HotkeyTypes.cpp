@@ -1,5 +1,7 @@
 #include "HotkeyTypes.h"
 
+#include "QtCompat.h"
+
 #include <QColor>
 #include <QKeySequence>
 #include <QStringList>
@@ -20,7 +22,7 @@ QString normalizedOptionalColor(const QString &value)
         return {};
     }
     const QColor color(trimmed);
-    return color.isValid() ? color.name(QColor::HexRgb) : QString();
+    return color.isValid() ? color.name() : QString();
 }
 
 }
@@ -68,7 +70,7 @@ QJsonObject HotkeyCombination::toJson() const
 HotkeyCombination HotkeyCombination::fromJson(const QJsonObject &object)
 {
     HotkeyCombination hotkey;
-    hotkey.modifiers = HotkeyModifiers::fromInt(object.value("modifiers").toInt());
+    hotkey.modifiers = HotkeyModifiers(QFlag(object.value("modifiers").toInt()));
     hotkey.key = object.value("key").toInt();
     return hotkey;
 }
@@ -222,7 +224,7 @@ LauncherSection LauncherSection::fromJson(const QJsonObject &object)
     LauncherSection section;
     section.id = object.value("id").toString();
     if (section.id.isEmpty()) {
-        section.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        section.id = QtCompat::uuidWithoutBraces();
     }
     section.category = categoryFromName(object.value("category").toString());
     section.name = object.value("name").toString();
@@ -278,7 +280,7 @@ HotkeyRule HotkeyRule::fromJson(const QJsonObject &object)
     HotkeyRule rule;
     rule.id = object.value("id").toString();
     if (rule.id.isEmpty()) {
-        rule.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        rule.id = QtCompat::uuidWithoutBraces();
     }
     rule.enabled = object.value("enabled").toBool(true);
     if (object.contains("category")) {
@@ -350,14 +352,14 @@ QJsonObject LauncherItemAppearance::toJson() const
 LauncherItemAppearance LauncherItemAppearance::fromJson(const QJsonObject &object)
 {
     LauncherItemAppearance appearance;
-    appearance.iconWidth = std::clamp(object.value("iconWidth").toInt(appearance.iconWidth), 16, 128);
-    appearance.iconHeight = std::clamp(object.value("iconHeight").toInt(appearance.iconHeight), 16, 128);
-    appearance.itemWidth = std::clamp(object.value("itemWidth").toInt(appearance.itemWidth), 40, 180);
-    appearance.itemHeight = std::clamp(object.value("itemHeight").toInt(appearance.itemHeight), 44, 220);
+    appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 16, 128);
+    appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 16, 128);
+    appearance.itemWidth = QtCompat::boundedInt(object.value("itemWidth").toInt(appearance.itemWidth), 40, 180);
+    appearance.itemHeight = QtCompat::boundedInt(object.value("itemHeight").toInt(appearance.itemHeight), 44, 220);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
-    appearance.fontPointSize = std::clamp(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
-    appearance.horizontalSpacing = std::clamp(object.value("horizontalSpacing").toInt(appearance.horizontalSpacing), 0, 40);
-    appearance.verticalSpacing = std::clamp(object.value("verticalSpacing").toInt(appearance.verticalSpacing), 0, 40);
+    appearance.fontPointSize = QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.horizontalSpacing = QtCompat::boundedInt(object.value("horizontalSpacing").toInt(appearance.horizontalSpacing), 0, 40);
+    appearance.verticalSpacing = QtCompat::boundedInt(object.value("verticalSpacing").toInt(appearance.verticalSpacing), 0, 40);
     appearance.multilineText = object.value("multilineText").toBool(appearance.multilineText);
     appearance.showEllipsis = object.value("showEllipsis").toBool(appearance.showEllipsis);
     return appearance;
@@ -386,11 +388,11 @@ QJsonObject LauncherSectionAppearance::toJson() const
 LauncherSectionAppearance LauncherSectionAppearance::fromJson(const QJsonObject &object)
 {
     LauncherSectionAppearance appearance;
-    appearance.iconWidth = std::clamp(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
-    appearance.iconHeight = std::clamp(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
-    appearance.headerHeight = std::clamp(object.value("headerHeight").toInt(appearance.headerHeight), 24, 96);
+    appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
+    appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
+    appearance.headerHeight = QtCompat::boundedInt(object.value("headerHeight").toInt(appearance.headerHeight), 24, 96);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
-    appearance.fontPointSize = std::clamp(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.fontPointSize = QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
     appearance.textColor = normalizedOptionalColor(object.value("textColor").toString(appearance.textColor));
     return appearance;
 }
@@ -418,11 +420,11 @@ QJsonObject LauncherCategoryAppearance::toJson() const
 LauncherCategoryAppearance LauncherCategoryAppearance::fromJson(const QJsonObject &object)
 {
     LauncherCategoryAppearance appearance;
-    appearance.iconWidth = std::clamp(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
-    appearance.iconHeight = std::clamp(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
-    appearance.buttonHeight = std::clamp(object.value("buttonHeight").toInt(appearance.buttonHeight), 24, 96);
+    appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
+    appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
+    appearance.buttonHeight = QtCompat::boundedInt(object.value("buttonHeight").toInt(appearance.buttonHeight), 24, 96);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
-    appearance.fontPointSize = std::clamp(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.fontPointSize = QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
     appearance.textColor = normalizedOptionalColor(object.value("textColor").toString(appearance.textColor));
     return appearance;
 }

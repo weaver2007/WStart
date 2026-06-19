@@ -5,8 +5,12 @@
 #include <QThread>
 #include <QUrl>
 
+#include <string>
+
 #ifdef Q_OS_WIN
 #include <windows.h>
+#define PSAPI_VERSION 1
+#include <psapi.h>
 #include <shellapi.h>
 #endif
 
@@ -18,18 +22,28 @@ struct WindowSearch {
     HWND window = nullptr;
 };
 
+QString fromWideString(const wchar_t *value, int length = -1)
+{
+    return QString::fromUtf16(reinterpret_cast<const ushort *>(value), length);
+}
+
+std::wstring toWideString(const QString &value)
+{
+    return std::wstring(reinterpret_cast<const wchar_t *>(value.utf16()), static_cast<size_t>(value.length()));
+}
+
 QString processImagePath(DWORD processId)
 {
-    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, processId);
+    HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
     if (!process) {
         return {};
     }
 
     wchar_t buffer[MAX_PATH * 4] = {};
-    DWORD size = static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0]));
     QString path;
-    if (QueryFullProcessImageNameW(process, 0, buffer, &size)) {
-        path = QString::fromWCharArray(buffer, static_cast<int>(size));
+    const DWORD size = GetModuleFileNameExW(process, nullptr, buffer, static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0])));
+    if (size > 0) {
+        path = fromWideString(buffer, static_cast<int>(size));
     }
     CloseHandle(process);
     return QDir::toNativeSeparators(path);
@@ -111,7 +125,9 @@ bool activateExistingApplicationWindow(const QString &target)
         : fileInfo.canonicalFilePath());
 
     for (int attempt = 0; attempt < 8; ++attempt) {
-        WindowSearch search{targetPath, nullptr};
+        WindowSearch search;
+        search.targetPath = targetPath;
+        search.window = nullptr;
         EnumWindows(enumWindowsForProcessPath, reinterpret_cast<LPARAM>(&search));
         if (search.window) {
             return forceForegroundWindow(search.window);
@@ -140,9 +156,9 @@ bool ActionRunner::run(const LaunchAction &action, QString *error) const
 
 #ifdef Q_OS_WIN
     const std::wstring verb = L"open";
-    const std::wstring target = action.target.toStdWString();
-    const std::wstring arguments = action.arguments.toStdWString();
-    const std::wstring workingDirectory = QDir::toNativeSeparators(action.workingDirectory).toStdWString();
+    const std::wstring target = toWideString(action.target);
+    const std::wstring arguments = toWideString(action.arguments);
+    const std::wstring workingDirectory = toWideString(QDir::toNativeSeparators(action.workingDirectory));
 
     SHELLEXECUTEINFOW info = {};
     info.cbSize = sizeof(info);

@@ -17,6 +17,8 @@ public:
 
     HotkeyCombination hotkey() const;
     void setHotkey(const HotkeyCombination &hotkey);
+
+public slots:
     void beginRecording();
 
 signals:

@@ -1,0 +1,30 @@
+#pragma once
+
+#include <QVariant>
+
+class QJsonArray;
+class QJsonObject;
+
+class QJsonValue {
+public:
+    QJsonValue() {}
+    QJsonValue(const char *value) : m_value(QString::fromUtf8(value)) {}
+    QJsonValue(const QString &value) : m_value(value) {}
+    QJsonValue(int value) : m_value(value) {}
+    QJsonValue(bool value) : m_value(value) {}
+    explicit QJsonValue(const QVariant &value);
+    QJsonValue(const QJsonArray &value);
+    QJsonValue(const QJsonObject &value);
+
+    bool isObject() const;
+    bool isArray() const;
+    QString toString(const QString &defaultValue = QString()) const;
+    int toInt(int defaultValue = 0) const;
+    bool toBool(bool defaultValue = false) const;
+    QJsonObject toObject() const;
+    QJsonArray toArray() const;
+    QVariant toVariant() const { return m_value; }
+
+private:
+    QVariant m_value;
+};

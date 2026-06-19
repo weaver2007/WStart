@@ -1,0 +1,42 @@
+#pragma once
+
+#include <QDir>
+#include <QFileInfo>
+#include <QString>
+#include <QUuid>
+
+class QTemporaryDir {
+public:
+    QTemporaryDir()
+    {
+        m_path = QDir::temp().filePath(QString("hkm-%1").arg(QUuid::createUuid().toString()));
+        QDir().mkpath(m_path);
+    }
+
+    ~QTemporaryDir()
+    {
+        removeDirectory(QDir(m_path));
+    }
+
+    bool isValid() const { return QDir(m_path).exists(); }
+    QString path() const { return m_path; }
+
+private:
+    static void removeDirectory(const QDir &directory)
+    {
+        if (!directory.exists()) {
+            return;
+        }
+        const QFileInfoList entries = directory.entryInfoList(QDir::NoDotAndDotDot | QDir::AllEntries);
+        for (QFileInfoList::const_iterator it = entries.constBegin(); it != entries.constEnd(); ++it) {
+            if (it->isDir()) {
+                removeDirectory(QDir(it->absoluteFilePath()));
+            } else {
+                QFile::remove(it->absoluteFilePath());
+            }
+        }
+        QDir().rmdir(directory.absolutePath());
+    }
+
+    QString m_path;
+};

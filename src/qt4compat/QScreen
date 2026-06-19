@@ -1,0 +1,14 @@
+#pragma once
+
+#include <QApplication>
+#include <QDesktopWidget>
+#include <QRect>
+
+class QScreen {
+public:
+    QRect availableGeometry() const
+    {
+        QDesktopWidget *desktop = QApplication::desktop();
+        return desktop ? desktop->availableGeometry(desktop->primaryScreen()) : QRect();
+    }
+};

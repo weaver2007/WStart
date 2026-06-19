@@ -2,6 +2,7 @@
 
 #include "ActionRunner.h"
 #include "HotkeyHookService.h"
+#include "LauncherWindowInterface.h"
 #include "RuleStore.h"
 #include "UiText.h"
 
@@ -13,15 +14,31 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QPoint>
+#include <QPointer>
 #include <QRect>
 #include <QScrollArea>
+#include <QScreen>
 #include <QSet>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <QFontComboBox>
+#include <QPushButton>
 #include <QTimer>
 #include <QButtonGroup>
 #include <QToolButton>
 #include <QVBoxLayout>
 
-class MainWindow : public QMainWindow {
+#if defined(Q_OS_WIN) && QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
+class MainWindow : public QMainWindow, public LauncherWindowInterface {
     Q_OBJECT
 
 public:
@@ -41,7 +58,13 @@ signals:
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 #ifdef Q_OS_WIN
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    bool winEvent(MSG *message, long *result);
+#elif QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    bool nativeEvent(const QByteArray &eventType, void *message, long *result) override;
+#else
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
 #endif
     void closeEvent(QCloseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -54,6 +77,31 @@ protected:
 
 private slots:
     void onHotkeyTriggered(const HotkeyRule &rule);
+    void showSettingsMenu();
+    void onCategoryButtonClicked(int id);
+    void setLanguageChinese();
+    void setLanguageEnglish();
+    void setThemeSystem();
+    void setThemeLight();
+    void setThemeDark();
+    void showSectionContextMenu(const QPoint &pos);
+    void showListContextMenu(const QPoint &pos);
+    void runClickedRule(QListWidgetItem *item);
+    void applyItemAppearanceDialogChange();
+    void applySectionAppearanceDialogChange();
+    void applyCategoryAppearanceDialogChange();
+    void chooseSectionTextColor();
+    void resetSectionTextColor();
+    void chooseCategoryTextColor();
+    void resetCategoryTextColor();
+    void updateTopAutoHide();
+    void setStatus(const QString &message);
+    void refreshLauncher();
+    void updateLauncherGrids();
+    void showHotkeyListDialog();
+    void showItemAppearanceDialog();
+    void showSectionAppearanceDialog();
+    void showCategoryAppearanceDialog();
 
 private:
     enum class ResizeRegion {
@@ -65,6 +113,12 @@ private:
         BottomRight
     };
 
+    enum class PendingContextMenuKind {
+        None,
+        Section,
+        List
+    };
+
     void buildUi();
     void buildSettingsMenu();
     void retranslateUi();
@@ -73,17 +127,11 @@ private:
     void saveDocument();
     void saveDocumentSilently();
     void refreshHooks();
-    void refreshLauncher();
     void rebuildSections();
-    void updateLauncherGrids();
     void setCurrentCategory(LauncherCategory category);
     void setLanguage(const QString &language);
     void setThemeMode(const QString &themeMode);
     void applyTheme();
-    void showItemAppearanceDialog();
-    void showSectionAppearanceDialog();
-    void showCategoryAppearanceDialog();
-    void showHotkeyListDialog();
     void applyItemAppearanceChange();
     void applySectionAppearanceChange();
     void applyCategoryAppearanceChange();
@@ -92,7 +140,6 @@ private:
     void applyFixedLauncherWidth();
     bool effectiveDarkTheme() const;
     void upsertRule(const HotkeyRule &rule);
-    void setStatus(const QString &message);
     void showSectionMenu(const QString &sectionId, const QPoint &globalPos);
     void showListMenu(const QString &sectionId, QListWidget *list, const QPoint &viewportPos);
     void addSection(LauncherCategory category);
@@ -114,6 +161,7 @@ private:
     void browseRuleTarget(const QString &ruleId);
     void createDesktopShortcutForRule(const QString &ruleId);
     void setRuleStartupShortcut(const QString &ruleId);
+    void resetPendingContextMenu();
     bool ensureSectionUnlocked(const QString &sectionId);
     bool isSectionUnlocked(const LauncherSection &section) const;
     int sectionIndexById(const QString &sectionId) const;
@@ -134,7 +182,6 @@ private:
     void snapToTopIfNeeded();
     void setTopAutoHidden(bool hidden);
     void revealFromTopAutoHide();
-    void updateTopAutoHide();
     void setAlwaysOnTop(bool enabled);
     QScreen *currentScreen() const;
     QRect currentScreenAvailableGeometry() const;
@@ -169,11 +216,39 @@ private:
     QAction *m_sectionAppearanceAction = nullptr;
     QAction *m_categoryAppearanceAction = nullptr;
     QAction *m_hotkeyListAction = nullptr;
+    QSpinBox *m_itemIconWidthSpin = nullptr;
+    QSpinBox *m_itemIconHeightSpin = nullptr;
+    QSpinBox *m_itemWidthSpin = nullptr;
+    QSpinBox *m_itemHeightSpin = nullptr;
+    QSpinBox *m_itemFontPointSizeSpin = nullptr;
+    QSpinBox *m_itemHorizontalSpacingSpin = nullptr;
+    QSpinBox *m_itemVerticalSpacingSpin = nullptr;
+    QFontComboBox *m_itemFontFamilyCombo = nullptr;
+    QCheckBox *m_itemMultilineCheck = nullptr;
+    QCheckBox *m_itemEllipsisCheck = nullptr;
+    QSpinBox *m_sectionIconWidthSpin = nullptr;
+    QSpinBox *m_sectionIconHeightSpin = nullptr;
+    QSpinBox *m_sectionHeaderHeightSpin = nullptr;
+    QSpinBox *m_sectionFontPointSizeSpin = nullptr;
+    QFontComboBox *m_sectionFontFamilyCombo = nullptr;
+    QPushButton *m_sectionColorButton = nullptr;
+    QSpinBox *m_categoryIconWidthSpin = nullptr;
+    QSpinBox *m_categoryIconHeightSpin = nullptr;
+    QSpinBox *m_categoryButtonHeightSpin = nullptr;
+    QSpinBox *m_categoryFontPointSizeSpin = nullptr;
+    QFontComboBox *m_categoryFontFamilyCombo = nullptr;
+    QPushButton *m_categoryColorButton = nullptr;
     QPoint m_dragPosition;
     QPoint m_resizeStartGlobal;
     QRect m_resizeStartGeometry;
     ResizeRegion m_resizeRegion = ResizeRegion::None;
     bool m_resizing = false;
+    PendingContextMenuKind m_pendingContextMenuKind = PendingContextMenuKind::None;
+    QPointer<QListWidget> m_pendingContextList;
+    QString m_pendingContextSectionId;
+    QPoint m_pendingContextViewportPos;
+    QPoint m_pendingContextGlobalPos;
+    bool m_ignoreNextContextMenuEvent = false;
     QTimer m_autoHideTimer;
     QRect m_autoHideShownGeometry;
     bool m_topAutoHidden = false;

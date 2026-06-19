@@ -1,6 +1,7 @@
 #include "RuleStore.h"
 
 #include "HotkeyConflictDetector.h"
+#include "QtCompat.h"
 #include "UiText.h"
 
 #include <QDir>
@@ -11,6 +12,47 @@
 #include <QUuid>
 
 #include <algorithm>
+
+namespace {
+
+HotkeyRule makeProgramRule(const QString &sectionId, const QString &name, const QString &target, const QString &arguments = QString())
+{
+    HotkeyRule rule;
+    rule.id = QtCompat::uuidWithoutBraces();
+    rule.category = LauncherCategory::Program;
+    rule.sectionId = sectionId;
+    rule.action.type = LaunchActionType::Application;
+    rule.action.target = target;
+    rule.action.arguments = arguments;
+    rule.description = name;
+    return rule;
+}
+
+HotkeyRule makeFolderRule(const QString &sectionId, const QString &name, const QString &target)
+{
+    HotkeyRule rule;
+    rule.id = QtCompat::uuidWithoutBraces();
+    rule.category = LauncherCategory::Folder;
+    rule.sectionId = sectionId;
+    rule.action.type = LaunchActionType::Folder;
+    rule.action.target = target;
+    rule.description = name;
+    return rule;
+}
+
+HotkeyRule makeWebsiteRule(const QString &sectionId, const QString &name, const QString &target)
+{
+    HotkeyRule rule;
+    rule.id = QtCompat::uuidWithoutBraces();
+    rule.category = LauncherCategory::Website;
+    rule.sectionId = sectionId;
+    rule.action.type = LaunchActionType::Url;
+    rule.action.target = target;
+    rule.description = name;
+    return rule;
+}
+
+} // namespace
 
 RuleStore::RuleStore(QObject *parent)
     : QObject(parent)
@@ -62,6 +104,8 @@ LauncherDocument RuleStore::loadDocument(QString *error) const
             document.rules.push_back(rule);
         }
     }
+
+    ensureDefaultRules(&document);
 
     return document;
 }
@@ -147,67 +191,14 @@ LauncherDocument RuleStore::createDefaultDocument() const
 {
     LauncherDocument document;
     ensureDefaultSections(&document);
-
-    auto makeRule = [](const QString &sectionId, const QString &name, const QString &target, const QString &arguments = QString()) {
-        HotkeyRule rule;
-        rule.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        rule.category = LauncherCategory::Program;
-        rule.sectionId = sectionId;
-        rule.action.type = LaunchActionType::Application;
-        rule.action.target = target;
-        rule.action.arguments = arguments;
-        rule.description = name;
-        return rule;
-    };
-
-    const QString systemSection = defaultSectionId(LauncherCategory::Program, 0);
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("控制面板"), "control.exe"));
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("任务管理器"), "taskmgr.exe"));
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("命令提示符"), "cmd.exe"));
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("注册表"), "regedit.exe"));
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("服务"), "services.msc"));
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("设备管理器"), "devmgmt.msc"));
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("计算器"), "calc.exe"));
-    document.rules.push_back(makeRule(systemSection, QString::fromUtf8("系统信息"), "msinfo32.exe"));
-
-    auto makeFolderRule = [](const QString &sectionId, const QString &name, const QString &target) {
-        HotkeyRule rule;
-        rule.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        rule.category = LauncherCategory::Folder;
-        rule.sectionId = sectionId;
-        rule.action.type = LaunchActionType::Folder;
-        rule.action.target = target;
-        rule.description = name;
-        return rule;
-    };
-
-    const QString folderSection = defaultSectionId(LauncherCategory::Folder, 0);
-    document.rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("我的文档"), QDir::home().filePath("Documents")));
-    document.rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("桌面"), QDir::home().filePath("Desktop")));
-    document.rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("下载"), QDir::home().filePath("Downloads")));
-
-    auto makeWebsiteRule = [](const QString &sectionId, const QString &name, const QString &target) {
-        HotkeyRule rule;
-        rule.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        rule.category = LauncherCategory::Website;
-        rule.sectionId = sectionId;
-        rule.action.type = LaunchActionType::Url;
-        rule.action.target = target;
-        rule.description = name;
-        return rule;
-    };
-
-    const QString websiteSection = defaultSectionId(LauncherCategory::Website, 0);
-    document.rules.push_back(makeWebsiteRule(websiteSection, QString::fromUtf8("百度"), "https://www.baidu.com"));
-    document.rules.push_back(makeWebsiteRule(websiteSection, QString::fromUtf8("必应"), "https://www.bing.com"));
-
+    ensureDefaultRules(&document);
     return document;
 }
 
 void RuleStore::ensureDefaultSections(LauncherDocument *document) const
 {
     auto hasSection = [document](const QString &id) {
-        return std::any_of(document->sections.cbegin(), document->sections.cend(), [&id](const LauncherSection &section) {
+        return std::any_of(document->sections.begin(), document->sections.end(), [&id](const LauncherSection &section) {
             return section.id == id;
         });
     };
@@ -231,6 +222,44 @@ void RuleStore::ensureDefaultSections(LauncherDocument *document) const
     addSection(LauncherCategory::Folder, 1, defaultSectionId(LauncherCategory::Folder, 1), QString::fromUtf8("我的目录"), "folder");
     addSection(LauncherCategory::Website, 0, defaultSectionId(LauncherCategory::Website, 0), QString::fromUtf8("常用网址"), "website");
     addSection(LauncherCategory::Website, 1, defaultSectionId(LauncherCategory::Website, 1), QString::fromUtf8("我的网址"), "website-user");
+}
+
+void RuleStore::ensureDefaultRules(LauncherDocument *document) const
+{
+    if (!document) {
+        return;
+    }
+
+    auto sectionHasRules = [document](const QString &sectionId) {
+        return std::any_of(document->rules.begin(), document->rules.end(), [&sectionId](const HotkeyRule &rule) {
+            return rule.sectionId == sectionId && rule.isValid();
+        });
+    };
+
+    const QString systemSection = defaultSectionId(LauncherCategory::Program, 0);
+    if (!sectionHasRules(systemSection)) {
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("控制面板"), "control.exe"));
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("任务管理器"), "taskmgr.exe"));
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("命令提示符"), "cmd.exe"));
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("注册表"), "regedit.exe"));
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("服务"), "services.msc"));
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("设备管理器"), "devmgmt.msc"));
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("计算器"), "calc.exe"));
+        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("系统信息"), "msinfo32.exe"));
+    }
+
+    const QString folderSection = defaultSectionId(LauncherCategory::Folder, 0);
+    if (!sectionHasRules(folderSection)) {
+        document->rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("我的文档"), QDir::home().filePath("Documents")));
+        document->rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("桌面"), QDir::home().filePath("Desktop")));
+        document->rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("下载"), QDir::home().filePath("Downloads")));
+    }
+
+    const QString websiteSection = defaultSectionId(LauncherCategory::Website, 0);
+    if (!sectionHasRules(websiteSection)) {
+        document->rules.push_back(makeWebsiteRule(websiteSection, QString::fromUtf8("百度"), "https://www.baidu.com"));
+        document->rules.push_back(makeWebsiteRule(websiteSection, QString::fromUtf8("必应"), "https://www.bing.com"));
+    }
 }
 
 QString RuleStore::defaultSectionId(LauncherCategory category, int index) const

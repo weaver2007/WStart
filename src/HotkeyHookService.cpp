@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QMetaObject>
+#include <QMetaType>
 
 #ifdef Q_OS_WIN
 HotkeyHookService *HotkeyHookService::s_instance = nullptr;
@@ -10,6 +11,12 @@ HotkeyHookService *HotkeyHookService::s_instance = nullptr;
 HotkeyHookService::HotkeyHookService(QObject *parent)
     : QObject(parent)
 {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    qRegisterMetaType<HotkeyRule>("HotkeyRule");
+    connect(this, SIGNAL(queuedHotkeyTriggered(HotkeyRule)), this, SIGNAL(hotkeyTriggered(HotkeyRule)), Qt::QueuedConnection);
+#else
+    connect(this, &HotkeyHookService::queuedHotkeyTriggered, this, &HotkeyHookService::hotkeyTriggered, Qt::QueuedConnection);
+#endif
 }
 
 HotkeyHookService::~HotkeyHookService()
@@ -72,7 +79,6 @@ void HotkeyHookService::setPaused(bool paused)
         m_suppressedKeys.clear();
         m_suppressedTriggerIds.clear();
         m_pressedModifiers = ModifierNone;
-        m_interceptingWinChord = false;
 #endif
     }
 }
@@ -114,7 +120,6 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
 
     const int virtualKey = static_cast<int>(event->vkCode);
     const bool isModifier = isModifierKey(virtualKey);
-    const bool isWin = isWinKey(virtualKey);
 
     if (isKeyDown && isModifier) {
         updatePressedModifierState(virtualKey, true);
@@ -130,24 +135,6 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
                 m_activeTriggers.remove(triggerId);
             }
             clearSuppressedKey(virtualKey);
-            if (isWin && !winModifierPressed()) {
-                m_interceptingWinChord = false;
-            }
-        }
-        return 1;
-    }
-
-    if (isWin && isKeyDown && hasEnabledWinHotkey()) {
-        m_interceptingWinChord = true;
-        return 1;
-    }
-
-    if (m_interceptingWinChord && isModifier) {
-        if (isModifier && isKeyUp) {
-            updatePressedModifierState(virtualKey, false);
-            if (!winModifierPressed()) {
-                m_interceptingWinChord = false;
-            }
         }
         return 1;
     }
@@ -155,12 +142,6 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
     const HotkeyModifiers modifiers = currentModifiers(virtualKey);
     const HotkeyRule *rule = matchingRule(virtualKey, modifiers);
     if (!rule) {
-        if (m_interceptingWinChord) {
-            if (isWin && isKeyUp && !winModifierPressed()) {
-                m_interceptingWinChord = false;
-            }
-            return 1;
-        }
         if (isKeyUp && isModifier) {
             clearSuppressedKey(virtualKey);
         }
@@ -182,9 +163,7 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
         trackSuppressedChord(rule->hotkey);
         m_suppressedTriggerIds.insert(rule->hotkey.key, triggerId);
         const HotkeyRule ruleCopy = *rule;
-        QMetaObject::invokeMethod(this, [this, ruleCopy]() {
-            emit hotkeyTriggered(ruleCopy);
-        }, Qt::QueuedConnection);
+        emit queuedHotkeyTriggered(ruleCopy);
     }
     if (isModifier) {
         updatePressedModifierState(virtualKey, true);
@@ -266,21 +245,6 @@ bool HotkeyHookService::isModifierKey(int virtualKey) const
     }
 }
 
-bool HotkeyHookService::isWinKey(int virtualKey) const
-{
-    return virtualKey == VK_LWIN || virtualKey == VK_RWIN;
-}
-
-bool HotkeyHookService::hasEnabledWinHotkey() const
-{
-    for (const HotkeyRule &rule : m_rules) {
-        if (rule.enabled && rule.hotkey.isValid() && rule.hotkey.modifiers.testFlag(ModifierWin)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 void HotkeyHookService::updatePressedModifierState(int virtualKey, bool pressed)
 {
     if (!isModifierKey(virtualKey)) {
@@ -300,72 +264,17 @@ void HotkeyHookService::updatePressedModifierState(int virtualKey, bool pressed)
     }
 }
 
-bool HotkeyHookService::winModifierPressed() const
-{
-    return m_pressedModifiers.testFlag(ModifierWin);
-}
-
 void HotkeyHookService::trackSuppressedChord(const HotkeyCombination &hotkey)
 {
     if (!hotkey.isValid()) {
         return;
     }
     m_suppressedKeys.insert(hotkey.key);
-    if (hotkey.modifiers.testFlag(ModifierCtrl)) {
-        m_suppressedKeys.insert(VK_CONTROL);
-        m_suppressedKeys.insert(VK_LCONTROL);
-        m_suppressedKeys.insert(VK_RCONTROL);
-    }
-    if (hotkey.modifiers.testFlag(ModifierAlt)) {
-        m_suppressedKeys.insert(VK_MENU);
-        m_suppressedKeys.insert(VK_LMENU);
-        m_suppressedKeys.insert(VK_RMENU);
-    }
-    if (hotkey.modifiers.testFlag(ModifierShift)) {
-        m_suppressedKeys.insert(VK_SHIFT);
-        m_suppressedKeys.insert(VK_LSHIFT);
-        m_suppressedKeys.insert(VK_RSHIFT);
-    }
-    if (hotkey.modifiers.testFlag(ModifierWin)) {
-        m_interceptingWinChord = true;
-        m_suppressedKeys.insert(VK_LWIN);
-        m_suppressedKeys.insert(VK_RWIN);
-    }
 }
 
 void HotkeyHookService::clearSuppressedKey(int virtualKey)
 {
     m_suppressedTriggerIds.remove(virtualKey);
     m_suppressedKeys.remove(virtualKey);
-    switch (virtualKey) {
-    case VK_CONTROL:
-    case VK_LCONTROL:
-    case VK_RCONTROL:
-        m_suppressedKeys.remove(VK_CONTROL);
-        m_suppressedKeys.remove(VK_LCONTROL);
-        m_suppressedKeys.remove(VK_RCONTROL);
-        break;
-    case VK_MENU:
-    case VK_LMENU:
-    case VK_RMENU:
-        m_suppressedKeys.remove(VK_MENU);
-        m_suppressedKeys.remove(VK_LMENU);
-        m_suppressedKeys.remove(VK_RMENU);
-        break;
-    case VK_SHIFT:
-    case VK_LSHIFT:
-    case VK_RSHIFT:
-        m_suppressedKeys.remove(VK_SHIFT);
-        m_suppressedKeys.remove(VK_LSHIFT);
-        m_suppressedKeys.remove(VK_RSHIFT);
-        break;
-    case VK_LWIN:
-    case VK_RWIN:
-        m_suppressedKeys.remove(VK_LWIN);
-        m_suppressedKeys.remove(VK_RWIN);
-        break;
-    default:
-        break;
-    }
 }
 #endif

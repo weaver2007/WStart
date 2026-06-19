@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 
+#include "AppIcon.h"
+#include "QtCompat.h"
 #include "RuleDialog.h"
 
 #include <QAction>
@@ -9,6 +11,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QBrush>
+#include <QContextMenuEvent>
 #include <QColorDialog>
 #include <QCryptographicHash>
 #include <QCursor>
@@ -27,6 +30,7 @@
 #include <QHideEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QImage>
 #include <QLineEdit>
 #include <QInputDialog>
 #include <QMenu>
@@ -34,12 +38,13 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPixmap>
 #include <QPointer>
 #include <QPushButton>
-#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScreen>
 #include <QShowEvent>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QStyle>
 #include <QStyleHints>
@@ -54,6 +59,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -65,9 +71,16 @@
 #        define NOMINMAX
 #    endif
 #    include <windows.h>
+#    include <wincrypt.h>
 #    include <shlobj.h>
 #    include <shobjidl.h>
 #    include <shellapi.h>
+#endif
+
+#ifdef Q_OS_WIN
+#ifndef MSGFLT_ALLOW
+#define MSGFLT_ALLOW 1
+#endif
 #endif
 
 namespace {
@@ -82,6 +95,10 @@ constexpr int AutoHideTriggerHeight = 4;
 constexpr int AutoHideRevealDistance = 4;
 constexpr int AutoHidePollIntervalMs = 80;
 
+#if defined(Q_OS_WIN) && !defined(CALG_SHA_256)
+#define CALG_SHA_256 (ALG_CLASS_HASH | ALG_TYPE_ANY | ALG_SID_SHA_256)
+#endif
+
 class IconGridDelegate final : public QStyledItemDelegate {
 public:
     explicit IconGridDelegate(LauncherItemAppearance appearance, QObject *parent = nullptr)
@@ -92,10 +109,20 @@ public:
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
     {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+        QStyleOptionViewItemV4 opt(option);
+#else
         QStyleOptionViewItem opt(option);
+#endif
         initStyleOption(&opt, index);
-        const QString text = m_appearance.multilineText ? opt.text : opt.text.simplified();
-        const QIcon icon = opt.icon;
+        QString text = index.data(Qt::DisplayRole).toString();
+        if (!m_appearance.multilineText) {
+            text = text.simplified();
+        }
+        QIcon icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
+        if (icon.isNull()) {
+            icon = opt.icon;
+        }
         opt.text.clear();
         opt.icon = QIcon();
 
@@ -103,13 +130,16 @@ public:
         style->drawPrimitive(QStyle::PE_PanelItemViewItem, &opt, painter, opt.widget);
 
         const QRect itemRect = option.rect.adjusted(2, 2, -2, -2);
-        const QSize iconSize = option.decorationSize;
+        QSize iconSize(m_appearance.iconWidth, m_appearance.iconHeight);
+        if (option.decorationSize.isValid() && !option.decorationSize.isEmpty()) {
+            iconSize = option.decorationSize;
+        }
         const QRect iconRect(itemRect.left() + (itemRect.width() - iconSize.width()) / 2,
                              itemRect.top() + 3,
                              iconSize.width(),
                              iconSize.height());
 
-        const QIcon::Mode iconMode = opt.state.testFlag(QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled;
+        const QIcon::Mode iconMode = (opt.state & QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled;
         icon.paint(painter, iconRect, Qt::AlignCenter, iconMode);
 
         QRect textRect = itemRect;
@@ -120,7 +150,7 @@ public:
         const QVariant foreground = index.data(Qt::ForegroundRole);
         if (foreground.canConvert<QBrush>()) {
             painter->setPen(qvariant_cast<QBrush>(foreground).color());
-        } else if (opt.state.testFlag(QStyle::State_Selected)) {
+        } else if (opt.state & QStyle::State_Selected) {
             painter->setPen(opt.palette.color(QPalette::HighlightedText));
         } else {
             painter->setPen(opt.palette.color(QPalette::Text));
@@ -161,7 +191,9 @@ private:
 };
 QVector<LauncherCategory> fixedCategories()
 {
-    return {LauncherCategory::Program, LauncherCategory::Folder, LauncherCategory::Website};
+    QVector<LauncherCategory> categories;
+    categories << LauncherCategory::Program << LauncherCategory::Folder << LauncherCategory::Website;
+    return categories;
 }
 
 UiText::Key defaultSectionNameKey(const QString &sectionId)
@@ -220,6 +252,69 @@ void localizeDialogButtons(QDialogButtonBox *buttons, const QString &language)
     }
 }
 
+LauncherItemAppearance scaledAppearance(LauncherItemAppearance appearance)
+{
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    appearance.iconWidth = QtCompat::scaleInt(appearance.iconWidth);
+    appearance.iconHeight = QtCompat::scaleInt(appearance.iconHeight);
+    appearance.itemWidth = QtCompat::scaleInt(appearance.itemWidth);
+    appearance.itemHeight = QtCompat::scaleInt(appearance.itemHeight);
+    appearance.fontPointSize = QtCompat::scaleInt(appearance.fontPointSize);
+    appearance.horizontalSpacing = QtCompat::scaleInt(appearance.horizontalSpacing);
+    appearance.verticalSpacing = QtCompat::scaleInt(appearance.verticalSpacing);
+#endif
+    return appearance;
+}
+
+LauncherSectionAppearance scaledAppearance(LauncherSectionAppearance appearance)
+{
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    appearance.iconWidth = QtCompat::scaleInt(appearance.iconWidth);
+    appearance.iconHeight = QtCompat::scaleInt(appearance.iconHeight);
+    appearance.headerHeight = QtCompat::scaleInt(appearance.headerHeight);
+    appearance.fontPointSize = QtCompat::scaleInt(appearance.fontPointSize);
+#endif
+    return appearance;
+}
+
+LauncherCategoryAppearance scaledAppearance(LauncherCategoryAppearance appearance)
+{
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    appearance.iconWidth = QtCompat::scaleInt(appearance.iconWidth);
+    appearance.iconHeight = QtCompat::scaleInt(appearance.iconHeight);
+    appearance.buttonHeight = QtCompat::scaleInt(appearance.buttonHeight);
+    appearance.fontPointSize = QtCompat::scaleInt(appearance.fontPointSize);
+#endif
+    return appearance;
+}
+
+QDialogButtonBox *makeDialogButtons(QDialogButtonBox::StandardButtons buttons, QWidget *parent)
+{
+    return new QDialogButtonBox(buttons, Qt::Horizontal, parent);
+}
+
+void connectDialogClose(QDialogButtonBox *buttons, QDialog *dialog)
+{
+    QObject::connect(buttons, SIGNAL(rejected()), dialog, SLOT(close()));
+}
+
+void connectDialogAcceptReject(QDialogButtonBox *buttons, QDialog *dialog)
+{
+    QObject::connect(buttons, SIGNAL(accepted()), dialog, SLOT(accept()));
+    QObject::connect(buttons, SIGNAL(rejected()), dialog, SLOT(reject()));
+}
+
+QListWidget *ancestorListWidget(QWidget *widget)
+{
+    while (widget) {
+        if (auto *list = qobject_cast<QListWidget *>(widget)) {
+            return list;
+        }
+        widget = widget->parentWidget();
+    }
+    return nullptr;
+}
+
 void showWarning(QWidget *parent, const QString &language, const QString &title, const QString &message)
 {
     QMessageBox box(QMessageBox::Warning, title, message, QMessageBox::Ok, parent);
@@ -260,7 +355,7 @@ QString textAppearanceStyleSheet(const QString &fontFamily, int fontPointSize, c
     if (!textColor.trimmed().isEmpty()) {
         rules << QString("color: %1;").arg(textColor.trimmed());
     }
-    return rules.join(' ');
+    return rules.join(QString(" "));
 }
 
 void applyTextAppearanceFont(QWidget *widget, const QString &fontFamily, int fontPointSize, QFont::Weight fontWeight)
@@ -275,6 +370,42 @@ void applyTextAppearanceFont(QWidget *widget, const QString &fontFamily, int fon
     font.setPointSize(fontPointSize);
     font.setWeight(fontWeight);
     widget->setFont(font);
+}
+
+QPoint eventPosition(QDropEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    return event->position().toPoint();
+#else
+    return event->pos();
+#endif
+}
+
+QPoint eventPosition(QMouseEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    return event->position().toPoint();
+#else
+    return event->pos();
+#endif
+}
+
+QPoint eventGlobalPosition(QMouseEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    return event->globalPosition().toPoint();
+#else
+    return event->globalPos();
+#endif
+}
+
+Qt::MouseButton eventButton(QMouseEvent *event)
+{
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    return event ? event->button() : Qt::NoButton;
+#else
+    return event ? event->button() : Qt::NoButton;
+#endif
 }
 
 void updateColorButton(QPushButton *button, const QString &language, const QString &color)
@@ -365,7 +496,7 @@ void allowElevatedDragDrop(HWND hwnd)
     if (!hwnd) {
         return;
     }
-    using ChangeWindowMessageFilterExFn = BOOL (WINAPI *)(HWND, UINT, DWORD, PCHANGEFILTERSTRUCT);
+    using ChangeWindowMessageFilterExFn = BOOL (WINAPI *)(HWND, UINT, DWORD, void *);
     auto *user32 = GetModuleHandleW(L"user32.dll");
     auto *changeFilter = reinterpret_cast<ChangeWindowMessageFilterExFn>(
         user32 ? GetProcAddress(user32, "ChangeWindowMessageFilterEx") : nullptr);
@@ -377,11 +508,21 @@ void allowElevatedDragDrop(HWND hwnd)
     changeFilter(hwnd, 0x0049, MSGFLT_ALLOW, nullptr);
 }
 
+QString fromWideString(const wchar_t *value, int length = -1)
+{
+    return QString::fromUtf16(reinterpret_cast<const ushort *>(value), length);
+}
+
+std::wstring toWideString(const QString &value)
+{
+    return std::wstring(reinterpret_cast<const wchar_t *>(value.utf16()), static_cast<size_t>(value.length()));
+}
+
 bool shellExecutePath(const QString &path, const wchar_t *verb, const QString &parameters = {}, const QString &workingDirectory = {})
 {
-    const std::wstring nativePath = QDir::toNativeSeparators(path).toStdWString();
-    const std::wstring nativeParameters = parameters.toStdWString();
-    const std::wstring nativeWorkingDirectory = QDir::toNativeSeparators(workingDirectory).toStdWString();
+    const std::wstring nativePath = toWideString(QDir::toNativeSeparators(path));
+    const std::wstring nativeParameters = toWideString(parameters);
+    const std::wstring nativeWorkingDirectory = toWideString(QDir::toNativeSeparators(workingDirectory));
 
     SHELLEXECUTEINFOW info = {};
     info.cbSize = sizeof(info);
@@ -391,6 +532,69 @@ bool shellExecutePath(const QString &path, const wchar_t *verb, const QString &p
     info.lpDirectory = nativeWorkingDirectory.empty() ? nullptr : nativeWorkingDirectory.c_str();
     info.nShow = SW_SHOWNORMAL;
     return ShellExecuteExW(&info);
+}
+
+QString windowsKnownExecutablePath(const QString &fileName)
+{
+    const QString normalized = fileName.trimmed();
+    if (normalized.isEmpty() || QFileInfo(normalized).isAbsolute()) {
+        return normalized;
+    }
+
+    wchar_t windowsPath[MAX_PATH] = {};
+    const UINT windowsLength = GetWindowsDirectoryW(windowsPath, MAX_PATH);
+    if (windowsLength > 0 && windowsLength < MAX_PATH) {
+        const QDir windowsDir(fromWideString(windowsPath, static_cast<int>(windowsLength)));
+        const QString system32Path = windowsDir.filePath(QString::fromLatin1("System32/%1").arg(normalized));
+        if (QFileInfo(system32Path).exists()) {
+            return system32Path;
+        }
+        const QString windowsFilePath = windowsDir.filePath(normalized);
+        if (QFileInfo(windowsFilePath).exists()) {
+            return windowsFilePath;
+        }
+    }
+
+    return normalized;
+}
+
+QIcon nativeFileIcon(const QString &path)
+{
+    const QString resolvedPath = windowsKnownExecutablePath(path);
+    const bool exists = QFileInfo(resolvedPath).exists();
+    const QString nativePath = QDir::toNativeSeparators(resolvedPath);
+    const std::wstring nativePathW = toWideString(nativePath);
+    SHFILEINFOW fileInfo = {};
+    const DWORD_PTR result = SHGetFileInfoW(
+        nativePathW.c_str(),
+        exists ? 0 : FILE_ATTRIBUTE_NORMAL,
+        &fileInfo,
+        sizeof(fileInfo),
+        SHGFI_ICON | SHGFI_SMALLICON | (exists ? 0 : SHGFI_USEFILEATTRIBUTES));
+    if (!result || !fileInfo.hIcon) {
+        return QIcon();
+    }
+    QPixmap pixmap(GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
+    pixmap.fill(Qt::transparent);
+    HDC dc = CreateCompatibleDC(nullptr);
+    HBITMAP bitmap = CreateCompatibleBitmap(GetDC(nullptr), pixmap.width(), pixmap.height());
+    HGDIOBJ previousBitmap = SelectObject(dc, bitmap);
+    RECT rect = {0, 0, pixmap.width(), pixmap.height()};
+    HBRUSH brush = CreateSolidBrush(RGB(0, 0, 0));
+    FillRect(dc, &rect, brush);
+    DeleteObject(brush);
+    DrawIconEx(dc, 0, 0, fileInfo.hIcon, pixmap.width(), pixmap.height(), 0, nullptr, DI_NORMAL);
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    pixmap = QPixmap::fromWinHBITMAP(bitmap, QPixmap::PremultipliedAlpha);
+#else
+    pixmap = QPixmap::fromImage(QImage::fromHBITMAP(bitmap));
+#endif
+    SelectObject(dc, previousBitmap);
+    DeleteObject(bitmap);
+    DeleteDC(dc);
+    QIcon icon(pixmap);
+    DestroyIcon(fileInfo.hIcon);
+    return icon;
 }
 
 bool revealInExplorer(const QString &path)
@@ -409,7 +613,7 @@ QString desktopDirectoryPath()
 {
     wchar_t path[MAX_PATH] = {};
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_DESKTOPDIRECTORY, nullptr, SHGFP_TYPE_CURRENT, path))) {
-        return QString::fromWCharArray(path);
+        return fromWideString(path);
     }
     return QDir::home().filePath("Desktop");
 }
@@ -418,7 +622,7 @@ QString startupDirectoryPath()
 {
     wchar_t path[MAX_PATH] = {};
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, SHGFP_TYPE_CURRENT, path))) {
-        return QString::fromWCharArray(path);
+        return fromWideString(path);
     }
     return QDir::home().filePath("AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup");
 }
@@ -436,10 +640,10 @@ bool createShortcutFile(const QString &shortcutPath, const HotkeyRule &rule, con
 
     const QString target = QDir::toNativeSeparators(rule.action.target);
     const QString workingDirectory = QDir::toNativeSeparators(rule.action.workingDirectory);
-    const std::wstring targetW = target.toStdWString();
-    const std::wstring argumentsW = rule.action.arguments.toStdWString();
-    const std::wstring workingDirectoryW = workingDirectory.toStdWString();
-    const std::wstring descriptionW = title.toStdWString();
+    const std::wstring targetW = toWideString(target);
+    const std::wstring argumentsW = toWideString(rule.action.arguments);
+    const std::wstring workingDirectoryW = toWideString(workingDirectory);
+    const std::wstring descriptionW = toWideString(title);
 
     link->SetPath(targetW.c_str());
     if (!argumentsW.empty()) {
@@ -457,7 +661,7 @@ bool createShortcutFile(const QString &shortcutPath, const HotkeyRule &rule, con
         return false;
     }
 
-    const std::wstring shortcutW = QDir::toNativeSeparators(shortcutPath).toStdWString();
+    const std::wstring shortcutW = toWideString(QDir::toNativeSeparators(shortcutPath));
     hr = persistFile->Save(shortcutW.c_str(), TRUE);
     persistFile->Release();
     link->Release();
@@ -831,25 +1035,27 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("HotKeyManager");
-    setWindowIcon(QIcon(":/app.svg"));
+    setWindowIcon(AppIcon::launcherIcon());
     setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
     setMouseTracking(true);
-    resize(fixedLauncherWidth(), 720);
+    resize(fixedLauncherWidth(), QtCompat::scaleInt(720));
     applyFixedLauncherWidth();
     buildUi();
     setAlwaysOnTop(true);
     qApp->installEventFilter(this);
     m_autoHideTimer.setInterval(AutoHidePollIntervalMs);
-    connect(&m_autoHideTimer, &QTimer::timeout, this, &MainWindow::updateTopAutoHide);
+    connect(&m_autoHideTimer, SIGNAL(timeout()), this, SLOT(updateTopAutoHide()));
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this]() {
         if (m_document.settings.themeMode == "system") {
             applyTheme();
         }
     });
+#endif
 
-    connect(&m_hookService, &HotkeyHookService::hotkeyTriggered, this, &MainWindow::onHotkeyTriggered);
-    connect(&m_hookService, &HotkeyHookService::hookError, this, &MainWindow::setStatus);
+    connect(&m_hookService, SIGNAL(hotkeyTriggered(HotkeyRule)), this, SLOT(onHotkeyTriggered(HotkeyRule)));
+    connect(&m_hookService, SIGNAL(hookError(QString)), this, SLOT(setStatus(QString)));
 
     loadDocument();
 
@@ -873,7 +1079,7 @@ void MainWindow::buildUi()
 
     auto *header = new QFrame(root);
     header->setObjectName("topPanel");
-    header->setFixedHeight(HeaderHeight);
+    header->setFixedHeight(QtCompat::scaleInt(HeaderHeight));
     header->setAcceptDrops(true);
     auto *headerLayout = new QVBoxLayout(header);
     headerLayout->setContentsMargins(14, 0, 10, 0);
@@ -895,6 +1101,9 @@ void MainWindow::buildUi()
 
     m_settingsButton = new QToolButton(header);
     m_settingsButton->setIcon(themedIcon("settings"));
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    m_settingsButton->setText("*");
+#endif
     m_settingsButton->setPopupMode(QToolButton::DelayedPopup);
     m_settingsButton->setObjectName("windowButton");
     m_minButton = new QToolButton(header);
@@ -903,20 +1112,22 @@ void MainWindow::buildUi()
     m_closeButton = new QToolButton(header);
     m_closeButton->setText("X");
     m_closeButton->setObjectName("windowButton");
-    for (QToolButton *button : {m_settingsButton, m_minButton, m_closeButton}) {
-        button->setFixedSize(28, 26);
-        button->setIconSize(QSize(18, 18));
+    QList<QToolButton *> windowButtons;
+    windowButtons << m_settingsButton << m_minButton << m_closeButton;
+    for (QToolButton *button : windowButtons) {
+        button->setFixedSize(QtCompat::scaleInt(28), QtCompat::scaleInt(26));
+        button->setIconSize(QSize(QtCompat::scaleInt(18), QtCompat::scaleInt(18)));
     }
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    m_settingsButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+#else
     m_settingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+#endif
     m_minButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_closeButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    connect(m_minButton, &QToolButton::clicked, this, &QWidget::showMinimized);
-    connect(m_closeButton, &QToolButton::clicked, this, &QWidget::hide);
-    connect(m_settingsButton, &QToolButton::clicked, this, [this]() {
-        if (m_settingsMenu) {
-            m_settingsMenu->popup(m_settingsButton->mapToGlobal(QPoint(0, m_settingsButton->height())));
-        }
-    });
+    connect(m_minButton, SIGNAL(clicked()), this, SLOT(showMinimized()));
+    connect(m_closeButton, SIGNAL(clicked()), this, SLOT(hide()));
+    connect(m_settingsButton, SIGNAL(clicked()), this, SLOT(showSettingsMenu()));
 
     titleRow->addWidget(brandIcon, 0, Qt::AlignVCenter);
     titleRow->addWidget(brand);
@@ -942,7 +1153,9 @@ void MainWindow::buildUi()
     searchLayout->setSpacing(8);
 
     m_searchEdit = new QLineEdit(searchBand);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 2, 0)
     m_searchEdit->setClearButtonEnabled(true);
+#endif
     searchLayout->addWidget(m_searchEdit, 1);
 
     m_navBar = new QWidget(content);
@@ -963,13 +1176,11 @@ void MainWindow::buildUi()
         button->setText(categoryDisplayName(category));
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         button->setProperty("category", static_cast<int>(category));
-        m_navGroup->addButton(button);
+        m_navGroup->addButton(button, static_cast<int>(category));
         navBarLayout->addWidget(button, 1);
         m_navButtons.insert(category, button);
-        connect(button, &QToolButton::clicked, this, [this, category]() {
-            setCurrentCategory(category);
-        });
     }
+    connect(m_navGroup, SIGNAL(buttonClicked(int)), this, SLOT(onCategoryButtonClicked(int)));
 
     contentLayout->addWidget(searchBand);
     contentLayout->addWidget(m_navBar);
@@ -994,7 +1205,7 @@ void MainWindow::buildUi()
 
     auto *statusBand = new QFrame(root);
     statusBand->setObjectName("statusBand");
-    statusBand->setFixedHeight(34);
+    statusBand->setFixedHeight(QtCompat::scaleInt(34));
     auto *statusLayout = new QHBoxLayout(statusBand);
     statusLayout->setContentsMargins(12, 0, 12, 0);
     m_statusLabel = new QLabel(statusBand);
@@ -1026,7 +1237,7 @@ void MainWindow::buildUi()
 #endif
 
     buildSettingsMenu();
-    connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::refreshLauncher);
+    connect(m_searchEdit, SIGNAL(textChanged(QString)), this, SLOT(refreshLauncher()));
     applyTheme();
 }
 
@@ -1060,25 +1271,23 @@ void MainWindow::buildSettingsMenu()
     m_settingsMenu = new QMenu(this);
     m_hotkeysEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeysEnabled));
     m_hotkeysEnabledAction->setCheckable(true);
-    connect(m_hotkeysEnabledAction, &QAction::toggled, this, &MainWindow::applyHotkeysEnabled);
+    connect(m_hotkeysEnabledAction, SIGNAL(toggled(bool)), this, SLOT(applyHotkeysEnabled(bool)));
     m_hotkeyListAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeyList));
-    connect(m_hotkeyListAction, &QAction::triggered, this, &MainWindow::showHotkeyListDialog);
+    connect(m_hotkeyListAction, SIGNAL(triggered()), this, SLOT(showHotkeyListDialog()));
 
     auto *languageMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Language));
     auto *languageGroup = new QActionGroup(languageMenu);
     languageGroup->setExclusive(true);
     m_chineseAction = languageMenu->addAction(uiText(UiText::Key::Chinese));
     m_englishAction = languageMenu->addAction(uiText(UiText::Key::English));
-    for (QAction *action : {m_chineseAction, m_englishAction}) {
+    QList<QAction *> languageActions;
+    languageActions << m_chineseAction << m_englishAction;
+    for (QAction *action : languageActions) {
         action->setCheckable(true);
         languageGroup->addAction(action);
     }
-    connect(m_chineseAction, &QAction::triggered, this, [this]() {
-        setLanguage("zh-CN");
-    });
-    connect(m_englishAction, &QAction::triggered, this, [this]() {
-        setLanguage("en-US");
-    });
+    connect(m_chineseAction, SIGNAL(triggered()), this, SLOT(setLanguageChinese()));
+    connect(m_englishAction, SIGNAL(triggered()), this, SLOT(setLanguageEnglish()));
 
     auto *themeMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Theme));
     auto *themeGroup = new QActionGroup(themeMenu);
@@ -1086,20 +1295,22 @@ void MainWindow::buildSettingsMenu()
     m_themeSystemAction = themeMenu->addAction(uiText(UiText::Key::ThemeSystem));
     m_themeLightAction = themeMenu->addAction(uiText(UiText::Key::ThemeLight));
     m_themeDarkAction = themeMenu->addAction(uiText(UiText::Key::ThemeDark));
-    for (QAction *action : {m_themeSystemAction, m_themeLightAction, m_themeDarkAction}) {
+    QList<QAction *> themeActions;
+    themeActions << m_themeSystemAction << m_themeLightAction << m_themeDarkAction;
+    for (QAction *action : themeActions) {
         action->setCheckable(true);
         themeGroup->addAction(action);
     }
-    connect(m_themeSystemAction, &QAction::triggered, this, [this]() { setThemeMode("system"); });
-    connect(m_themeLightAction, &QAction::triggered, this, [this]() { setThemeMode("light"); });
-    connect(m_themeDarkAction, &QAction::triggered, this, [this]() { setThemeMode("dark"); });
+    connect(m_themeSystemAction, SIGNAL(triggered()), this, SLOT(setThemeSystem()));
+    connect(m_themeLightAction, SIGNAL(triggered()), this, SLOT(setThemeLight()));
+    connect(m_themeDarkAction, SIGNAL(triggered()), this, SLOT(setThemeDark()));
 
     m_itemAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::ItemAppearance));
-    connect(m_itemAppearanceAction, &QAction::triggered, this, &MainWindow::showItemAppearanceDialog);
+    connect(m_itemAppearanceAction, SIGNAL(triggered()), this, SLOT(showItemAppearanceDialog()));
     m_sectionAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::SectionAppearance));
-    connect(m_sectionAppearanceAction, &QAction::triggered, this, &MainWindow::showSectionAppearanceDialog);
+    connect(m_sectionAppearanceAction, SIGNAL(triggered()), this, SLOT(showSectionAppearanceDialog()));
     m_categoryAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::CategoryAppearance));
-    connect(m_categoryAppearanceAction, &QAction::triggered, this, &MainWindow::showCategoryAppearanceDialog);
+    connect(m_categoryAppearanceAction, SIGNAL(triggered()), this, SLOT(showCategoryAppearanceDialog()));
 
     retranslateUi();
 }
@@ -1193,6 +1404,49 @@ bool MainWindow::hotkeysEnabled() const
     return m_document.settings.hotkeysEnabled;
 }
 
+void MainWindow::showSettingsMenu()
+{
+    if (m_settingsMenu && m_settingsButton) {
+        m_settingsMenu->popup(m_settingsButton->mapToGlobal(QPoint(0, m_settingsButton->height())));
+    }
+}
+
+void MainWindow::onCategoryButtonClicked(int id)
+{
+    if (id == static_cast<int>(LauncherCategory::Program)) {
+        setCurrentCategory(LauncherCategory::Program);
+    } else if (id == static_cast<int>(LauncherCategory::Folder)) {
+        setCurrentCategory(LauncherCategory::Folder);
+    } else if (id == static_cast<int>(LauncherCategory::Website)) {
+        setCurrentCategory(LauncherCategory::Website);
+    }
+}
+
+void MainWindow::setLanguageChinese()
+{
+    setLanguage("zh-CN");
+}
+
+void MainWindow::setLanguageEnglish()
+{
+    setLanguage("en-US");
+}
+
+void MainWindow::setThemeSystem()
+{
+    setThemeMode("system");
+}
+
+void MainWindow::setThemeLight()
+{
+    setThemeMode("light");
+}
+
+void MainWindow::setThemeDark()
+{
+    setThemeMode("dark");
+}
+
 void MainWindow::setHotkeysPaused(bool paused)
 {
     applyHotkeysEnabled(!paused);
@@ -1212,6 +1466,33 @@ void MainWindow::applyHotkeysEnabled(bool enabled)
     }
     emit hotkeysEnabledChanged(enabled);
     setStatus(enabled ? uiText(UiText::Key::HotkeysResumed) : uiText(UiText::Key::HotkeysPaused));
+}
+
+void MainWindow::showSectionContextMenu(const QPoint &pos)
+{
+    QWidget *header = qobject_cast<QWidget *>(sender());
+    if (!header) {
+        return;
+    }
+    showSectionMenu(header->property("sectionId").toString(), header->mapToGlobal(pos));
+}
+
+void MainWindow::showListContextMenu(const QPoint &pos)
+{
+    Q_UNUSED(pos);
+    QListWidget *list = ancestorListWidget(qobject_cast<QWidget *>(sender()));
+    if (!list) {
+        return;
+    }
+    showListMenu(list->property("sectionId").toString(), list, list->viewport()->mapFromGlobal(QCursor::pos()));
+}
+
+void MainWindow::runClickedRule(QListWidgetItem *item)
+{
+    if (!item) {
+        return;
+    }
+    runRule(item->data(RuleIdRole).toString());
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -1240,7 +1521,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         auto *dropBaseEvent = static_cast<QDropEvent *>(event);
         QString sectionId = widget ? widget->property("sectionId").toString() : QString();
         if (widget && (sectionId.isEmpty() || sectionIndexById(sectionId) < 0)) {
-            sectionId = sectionIdAtGlobalPosition(widget->mapToGlobal(dropBaseEvent->position().toPoint()));
+            sectionId = sectionIdAtGlobalPosition(widget->mapToGlobal(eventPosition(dropBaseEvent)));
         }
         if (sectionId.isEmpty()) {
             sectionId = fallbackDropSectionId();
@@ -1267,6 +1548,56 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    if (event->type() == QEvent::ContextMenu) {
+        if (m_ignoreNextContextMenuEvent) {
+            m_ignoreNextContextMenuEvent = false;
+            resetPendingContextMenu();
+            event->accept();
+            return true;
+        }
+        QWidget *widget = qobject_cast<QWidget *>(watched);
+        if (widget && widget->window() == this) {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+            event->accept();
+            return true;
+#else
+            auto *contextEvent = static_cast<QContextMenuEvent *>(event);
+            const QPoint globalPos = contextEvent->globalPos();
+
+            QWidget *sectionHeader = widget;
+            while (sectionHeader && sectionHeader->window() == this && sectionHeader->objectName() != "sectionHeader") {
+                sectionHeader = sectionHeader->parentWidget();
+            }
+            if (sectionHeader && sectionHeader->objectName() == "sectionHeader") {
+                showSectionMenu(sectionHeader->property("sectionId").toString(), globalPos);
+                contextEvent->accept();
+                return true;
+            }
+
+            if (QListWidget *list = ancestorListWidget(widget)) {
+                const QPoint viewportPos = list->viewport()->mapFromGlobal(globalPos);
+                showListMenu(list->property("sectionId").toString(), list, viewportPos);
+                contextEvent->accept();
+                return true;
+            }
+
+            QString sectionId = widget->property("sectionId").toString();
+            if (sectionId.isEmpty()) {
+                sectionId = sectionIdAtGlobalPosition(globalPos);
+            }
+            if (!sectionId.isEmpty()) {
+                if (QListWidget *sectionList = m_sectionLists.value(sectionId, nullptr)) {
+                    showListMenu(sectionId, sectionList, sectionList->viewport()->mapFromGlobal(globalPos));
+                } else {
+                    showSectionMenu(sectionId, globalPos);
+                }
+                contextEvent->accept();
+                return true;
+            }
+#endif
+        }
+    }
+
     if (!isVisible()) {
         return QMainWindow::eventFilter(watched, event);
     }
@@ -1286,19 +1617,99 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     }
 
     auto *mouseEvent = static_cast<QMouseEvent *>(event);
-    const QPoint localPos = mapFromGlobal(mouseEvent->globalPosition().toPoint());
+    const QPoint localPos = mapFromGlobal(eventGlobalPosition(mouseEvent));
+
+    if (event->type() == QEvent::MouseButtonPress && mouseEvent->button() == Qt::RightButton) {
+        m_ignoreNextContextMenuEvent = false;
+        m_pendingContextMenuKind = PendingContextMenuKind::None;
+        m_pendingContextList = nullptr;
+        m_pendingContextSectionId.clear();
+        m_pendingContextViewportPos = QPoint();
+        m_pendingContextGlobalPos = eventGlobalPosition(mouseEvent);
+
+        QWidget *sectionHeader = widget;
+        while (sectionHeader && sectionHeader->window() == this && sectionHeader->objectName() != "sectionHeader") {
+            sectionHeader = sectionHeader->parentWidget();
+        }
+        if (sectionHeader && sectionHeader->objectName() == "sectionHeader") {
+            m_pendingContextMenuKind = PendingContextMenuKind::Section;
+            m_pendingContextSectionId = sectionHeader->property("sectionId").toString();
+            return true;
+        }
+
+        if (QListWidget *list = ancestorListWidget(widget)) {
+            m_pendingContextMenuKind = PendingContextMenuKind::List;
+            m_pendingContextList = list;
+            m_pendingContextSectionId = list->property("sectionId").toString();
+            m_pendingContextViewportPos = list->viewport()->mapFromGlobal(m_pendingContextGlobalPos);
+            return true;
+        }
+
+        QString sectionId = widget->property("sectionId").toString();
+        if (sectionId.isEmpty()) {
+            sectionId = sectionIdAtGlobalPosition(m_pendingContextGlobalPos);
+        }
+        if (!sectionId.isEmpty()) {
+            if (QListWidget *sectionList = m_sectionLists.value(sectionId, nullptr)) {
+                m_pendingContextMenuKind = PendingContextMenuKind::List;
+                m_pendingContextList = sectionList;
+                m_pendingContextSectionId = sectionId;
+                m_pendingContextViewportPos = sectionList->viewport()->mapFromGlobal(m_pendingContextGlobalPos);
+            } else {
+                m_pendingContextMenuKind = PendingContextMenuKind::Section;
+                m_pendingContextSectionId = sectionId;
+            }
+            return true;
+        }
+    }
+
+    if (event->type() == QEvent::MouseButtonRelease && m_pendingContextMenuKind != PendingContextMenuKind::None) {
+        if (m_pendingContextMenuKind == PendingContextMenuKind::Section) {
+            const QString sectionId = m_pendingContextSectionId;
+            const QPoint globalPos = m_pendingContextGlobalPos;
+            resetPendingContextMenu();
+            m_ignoreNextContextMenuEvent = true;
+            showSectionMenu(sectionId, globalPos);
+            return true;
+        }
+        if (m_pendingContextMenuKind == PendingContextMenuKind::List && m_pendingContextList) {
+            QListWidget *list = m_pendingContextList.data();
+            const QString sectionId = m_pendingContextSectionId;
+            const QPoint viewportPos = m_pendingContextViewportPos;
+            resetPendingContextMenu();
+            m_ignoreNextContextMenuEvent = true;
+            showListMenu(sectionId, list, viewportPos);
+            return true;
+        }
+        resetPendingContextMenu();
+    }
+
+    if (event->type() == QEvent::MouseButtonRelease && eventButton(mouseEvent) == Qt::RightButton) {
+        resetPendingContextMenu();
+        return true;
+    }
+
+    if (event->type() == QEvent::MouseButtonRelease && mouseEvent->button() == Qt::LeftButton) {
+        if (QListWidget *list = ancestorListWidget(widget)) {
+            const QPoint viewportPos = list->viewport()->mapFromGlobal(eventGlobalPosition(mouseEvent));
+            if (QListWidgetItem *item = list->itemAt(viewportPos)) {
+                runRule(item->data(RuleIdRole).toString());
+                return true;
+            }
+        }
+    }
 
     if (event->type() == QEvent::MouseMove) {
         if (m_resizing) {
-            performResize(mouseEvent->globalPosition().toPoint());
+            performResize(eventGlobalPosition(mouseEvent));
             return true;
         }
-        if (mouseEvent->buttons().testFlag(Qt::LeftButton) && !m_dragPosition.isNull()) {
+        if ((mouseEvent->buttons() & Qt::LeftButton) && !m_dragPosition.isNull()) {
             if (m_topAutoHidden) {
                 revealFromTopAutoHide();
-                m_dragPosition = mouseEvent->globalPosition().toPoint() - frameGeometry().topLeft();
+                m_dragPosition = eventGlobalPosition(mouseEvent) - frameGeometry().topLeft();
             }
-            move(mouseEvent->globalPosition().toPoint() - m_dragPosition);
+            move(eventGlobalPosition(mouseEvent) - m_dragPosition);
             return true;
         }
         updateResizeCursor(localPos);
@@ -1309,13 +1720,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         m_resizeRegion = resizeRegionAt(localPos);
         if (m_resizeRegion != ResizeRegion::None) {
             m_resizing = true;
-            m_resizeStartGlobal = mouseEvent->globalPosition().toPoint();
+            m_resizeStartGlobal = eventGlobalPosition(mouseEvent);
             m_resizeStartGeometry = geometry();
             return true;
         }
         const bool draggableWidget = !qobject_cast<QAbstractButton *>(widget) && !qobject_cast<QLineEdit *>(widget);
-        if (localPos.y() <= HeaderHeight && draggableWidget) {
-            m_dragPosition = mouseEvent->globalPosition().toPoint() - frameGeometry().topLeft();
+        if (localPos.y() <= QtCompat::scaleInt(HeaderHeight) && draggableWidget) {
+            m_dragPosition = eventGlobalPosition(mouseEvent) - frameGeometry().topLeft();
             return true;
         }
     }
@@ -1360,17 +1771,33 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 }
 
 #ifdef Q_OS_WIN
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+bool MainWindow::winEvent(MSG *msg, long *result)
+#elif QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, long *result)
+#else
 bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+#endif
 {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     Q_UNUSED(eventType);
     auto *msg = static_cast<MSG *>(message);
+#endif
     if (!msg || msg->message != WM_DROPFILES) {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+        return QMainWindow::winEvent(msg, result);
+#else
         return QMainWindow::nativeEvent(eventType, message, result);
+#endif
     }
 
     HDROP drop = reinterpret_cast<HDROP>(msg->wParam);
     if (!drop) {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+        return QMainWindow::winEvent(msg, result);
+#else
         return QMainWindow::nativeEvent(eventType, message, result);
+#endif
     }
 
     POINT clientPoint = {};
@@ -1390,8 +1817,8 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
             continue;
         }
         std::wstring buffer(length + 1, L'\0');
-        if (DragQueryFileW(drop, i, buffer.data(), static_cast<UINT>(buffer.size())) > 0) {
-            urls.push_back(QUrl::fromLocalFile(QString::fromWCharArray(buffer.c_str())));
+        if (DragQueryFileW(drop, i, &buffer[0], static_cast<UINT>(buffer.size())) > 0) {
+            urls.push_back(QUrl::fromLocalFile(fromWideString(buffer.c_str(), static_cast<int>(length))));
         }
     }
     DragFinish(drop);
@@ -1420,18 +1847,18 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         revealFromTopAutoHide();
     }
     if (event->button() == Qt::LeftButton) {
-        m_resizeRegion = resizeRegionAt(event->position().toPoint());
+        m_resizeRegion = resizeRegionAt(eventPosition(event));
         if (m_resizeRegion != ResizeRegion::None) {
             m_resizing = true;
-            m_resizeStartGlobal = event->globalPosition().toPoint();
+            m_resizeStartGlobal = eventGlobalPosition(event);
             m_resizeStartGeometry = geometry();
             event->accept();
             return;
         }
     }
 
-    if (event->button() == Qt::LeftButton && event->position().y() <= HeaderHeight) {
-        m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
+    if (event->button() == Qt::LeftButton && eventPosition(event).y() <= QtCompat::scaleInt(HeaderHeight)) {
+        m_dragPosition = eventGlobalPosition(event) - frameGeometry().topLeft();
         event->accept();
         return;
     }
@@ -1445,20 +1872,20 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
         return;
     }
     if (m_resizing) {
-        performResize(event->globalPosition().toPoint());
+        performResize(eventGlobalPosition(event));
         event->accept();
         return;
     }
-    if (event->buttons().testFlag(Qt::LeftButton) && !m_dragPosition.isNull()) {
+    if ((event->buttons() & Qt::LeftButton) && !m_dragPosition.isNull()) {
         if (m_topAutoHidden) {
             revealFromTopAutoHide();
-            m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
+            m_dragPosition = eventGlobalPosition(event) - frameGeometry().topLeft();
         }
-        move(event->globalPosition().toPoint() - m_dragPosition);
+        move(eventGlobalPosition(event) - m_dragPosition);
         event->accept();
         return;
     }
-    updateResizeCursor(event->position().toPoint());
+    updateResizeCursor(eventPosition(event));
     QMainWindow::mouseMoveEvent(event);
 }
 
@@ -1468,7 +1895,7 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
     m_resizing = false;
     m_resizeRegion = ResizeRegion::None;
     m_dragPosition = {};
-    updateResizeCursor(event->position().toPoint());
+    updateResizeCursor(eventPosition(event));
     if (wasDraggingWindow) {
         finishInteractiveMove();
         event->accept();
@@ -1488,7 +1915,7 @@ void MainWindow::hideEvent(QHideEvent *event)
 {
     if (m_topAutoHidden) {
         m_topAutoHidden = false;
-        setMinimumHeight(WindowMinimumHeight);
+        setMinimumHeight(QtCompat::scaleInt(WindowMinimumHeight));
         setMaximumHeight(QWIDGETSIZE_MAX);
         if (m_autoHideShownGeometry.isValid()) {
             setGeometry(m_autoHideShownGeometry);
@@ -1577,7 +2004,7 @@ void MainWindow::refreshLauncher()
 {
     rebuildSections();
 
-    const int enabledCount = std::count_if(m_document.rules.cbegin(), m_document.rules.cend(), [](const HotkeyRule &rule) {
+    const int enabledCount = std::count_if(m_document.rules.begin(), m_document.rules.end(), [](const HotkeyRule &rule) {
         return rule.enabled;
     });
     if (m_ruleCountLabel) {
@@ -1620,7 +2047,7 @@ void MainWindow::rebuildSections()
         }
     }
     if (openSectionId.isEmpty() && !sections.isEmpty()) {
-        openSectionId = sections.constFirst().id;
+        openSectionId = sections.first().id;
     }
 
     bool normalizedCollapsedState = false;
@@ -1656,7 +2083,7 @@ void MainWindow::rebuildSections()
         header->setContextMenuPolicy(Qt::CustomContextMenu);
         header->setProperty("sectionId", section.id);
         header->setProperty("collapsed", section.collapsed);
-        const LauncherSectionAppearance sectionAppearance = m_document.settings.sectionAppearance;
+        const LauncherSectionAppearance sectionAppearance = scaledAppearance(m_document.settings.sectionAppearance);
         header->setFixedHeight(sectionAppearance.headerHeight);
         auto *headerLayout = new QHBoxLayout(header);
         const int headerVerticalMargin = qMax(2, (sectionAppearance.headerHeight - qMax(sectionAppearance.iconHeight, sectionAppearance.fontPointSize + 8)) / 2);
@@ -1675,12 +2102,12 @@ void MainWindow::rebuildSections()
             sectionAppearance.fontPointSize,
             sectionAppearance.textColor,
             700));
-        const int itemCount = std::count_if(m_document.rules.cbegin(), m_document.rules.cend(), [&section](const HotkeyRule &rule) {
+        const int itemCount = std::count_if(m_document.rules.begin(), m_document.rules.end(), [&section](const HotkeyRule &rule) {
             return rule.sectionId == section.id;
         });
         auto *meta = new QLabel(section.encrypted ? uiText(UiText::Key::EncryptedItemCount).arg(itemCount) : uiText(UiText::Key::ItemCount).arg(itemCount), header);
         meta->setObjectName("sectionMeta");
-        auto *toggle = new QLabel(section.collapsed ? QStringLiteral("+") : QStringLiteral("-"), header);
+        auto *toggle = new QLabel(section.collapsed ? QString("+") : QString("-"), header);
         toggle->setObjectName("sectionToggle");
         toggle->setFixedWidth(16);
         toggle->setAlignment(Qt::AlignCenter);
@@ -1690,9 +2117,9 @@ void MainWindow::rebuildSections()
         headerLayout->addWidget(meta);
         headerLayout->addWidget(toggle);
 
-        connect(header, &QWidget::customContextMenuRequested, this, [this, header](const QPoint &pos) {
-            showSectionMenu(header->property("sectionId").toString(), header->mapToGlobal(pos));
-        });
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+        connect(header, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(showSectionContextMenu(QPoint)));
+#endif
 
         sectionLayout->addWidget(header);
 
@@ -1724,19 +2151,21 @@ void MainWindow::rebuildSections()
                 list->setDragDropMode(QAbstractItemView::DropOnly);
                 list->setDefaultDropAction(Qt::CopyAction);
                 list->setDropIndicatorShown(true);
+                list->installEventFilter(this);
                 list->viewport()->setAcceptDrops(true);
                 list->viewport()->installEventFilter(this);
-                list->setContextMenuPolicy(Qt::CustomContextMenu);
+                list->setContextMenuPolicy(Qt::NoContextMenu);
+                list->viewport()->setContextMenuPolicy(Qt::NoContextMenu);
                 list->setProperty("sectionId", section.id);
                 list->viewport()->setProperty("sectionId", section.id);
                 list->setTextElideMode(m_document.settings.itemAppearance.showEllipsis ? Qt::ElideRight : Qt::ElideNone);
                 list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-                list->setItemDelegate(new IconGridDelegate(m_document.settings.itemAppearance, list));
+                list->setItemDelegate(new IconGridDelegate(scaledAppearance(m_document.settings.itemAppearance), list));
                 QFont itemFont = list->font();
                 if (!m_document.settings.itemAppearance.fontFamily.isEmpty()) {
                     itemFont.setFamily(m_document.settings.itemAppearance.fontFamily);
                 }
-                itemFont.setPointSize(m_document.settings.itemAppearance.fontPointSize);
+                itemFont.setPointSize(scaledAppearance(m_document.settings.itemAppearance).fontPointSize);
                 list->setFont(itemFont);
 
                 for (const HotkeyRule &rule : m_document.rules) {
@@ -1745,8 +2174,11 @@ void MainWindow::rebuildSections()
                     }
                     QString text = ruleTitle(rule);
                     auto *item = new QListWidgetItem(iconForRule(rule), text);
-                    item->setSizeHint(QSize(m_document.settings.itemAppearance.itemWidth, m_document.settings.itemAppearance.itemHeight));
+                    const LauncherItemAppearance itemAppearance = scaledAppearance(m_document.settings.itemAppearance);
+                    item->setSizeHint(QSize(itemAppearance.itemWidth, itemAppearance.itemHeight));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
                     item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
+#endif
                     const QString hotkeyTip = rule.hotkey.isValid() ? rule.hotkey.displayText() : uiText(UiText::Key::UnboundHotkey);
                     item->setToolTip(QString("%1\n%2\n%3").arg(ruleTitle(rule), rule.action.target, hotkeyTip));
                     item->setData(RuleIdRole, rule.id);
@@ -1755,13 +2187,6 @@ void MainWindow::rebuildSections()
                     }
                     list->addItem(item);
                 }
-
-                connect(list, &QListWidget::customContextMenuRequested, this, [this, list](const QPoint &pos) {
-                    showListMenu(list->property("sectionId").toString(), list, pos);
-                });
-                connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
-                    runRule(item->data(RuleIdRole).toString());
-                });
 
                 bodyLayout->addWidget(list, 1);
                 m_sectionLists.insert(section.id, list);
@@ -1777,17 +2202,17 @@ void MainWindow::rebuildSections()
 
     enablePointerTracking(m_sectionsContainer);
     updateLauncherGrids();
-    QTimer::singleShot(0, this, &MainWindow::updateLauncherGrids);
+    QTimer::singleShot(0, this, SLOT(updateLauncherGrids()));
 }
 
 void MainWindow::updateLauncherGrids()
 {
-    const LauncherItemAppearance appearance = m_document.settings.itemAppearance;
+    const LauncherItemAppearance appearance = scaledAppearance(m_document.settings.itemAppearance);
     const QSize iconSize(appearance.iconWidth, appearance.iconHeight);
     const QSize gridSize(appearance.itemWidth + appearance.horizontalSpacing,
                          appearance.itemHeight + appearance.verticalSpacing);
 
-    for (QListWidget *list : std::as_const(m_sectionLists)) {
+    for (QListWidget *list : m_sectionLists) {
         if (!list) {
             continue;
         }
@@ -1865,12 +2290,12 @@ void MainWindow::showHotkeyListDialog()
     auto *layout = new QVBoxLayout(dialog);
     auto *table = new QTableWidget(dialog);
     table->setColumnCount(4);
-    table->setHorizontalHeaderLabels({
-        uiText(UiText::Key::HotkeyListCategory),
-        uiText(UiText::Key::HotkeyListItem),
-        uiText(UiText::Key::HotkeyListHotkey),
-        uiText(UiText::Key::HotkeyListTarget)
-    });
+    QStringList headerLabels;
+    headerLabels << uiText(UiText::Key::HotkeyListCategory)
+                 << uiText(UiText::Key::HotkeyListItem)
+                 << uiText(UiText::Key::HotkeyListHotkey)
+                 << uiText(UiText::Key::HotkeyListTarget);
+    table->setHorizontalHeaderLabels(headerLabels);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -1897,8 +2322,8 @@ void MainWindow::showHotkeyListDialog()
         emptyLabel->setAlignment(Qt::AlignCenter);
         layout->addWidget(emptyLabel);
     }
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
-    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+    auto *buttons = makeDialogButtons(QDialogButtonBox::Close, dialog);
+    connectDialogClose(buttons, dialog);
     layout->addWidget(buttons);
 
     dialog->resize(620, 420);
@@ -1944,6 +2369,17 @@ void MainWindow::showItemAppearanceDialog()
     auto *showEllipsis = new QCheckBox(dialog);
     showEllipsis->setChecked(appearance.showEllipsis);
 
+    m_itemIconWidthSpin = iconWidth;
+    m_itemIconHeightSpin = iconHeight;
+    m_itemWidthSpin = itemWidth;
+    m_itemHeightSpin = itemHeight;
+    m_itemFontFamilyCombo = fontFamily;
+    m_itemFontPointSizeSpin = fontPointSize;
+    m_itemHorizontalSpacingSpin = horizontalSpacing;
+    m_itemVerticalSpacingSpin = verticalSpacing;
+    m_itemMultilineCheck = multilineText;
+    m_itemEllipsisCheck = showEllipsis;
+
     form->addRow(uiText(UiText::Key::IconWidth), iconWidth);
     form->addRow(uiText(UiText::Key::IconHeight), iconHeight);
     form->addRow(uiText(UiText::Key::ItemWidth), itemWidth);
@@ -1955,33 +2391,18 @@ void MainWindow::showItemAppearanceDialog()
     form->addRow(uiText(UiText::Key::MultilineText), multilineText);
     form->addRow(uiText(UiText::Key::ShowEllipsis), showEllipsis);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    auto *buttons = makeDialogButtons(QDialogButtonBox::Close, dialog);
     layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+    connectDialogClose(buttons, dialog);
 
-    auto apply = [this, iconWidth, iconHeight, itemWidth, itemHeight, fontFamily, fontPointSize,
-                  horizontalSpacing, verticalSpacing, multilineText, showEllipsis]() {
-        LauncherItemAppearance next;
-        next.iconWidth = iconWidth->value();
-        next.iconHeight = iconHeight->value();
-        next.itemWidth = itemWidth->value();
-        next.itemHeight = itemHeight->value();
-        next.fontFamily = fontFamily->currentFont().family();
-        next.fontPointSize = fontPointSize->value();
-        next.horizontalSpacing = horizontalSpacing->value();
-        next.verticalSpacing = verticalSpacing->value();
-        next.multilineText = multilineText->isChecked();
-        next.showEllipsis = showEllipsis->isChecked();
-        m_document.settings.itemAppearance = LauncherItemAppearance::fromJson(next.toJson());
-        applyItemAppearanceChange();
-    };
-
-    for (QSpinBox *spin : {iconWidth, iconHeight, itemWidth, itemHeight, fontPointSize, horizontalSpacing, verticalSpacing}) {
-        connect(spin, &QSpinBox::valueChanged, this, apply);
+    QList<QSpinBox *> itemSpins;
+    itemSpins << iconWidth << iconHeight << itemWidth << itemHeight << fontPointSize << horizontalSpacing << verticalSpacing;
+    for (QSpinBox *spin : itemSpins) {
+        connect(spin, SIGNAL(valueChanged(int)), this, SLOT(applyItemAppearanceDialogChange()));
     }
-    connect(fontFamily, &QFontComboBox::currentFontChanged, this, apply);
-    connect(multilineText, &QCheckBox::toggled, this, apply);
-    connect(showEllipsis, &QCheckBox::toggled, this, apply);
+    connect(fontFamily, SIGNAL(currentFontChanged(QFont)), this, SLOT(applyItemAppearanceDialogChange()));
+    connect(multilineText, SIGNAL(toggled(bool)), this, SLOT(applyItemAppearanceDialogChange()));
+    connect(showEllipsis, SIGNAL(toggled(bool)), this, SLOT(applyItemAppearanceDialogChange()));
 
     dialog->resize(320, dialog->sizeHint().height());
     dialog->show();
@@ -2021,6 +2442,14 @@ void MainWindow::showSectionAppearanceDialog()
     auto *colorButton = new QPushButton(dialog);
     auto *defaultColorButton = new QPushButton(uiText(UiText::Key::DefaultColor), dialog);
     updateColorButton(colorButton, language(), appearance.textColor);
+    colorButton->setProperty("selectedColor", appearance.textColor);
+
+    m_sectionIconWidthSpin = iconWidth;
+    m_sectionIconHeightSpin = iconHeight;
+    m_sectionHeaderHeightSpin = headerHeight;
+    m_sectionFontFamilyCombo = fontFamily;
+    m_sectionFontPointSizeSpin = fontPointSize;
+    m_sectionColorButton = colorButton;
 
     auto *colorLayout = new QHBoxLayout;
     colorLayout->setContentsMargins(0, 0, 0, 0);
@@ -2036,44 +2465,18 @@ void MainWindow::showSectionAppearanceDialog()
     form->addRow(uiText(UiText::Key::FontPointSize), fontPointSize);
     form->addRow(uiText(UiText::Key::TextColor), colorWidget);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    auto *buttons = makeDialogButtons(QDialogButtonBox::Close, dialog);
     layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+    connectDialogClose(buttons, dialog);
 
-    auto apply = [this, iconWidth, iconHeight, headerHeight, fontFamily, fontPointSize, colorButton]() {
-        LauncherSectionAppearance next;
-        next.iconWidth = iconWidth->value();
-        next.iconHeight = iconHeight->value();
-        next.headerHeight = headerHeight->value();
-        next.fontFamily = fontFamily->currentFont().family();
-        next.fontPointSize = fontPointSize->value();
-        next.textColor = colorButton->property("selectedColor").toString();
-        m_document.settings.sectionAppearance = LauncherSectionAppearance::fromJson(next.toJson());
-        applySectionAppearanceChange();
-    };
-    colorButton->setProperty("selectedColor", appearance.textColor);
-
-    for (QSpinBox *spin : {iconWidth, iconHeight, headerHeight, fontPointSize}) {
-        connect(spin, &QSpinBox::valueChanged, this, apply);
+    QList<QSpinBox *> sectionSpins;
+    sectionSpins << iconWidth << iconHeight << headerHeight << fontPointSize;
+    for (QSpinBox *spin : sectionSpins) {
+        connect(spin, SIGNAL(valueChanged(int)), this, SLOT(applySectionAppearanceDialogChange()));
     }
-    connect(fontFamily, &QFontComboBox::currentFontChanged, this, apply);
-    connect(colorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
-        const QString currentColor = colorButton->property("selectedColor").toString();
-        const QColor initial = currentColor.isEmpty() ? palette().color(QPalette::Text) : QColor(currentColor);
-        const QColor selected = QColorDialog::getColor(initial, this, uiText(UiText::Key::ChooseColor));
-        if (!selected.isValid()) {
-            return;
-        }
-        const QString color = selected.name(QColor::HexRgb);
-        colorButton->setProperty("selectedColor", color);
-        updateColorButton(colorButton, language(), color);
-        apply();
-    });
-    connect(defaultColorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
-        colorButton->setProperty("selectedColor", QString());
-        updateColorButton(colorButton, language(), QString());
-        apply();
-    });
+    connect(fontFamily, SIGNAL(currentFontChanged(QFont)), this, SLOT(applySectionAppearanceDialogChange()));
+    connect(colorButton, SIGNAL(clicked()), this, SLOT(chooseSectionTextColor()));
+    connect(defaultColorButton, SIGNAL(clicked()), this, SLOT(resetSectionTextColor()));
 
     dialog->resize(320, dialog->sizeHint().height());
     dialog->show();
@@ -2113,6 +2516,14 @@ void MainWindow::showCategoryAppearanceDialog()
     auto *colorButton = new QPushButton(dialog);
     auto *defaultColorButton = new QPushButton(uiText(UiText::Key::DefaultColor), dialog);
     updateColorButton(colorButton, language(), appearance.textColor);
+    colorButton->setProperty("selectedColor", appearance.textColor);
+
+    m_categoryIconWidthSpin = iconWidth;
+    m_categoryIconHeightSpin = iconHeight;
+    m_categoryButtonHeightSpin = buttonHeight;
+    m_categoryFontFamilyCombo = fontFamily;
+    m_categoryFontPointSizeSpin = fontPointSize;
+    m_categoryColorButton = colorButton;
 
     auto *colorLayout = new QHBoxLayout;
     colorLayout->setContentsMargins(0, 0, 0, 0);
@@ -2128,44 +2539,18 @@ void MainWindow::showCategoryAppearanceDialog()
     form->addRow(uiText(UiText::Key::FontPointSize), fontPointSize);
     form->addRow(uiText(UiText::Key::TextColor), colorWidget);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dialog);
+    auto *buttons = makeDialogButtons(QDialogButtonBox::Close, dialog);
     layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+    connectDialogClose(buttons, dialog);
 
-    auto apply = [this, iconWidth, iconHeight, buttonHeight, fontFamily, fontPointSize, colorButton]() {
-        LauncherCategoryAppearance next;
-        next.iconWidth = iconWidth->value();
-        next.iconHeight = iconHeight->value();
-        next.buttonHeight = buttonHeight->value();
-        next.fontFamily = fontFamily->currentFont().family();
-        next.fontPointSize = fontPointSize->value();
-        next.textColor = colorButton->property("selectedColor").toString();
-        m_document.settings.categoryAppearance = LauncherCategoryAppearance::fromJson(next.toJson());
-        applyCategoryAppearanceChange();
-    };
-    colorButton->setProperty("selectedColor", appearance.textColor);
-
-    for (QSpinBox *spin : {iconWidth, iconHeight, buttonHeight, fontPointSize}) {
-        connect(spin, &QSpinBox::valueChanged, this, apply);
+    QList<QSpinBox *> categorySpins;
+    categorySpins << iconWidth << iconHeight << buttonHeight << fontPointSize;
+    for (QSpinBox *spin : categorySpins) {
+        connect(spin, SIGNAL(valueChanged(int)), this, SLOT(applyCategoryAppearanceDialogChange()));
     }
-    connect(fontFamily, &QFontComboBox::currentFontChanged, this, apply);
-    connect(colorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
-        const QString currentColor = colorButton->property("selectedColor").toString();
-        const QColor initial = currentColor.isEmpty() ? palette().color(QPalette::Text) : QColor(currentColor);
-        const QColor selected = QColorDialog::getColor(initial, this, uiText(UiText::Key::ChooseColor));
-        if (!selected.isValid()) {
-            return;
-        }
-        const QString color = selected.name(QColor::HexRgb);
-        colorButton->setProperty("selectedColor", color);
-        updateColorButton(colorButton, language(), color);
-        apply();
-    });
-    connect(defaultColorButton, &QPushButton::clicked, this, [this, colorButton, apply]() {
-        colorButton->setProperty("selectedColor", QString());
-        updateColorButton(colorButton, language(), QString());
-        apply();
-    });
+    connect(fontFamily, SIGNAL(currentFontChanged(QFont)), this, SLOT(applyCategoryAppearanceDialogChange()));
+    connect(colorButton, SIGNAL(clicked()), this, SLOT(chooseCategoryTextColor()));
+    connect(defaultColorButton, SIGNAL(clicked()), this, SLOT(resetCategoryTextColor()));
 
     dialog->resize(320, dialog->sizeHint().height());
     dialog->show();
@@ -2191,10 +2576,123 @@ void MainWindow::applyCategoryAppearanceChange()
     rebuildNavItems();
 }
 
+void MainWindow::applyItemAppearanceDialogChange()
+{
+    if (!m_itemIconWidthSpin || !m_itemIconHeightSpin || !m_itemWidthSpin || !m_itemHeightSpin ||
+        !m_itemFontFamilyCombo || !m_itemFontPointSizeSpin || !m_itemHorizontalSpacingSpin ||
+        !m_itemVerticalSpacingSpin || !m_itemMultilineCheck || !m_itemEllipsisCheck) {
+        return;
+    }
+
+    LauncherItemAppearance next;
+    next.iconWidth = m_itemIconWidthSpin->value();
+    next.iconHeight = m_itemIconHeightSpin->value();
+    next.itemWidth = m_itemWidthSpin->value();
+    next.itemHeight = m_itemHeightSpin->value();
+    next.fontFamily = m_itemFontFamilyCombo->currentFont().family();
+    next.fontPointSize = m_itemFontPointSizeSpin->value();
+    next.horizontalSpacing = m_itemHorizontalSpacingSpin->value();
+    next.verticalSpacing = m_itemVerticalSpacingSpin->value();
+    next.multilineText = m_itemMultilineCheck->isChecked();
+    next.showEllipsis = m_itemEllipsisCheck->isChecked();
+    m_document.settings.itemAppearance = LauncherItemAppearance::fromJson(next.toJson());
+    applyItemAppearanceChange();
+}
+
+void MainWindow::applySectionAppearanceDialogChange()
+{
+    if (!m_sectionIconWidthSpin || !m_sectionIconHeightSpin || !m_sectionHeaderHeightSpin ||
+        !m_sectionFontFamilyCombo || !m_sectionFontPointSizeSpin || !m_sectionColorButton) {
+        return;
+    }
+
+    LauncherSectionAppearance next;
+    next.iconWidth = m_sectionIconWidthSpin->value();
+    next.iconHeight = m_sectionIconHeightSpin->value();
+    next.headerHeight = m_sectionHeaderHeightSpin->value();
+    next.fontFamily = m_sectionFontFamilyCombo->currentFont().family();
+    next.fontPointSize = m_sectionFontPointSizeSpin->value();
+    next.textColor = m_sectionColorButton->property("selectedColor").toString();
+    m_document.settings.sectionAppearance = LauncherSectionAppearance::fromJson(next.toJson());
+    applySectionAppearanceChange();
+}
+
+void MainWindow::applyCategoryAppearanceDialogChange()
+{
+    if (!m_categoryIconWidthSpin || !m_categoryIconHeightSpin || !m_categoryButtonHeightSpin ||
+        !m_categoryFontFamilyCombo || !m_categoryFontPointSizeSpin || !m_categoryColorButton) {
+        return;
+    }
+
+    LauncherCategoryAppearance next;
+    next.iconWidth = m_categoryIconWidthSpin->value();
+    next.iconHeight = m_categoryIconHeightSpin->value();
+    next.buttonHeight = m_categoryButtonHeightSpin->value();
+    next.fontFamily = m_categoryFontFamilyCombo->currentFont().family();
+    next.fontPointSize = m_categoryFontPointSizeSpin->value();
+    next.textColor = m_categoryColorButton->property("selectedColor").toString();
+    m_document.settings.categoryAppearance = LauncherCategoryAppearance::fromJson(next.toJson());
+    applyCategoryAppearanceChange();
+}
+
+void MainWindow::chooseSectionTextColor()
+{
+    if (!m_sectionColorButton) {
+        return;
+    }
+    const QString currentColor = m_sectionColorButton->property("selectedColor").toString();
+    const QColor initial = currentColor.isEmpty() ? palette().color(QPalette::Text) : QColor(currentColor);
+    const QColor selected = QColorDialog::getColor(initial, this, uiText(UiText::Key::ChooseColor));
+    if (!selected.isValid()) {
+        return;
+    }
+    const QString color = selected.name();
+    m_sectionColorButton->setProperty("selectedColor", color);
+    updateColorButton(m_sectionColorButton, language(), color);
+    applySectionAppearanceDialogChange();
+}
+
+void MainWindow::resetSectionTextColor()
+{
+    if (!m_sectionColorButton) {
+        return;
+    }
+    m_sectionColorButton->setProperty("selectedColor", QString());
+    updateColorButton(m_sectionColorButton, language(), QString());
+    applySectionAppearanceDialogChange();
+}
+
+void MainWindow::chooseCategoryTextColor()
+{
+    if (!m_categoryColorButton) {
+        return;
+    }
+    const QString currentColor = m_categoryColorButton->property("selectedColor").toString();
+    const QColor initial = currentColor.isEmpty() ? palette().color(QPalette::Text) : QColor(currentColor);
+    const QColor selected = QColorDialog::getColor(initial, this, uiText(UiText::Key::ChooseColor));
+    if (!selected.isValid()) {
+        return;
+    }
+    const QString color = selected.name();
+    m_categoryColorButton->setProperty("selectedColor", color);
+    updateColorButton(m_categoryColorButton, language(), color);
+    applyCategoryAppearanceDialogChange();
+}
+
+void MainWindow::resetCategoryTextColor()
+{
+    if (!m_categoryColorButton) {
+        return;
+    }
+    m_categoryColorButton->setProperty("selectedColor", QString());
+    updateColorButton(m_categoryColorButton, language(), QString());
+    applyCategoryAppearanceDialogChange();
+}
+
 void MainWindow::applyCategoryAppearance()
 {
-    const LauncherCategoryAppearance appearance = m_document.settings.categoryAppearance;
-    for (QToolButton *button : std::as_const(m_navButtons)) {
+    const LauncherCategoryAppearance appearance = scaledAppearance(m_document.settings.categoryAppearance);
+    for (QToolButton *button : m_navButtons) {
         if (!button) {
             continue;
         }
@@ -2211,7 +2709,7 @@ void MainWindow::applyCategoryAppearance()
 
 int MainWindow::fixedLauncherWidth() const
 {
-    const LauncherItemAppearance appearance = m_document.settings.itemAppearance;
+    const LauncherItemAppearance appearance = scaledAppearance(m_document.settings.itemAppearance);
     const int cellWidth = appearance.itemWidth + appearance.horizontalSpacing;
     return FixedIconColumns * cellWidth + SectionHorizontalMargin * 2 + ScrollBarReserveWidth;
 }
@@ -2219,7 +2717,7 @@ int MainWindow::fixedLauncherWidth() const
 void MainWindow::applyFixedLauncherWidth()
 {
     const int width = fixedLauncherWidth();
-    setMinimumSize(width, WindowMinimumHeight);
+    setMinimumSize(width, QtCompat::scaleInt(WindowMinimumHeight));
     setMaximumSize(width, QWIDGETSIZE_MAX);
     setMaximumWidth(width);
     if (this->width() != width) {
@@ -2286,27 +2784,29 @@ void MainWindow::showSectionMenu(const QString &sectionId, const QPoint &globalP
     }
 
     QMenu menu(this);
-    menu.addAction(uiText(UiText::Key::NewSection), this, [this]() {
-        addSection(m_currentCategory);
-    });
-    menu.addAction(uiText(UiText::Key::EditSection), this, [this, sectionId]() {
-        editSection(sectionId);
-    });
-    menu.addAction(uiText(UiText::Key::DeleteSection), this, [this, sectionId]() {
-        deleteSection(sectionId);
-    });
-    menu.addAction(uiText(UiText::Key::EncryptSection), this, [this, sectionId]() {
-        encryptSection(sectionId);
-    });
+    QAction *newAction = menu.addAction(uiText(UiText::Key::NewSection));
+    QAction *editAction = menu.addAction(uiText(UiText::Key::EditSection));
+    QAction *deleteAction = menu.addAction(uiText(UiText::Key::DeleteSection));
+    QAction *encryptAction = menu.addAction(uiText(UiText::Key::EncryptSection));
+    QAction *unlockAction = nullptr;
     if (m_document.sections[index].encrypted && !m_unlockedSectionIds.contains(sectionId)) {
         menu.addSeparator();
-        menu.addAction(uiText(UiText::Key::UnlockSection), this, [this, sectionId]() {
-            if (ensureSectionUnlocked(sectionId)) {
-                refreshLauncher();
-            }
-        });
+        unlockAction = menu.addAction(uiText(UiText::Key::UnlockSection));
     }
-    menu.exec(globalPos);
+    QAction *selected = menu.exec(globalPos);
+    if (selected == newAction) {
+        addSection(m_currentCategory);
+    } else if (selected == editAction) {
+        editSection(sectionId);
+    } else if (selected == deleteAction) {
+        deleteSection(sectionId);
+    } else if (selected == encryptAction) {
+        encryptSection(sectionId);
+    } else if (selected == unlockAction && unlockAction) {
+        if (ensureSectionUnlocked(sectionId)) {
+            refreshLauncher();
+        }
+    }
 }
 
 void MainWindow::showListMenu(const QString &sectionId, QListWidget *list, const QPoint &viewportPos)
@@ -2316,39 +2816,54 @@ void MainWindow::showListMenu(const QString &sectionId, QListWidget *list, const
     }
     QListWidgetItem *item = list ? list->itemAt(viewportPos) : nullptr;
     QMenu menu(this);
+    QAction *runAction = nullptr;
+    QAction *runAsAdminAction = nullptr;
+    QAction *explorerMenuAction = nullptr;
+    QAction *browseAction = nullptr;
+    QAction *desktopShortcutAction = nullptr;
+    QAction *startupAction = nullptr;
+    QAction *editAction = nullptr;
+    QAction *deleteAction = nullptr;
+    QAction *addAction = nullptr;
+    QString ruleId;
     if (item) {
-        const QString ruleId = item->data(RuleIdRole).toString();
-        menu.addAction(uiText(UiText::Key::Run), this, [this, ruleId]() {
-            runRule(ruleId);
-        });
-        menu.addAction(uiText(UiText::Key::RunAsAdmin), this, [this, ruleId]() {
-            runRuleAsAdmin(ruleId);
-        });
-        menu.addAction(uiText(UiText::Key::ExplorerContextMenu), this, [this, ruleId, list, viewportPos]() {
-            showExplorerContextMenuForRule(ruleId, list->viewport()->mapToGlobal(viewportPos));
-        });
-        menu.addAction(uiText(UiText::Key::BrowseTarget), this, [this, ruleId]() {
-            browseRuleTarget(ruleId);
-        });
-        menu.addAction(uiText(UiText::Key::CreateDesktopShortcut), this, [this, ruleId]() {
-            createDesktopShortcutForRule(ruleId);
-        });
-        menu.addAction(uiText(UiText::Key::SetStartup), this, [this, ruleId]() {
-            setRuleStartupShortcut(ruleId);
-        });
+        ruleId = item->data(RuleIdRole).toString();
+        runAction = menu.addAction(uiText(UiText::Key::Run));
+        runAsAdminAction = menu.addAction(uiText(UiText::Key::RunAsAdmin));
+        explorerMenuAction = menu.addAction(uiText(UiText::Key::ExplorerContextMenu));
+        browseAction = menu.addAction(uiText(UiText::Key::BrowseTarget));
+        desktopShortcutAction = menu.addAction(uiText(UiText::Key::CreateDesktopShortcut));
+        startupAction = menu.addAction(uiText(UiText::Key::SetStartup));
         menu.addSeparator();
-        menu.addAction(uiText(UiText::Key::Edit), this, [this, ruleId]() {
-            editRule(ruleId);
-        });
-        menu.addAction(uiText(UiText::Key::Delete), this, [this, ruleId]() {
-            deleteRule(ruleId);
-        });
+        editAction = menu.addAction(uiText(UiText::Key::Edit));
+        deleteAction = menu.addAction(uiText(UiText::Key::Delete));
     } else {
-        menu.addAction(uiText(UiText::Key::AddItem), this, [this, sectionId]() {
-            addRuleToSection(sectionId);
-        });
+        addAction = menu.addAction(uiText(UiText::Key::AddItem));
     }
-    menu.exec(list->viewport()->mapToGlobal(viewportPos));
+    const QPoint globalPos = list ? list->viewport()->mapToGlobal(viewportPos) : QCursor::pos();
+    QAction *selected = menu.exec(globalPos);
+    if (!selected) {
+        return;
+    }
+    if (selected == runAction) {
+        runRule(ruleId);
+    } else if (selected == runAsAdminAction) {
+        runRuleAsAdmin(ruleId);
+    } else if (selected == explorerMenuAction) {
+        showExplorerContextMenuForRule(ruleId, globalPos);
+    } else if (selected == browseAction) {
+        browseRuleTarget(ruleId);
+    } else if (selected == desktopShortcutAction) {
+        createDesktopShortcutForRule(ruleId);
+    } else if (selected == startupAction) {
+        setRuleStartupShortcut(ruleId);
+    } else if (selected == editAction) {
+        editRule(ruleId);
+    } else if (selected == deleteAction) {
+        deleteRule(ruleId);
+    } else if (addAction && selected == addAction) {
+        addRuleToSection(sectionId);
+    }
 }
 
 void MainWindow::addSection(LauncherCategory category)
@@ -2370,10 +2885,9 @@ void MainWindow::addSection(LauncherCategory category)
     form->addRow(uiText(UiText::Key::IconKey), iconEdit);
     form->addRow(uiText(UiText::Key::SortOrder), orderEdit);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    auto *buttons = makeDialogButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     localizeDialogButtons(buttons, language());
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connectDialogAcceptReject(buttons, &dialog);
 
     auto *layout = new QVBoxLayout(&dialog);
     layout->addLayout(form);
@@ -2393,7 +2907,7 @@ void MainWindow::addSection(LauncherCategory category)
     const int order = orderEdit->text().toInt(&ok);
 
     LauncherSection section;
-    section.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    section.id = QtCompat::uuidWithoutBraces();
     section.category = category;
     section.name = name;
     section.iconKey = iconEdit->text().trimmed();
@@ -2420,10 +2934,9 @@ void MainWindow::editSection(const QString &sectionId)
     form->addRow(uiText(UiText::Key::IconKey), iconEdit);
     form->addRow(uiText(UiText::Key::SortOrder), orderEdit);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+    auto *buttons = makeDialogButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
     localizeDialogButtons(buttons, language());
-    connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+    connectDialogAcceptReject(buttons, dialog);
 
     auto *layout = new QVBoxLayout(dialog);
     layout->addLayout(form);
@@ -2455,7 +2968,7 @@ void MainWindow::deleteSection(const QString &sectionId)
     }
 
     const LauncherSection section = m_document.sections[index];
-    const int itemCount = std::count_if(m_document.rules.cbegin(), m_document.rules.cend(), [&sectionId](const HotkeyRule &rule) {
+    const int itemCount = std::count_if(m_document.rules.begin(), m_document.rules.end(), [&sectionId](const HotkeyRule &rule) {
         return rule.sectionId == sectionId;
     });
     const QString message = itemCount > 0
@@ -2465,7 +2978,7 @@ void MainWindow::deleteSection(const QString &sectionId)
         return;
     }
 
-    m_document.sections.removeAt(index);
+    m_document.sections.remove(index);
     m_document.rules.erase(std::remove_if(m_document.rules.begin(), m_document.rules.end(), [&sectionId](const HotkeyRule &rule) {
         return rule.sectionId == sectionId;
     }), m_document.rules.end());
@@ -2592,7 +3105,7 @@ void MainWindow::addDroppedPathsToSection(const QString &sectionId, const QList<
         }
 
         HotkeyRule rule;
-        rule.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        rule.id = QtCompat::uuidWithoutBraces();
         rule.enabled = true;
         rule.category = section.category;
         rule.sectionId = section.id;
@@ -2647,7 +3160,13 @@ QString MainWindow::sectionIdAtGlobalPosition(const QPoint &globalPos) const
 
     QWidget *container = m_sectionsContainer;
     while (container) {
-        const QList<QWidget *> sectionFrames = container->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly);
+        const QList<QWidget *> allWidgets = container->findChildren<QWidget *>();
+        QList<QWidget *> sectionFrames;
+        for (QWidget *child : allWidgets) {
+            if (child && child->parentWidget() == container) {
+                sectionFrames << child;
+            }
+        }
         for (QWidget *sectionFrame : sectionFrames) {
             const QString sectionId = sectionFrame->property("sectionId").toString();
             if (sectionId.isEmpty() || sectionIndexById(sectionId) < 0 || !sectionFrame->isVisible()) {
@@ -2727,7 +3246,7 @@ void MainWindow::deleteRule(const QString &ruleId)
     if (!confirm(this, language(), uiText(UiText::Key::DeleteItemTitle), uiText(UiText::Key::DeleteItemConfirm).arg(ruleTitle(m_document.rules[index])))) {
         return;
     }
-    m_document.rules.removeAt(index);
+    m_document.rules.remove(index);
     saveDocument();
 }
 
@@ -2807,7 +3326,7 @@ void MainWindow::createDesktopShortcutForRule(const QString &ruleId)
 
 #ifdef Q_OS_WIN
     const HotkeyRule &rule = m_document.rules[index];
-    const QString shortcutName = QString("%1.lnk").arg(ruleTitle(rule)).replace(QRegularExpression(R"([\\/:*?"<>|])"), "_");
+    const QString shortcutName = QtCompat::sanitizeFileName(QString("%1.lnk").arg(ruleTitle(rule)));
     createShortcutFile(QDir(desktopDirectoryPath()).filePath(shortcutName), rule, ruleTitle(rule));
 #endif
 }
@@ -2824,9 +3343,18 @@ void MainWindow::setRuleStartupShortcut(const QString &ruleId)
 
 #ifdef Q_OS_WIN
     const HotkeyRule &rule = m_document.rules[index];
-    const QString shortcutName = QString("HStart-%1.lnk").arg(ruleTitle(rule)).replace(QRegularExpression(R"([\\/:*?"<>|])"), "_");
+    const QString shortcutName = QtCompat::sanitizeFileName(QString("HStart-%1.lnk").arg(ruleTitle(rule)));
     createShortcutFile(QDir(startupDirectoryPath()).filePath(shortcutName), rule, ruleTitle(rule));
 #endif
+}
+
+void MainWindow::resetPendingContextMenu()
+{
+    m_pendingContextMenuKind = PendingContextMenuKind::None;
+    m_pendingContextList = nullptr;
+    m_pendingContextSectionId.clear();
+    m_pendingContextViewportPos = QPoint();
+    m_pendingContextGlobalPos = QPoint();
 }
 
 bool MainWindow::ensureSectionUnlocked(const QString &sectionId)
@@ -2884,29 +3412,40 @@ QIcon MainWindow::iconForRule(const HotkeyRule &rule) const
     case LauncherCategory::Program: {
         const QString target = QFileInfo(rule.action.target).fileName().toLower();
         const QString title = rule.description.toLower();
+        const auto nativeOrFallback = [this](const QString &path, QStyle::StandardPixmap fallback) {
+#ifdef Q_OS_WIN
+            const QIcon native = nativeFileIcon(path);
+            if (!native.isNull()) {
+                return native;
+            }
+#else
+            Q_UNUSED(path)
+#endif
+            return style()->standardIcon(fallback);
+        };
         if (target == "control.exe" || title.contains(QString::fromUtf8("控制面板")) || title.contains("control")) {
-            return themedIcon("control-panel");
+            return nativeOrFallback("control.exe", QStyle::SP_ComputerIcon);
         }
         if (target == "taskmgr.exe" || title.contains(QString::fromUtf8("任务管理器")) || title.contains("task")) {
-            return themedIcon("task-manager");
+            return nativeOrFallback("taskmgr.exe", QStyle::SP_FileDialogDetailedView);
         }
         if (target == "cmd.exe" || target == "powershell.exe" || title.contains(QString::fromUtf8("命令")) || title.contains("terminal")) {
-            return themedIcon("terminal");
+            return nativeOrFallback("cmd.exe", QStyle::SP_ComputerIcon);
         }
         if (target == "regedit.exe" || title.contains(QString::fromUtf8("注册表")) || title.contains("registry")) {
-            return themedIcon("registry");
+            return nativeOrFallback("regedit.exe", QStyle::SP_FileIcon);
         }
         if (target == "services.msc" || title.contains(QString::fromUtf8("服务")) || title.contains("services")) {
-            return themedIcon("services");
+            return nativeOrFallback("services.msc", QStyle::SP_FileDialogInfoView);
         }
         if (target == "devmgmt.msc" || title.contains(QString::fromUtf8("设备")) || title.contains("device")) {
-            return themedIcon("device-manager");
+            return nativeOrFallback("devmgmt.msc", QStyle::SP_ComputerIcon);
         }
         if (target == "calc.exe" || title.contains(QString::fromUtf8("计算器")) || title.contains("calculator")) {
-            return themedIcon("calculator");
+            return nativeOrFallback("calc.exe", QStyle::SP_FileIcon);
         }
         if (target == "msinfo32.exe" || title.contains(QString::fromUtf8("系统信息")) || title.contains("system info")) {
-            return themedIcon("system-info");
+            return nativeOrFallback("msinfo32.exe", QStyle::SP_FileDialogInfoView);
         }
         const QFileInfo targetInfo(rule.action.target);
         if (targetInfo.isFile() && targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0) {
@@ -2985,7 +3524,28 @@ QIcon MainWindow::themedIcon(const QString &key) const
     if (!icon.isNull()) {
         return icon;
     }
-    return QIcon(":/app.svg");
+    if (normalized == "folder" || normalized == "folder-system" || normalized == "documents" || normalized == "downloads") {
+        return style()->standardIcon(QStyle::SP_DirIcon);
+    }
+    if (normalized == "desktop") {
+        return style()->standardIcon(QStyle::SP_DesktopIcon);
+    }
+    if (normalized == "settings") {
+        return style()->standardIcon(QStyle::SP_FileDialogDetailedView);
+    }
+    if (normalized == "globe") {
+        return style()->standardIcon(QStyle::SP_DriveNetIcon);
+    }
+    if (normalized == "control-panel" || normalized == "program" || normalized == "system") {
+        return style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+    if (normalized == "task-manager" || normalized == "services" || normalized == "system-info") {
+        return style()->standardIcon(QStyle::SP_FileDialogInfoView);
+    }
+    if (normalized == "terminal" || normalized == "registry" || normalized == "calculator" || normalized == "device-manager") {
+        return style()->standardIcon(QStyle::SP_FileIcon);
+    }
+    return AppIcon::launcherIcon();
 }
 
 bool MainWindow::rulePassesFilters(const HotkeyRule &rule) const
@@ -3027,7 +3587,37 @@ QString MainWindow::categoryDisplayName(LauncherCategory category) const
 
 QString MainWindow::passwordHash(const QString &password) const
 {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0) && defined(Q_OS_WIN)
+    HCRYPTPROV provider = 0;
+    HCRYPTHASH hash = 0;
+    QByteArray digest;
+    const QByteArray input = password.toUtf8();
+    if (CryptAcquireContextW(&provider, nullptr, nullptr, PROV_RSA_AES, CRYPT_VERIFYCONTEXT) &&
+        CryptCreateHash(provider, CALG_SHA_256, 0, 0, &hash) &&
+        CryptHashData(hash, reinterpret_cast<const BYTE *>(input.constData()), static_cast<DWORD>(input.size()), 0)) {
+        DWORD hashSize = 0;
+        DWORD hashSizeLength = sizeof(hashSize);
+        if (CryptGetHashParam(hash, HP_HASHSIZE, reinterpret_cast<BYTE *>(&hashSize), &hashSizeLength, 0) && hashSize > 0) {
+            digest.resize(static_cast<int>(hashSize));
+            DWORD digestLength = hashSize;
+            if (!CryptGetHashParam(hash, HP_HASHVAL, reinterpret_cast<BYTE *>(digest.data()), &digestLength, 0)) {
+                digest.clear();
+            }
+        }
+    }
+    if (hash) {
+        CryptDestroyHash(hash);
+    }
+    if (provider) {
+        CryptReleaseContext(provider, 0);
+    }
+    if (!digest.isEmpty()) {
+        return QString::fromLatin1(digest.toHex());
+    }
+    return QString::fromLatin1(QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha1).toHex());
+#else
     return QString::fromLatin1(QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha256).toHex());
+#endif
 }
 
 QString MainWindow::uiText(UiText::Key key) const
@@ -3128,7 +3718,7 @@ void MainWindow::snapToTopIfNeeded()
     }
 
     const QPoint cursorPosition = QCursor::pos();
-    QScreen *targetScreen = QGuiApplication::screenAt(cursorPosition);
+    QScreen *targetScreen = QtCompat::screenAtPoint(cursorPosition);
     const QRect screenGeometry = targetScreen ? targetScreen->availableGeometry() : currentScreenAvailableGeometry();
     if (screenGeometry.isNull()) {
         return;
@@ -3178,7 +3768,7 @@ void MainWindow::setTopAutoHidden(bool hidden)
 
     m_topAutoHidden = false;
     setAlwaysOnTop(true);
-    setMinimumHeight(WindowMinimumHeight);
+    setMinimumHeight(QtCompat::scaleInt(WindowMinimumHeight));
     setMaximumHeight(QWIDGETSIZE_MAX);
     if (m_autoHideShownGeometry.isValid()) {
         const QRect screenGeometry = currentScreenAvailableGeometry();
@@ -3251,10 +3841,7 @@ void MainWindow::setAlwaysOnTop(bool enabled)
 
 QScreen *MainWindow::currentScreen() const
 {
-    if (QScreen *windowScreen = screen()) {
-        return windowScreen;
-    }
-    return QGuiApplication::screenAt(frameGeometry().center());
+    return QtCompat::screenForWidget(this);
 }
 
 QRect MainWindow::currentScreenAvailableGeometry() const

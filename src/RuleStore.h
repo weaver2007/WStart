@@ -21,6 +21,7 @@ public:
 private:
     LauncherDocument createDefaultDocument() const;
     void ensureDefaultSections(LauncherDocument *document) const;
+    void ensureDefaultRules(LauncherDocument *document) const;
     QString defaultSectionId(LauncherCategory category, int index = 0) const;
     QString configDirectory() const;
 };

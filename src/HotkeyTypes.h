@@ -28,6 +28,18 @@ enum class LauncherCategory {
     Website
 };
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+inline size_t qHash(LauncherCategory category, size_t seed = 0) noexcept
+{
+    return ::qHash(static_cast<int>(category), seed);
+}
+#else
+inline uint qHash(LauncherCategory category, uint seed = 0) noexcept
+{
+    return ::qHash(static_cast<int>(category)) ^ seed;
+}
+#endif
+
 struct LauncherSection {
     QString id;
     LauncherCategory category = LauncherCategory::Program;

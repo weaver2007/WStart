@@ -332,7 +332,9 @@ void CoreTests::conflictWarnings()
     HotkeyRule second = first;
     second.id = "two";
 
-    const QStringList warnings = store.warningsForRule(second, {first});
+    QVector<HotkeyRule> existingRules;
+    existingRules.push_back(first);
+    const QStringList warnings = store.warningsForRule(second, existingRules);
     QVERIFY(!warnings.isEmpty());
 
     HotkeyRule shellShortcut = first;
@@ -344,13 +346,13 @@ void CoreTests::conflictWarnings()
     shellShortcut.hotkey.key = 83;
 #endif
     QVERIFY(HotkeyConflictDetector::isKnownSystemHotkey(shellShortcut.hotkey));
-    QVERIFY(!store.warningsForRule(shellShortcut, {}).isEmpty());
+    QVERIFY(!store.warningsForRule(shellShortcut, QVector<HotkeyRule>()).isEmpty());
 
     HotkeyRule noHotkey = first;
     noHotkey.id = "three";
-    noHotkey.hotkey = {};
-    QVERIFY(store.warningsForRule(noHotkey, {first}).isEmpty());
+    noHotkey.hotkey = HotkeyCombination();
+    QVERIFY(store.warningsForRule(noHotkey, existingRules).isEmpty());
 }
 
-QTEST_MAIN(CoreTests)
+QTEST_APPLESS_MAIN(CoreTests)
 #include "test_core.moc"

@@ -1,0 +1,41 @@
+#pragma once
+
+#include <QFile>
+#include <QString>
+
+class QLockFile {
+public:
+    explicit QLockFile(const QString &fileName) : m_fileName(fileName) {}
+    ~QLockFile() { unlock(); }
+
+    bool tryLock(int timeout)
+    {
+        Q_UNUSED(timeout);
+        if (m_locked) {
+            return true;
+        }
+        if (QFile::exists(m_fileName)) {
+            return false;
+        }
+        QFile file(m_fileName);
+        if (!file.open(QIODevice::WriteOnly)) {
+            return false;
+        }
+        file.write("locked");
+        file.close();
+        m_locked = true;
+        return true;
+    }
+
+    void unlock()
+    {
+        if (m_locked) {
+            QFile::remove(m_fileName);
+            m_locked = false;
+        }
+    }
+
+private:
+    QString m_fileName;
+    bool m_locked = false;
+};

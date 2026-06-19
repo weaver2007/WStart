@@ -15,7 +15,10 @@ constexpr int ProbeHotkeyId = 0x48535431;
 #ifdef Q_OS_WIN
 UINT nativeModifiers(HotkeyModifiers modifiers)
 {
-    UINT result = MOD_NOREPEAT;
+    UINT result = 0;
+#if defined(MOD_NOREPEAT)
+    result |= MOD_NOREPEAT;
+#endif
     if (modifiers.testFlag(ModifierCtrl)) {
         result |= MOD_CONTROL;
     }
@@ -78,9 +81,9 @@ bool HotkeyConflictDetector::isKnownSystemHotkey(const HotkeyCombination &hotkey
 
 QStringList HotkeyConflictDetector::systemHotkeyNames()
 {
-    return {
-        "Win+S", "Win+E", "Win+R", "Win+D", "Win+Tab", "Win+L", "Win+V",
-        "Win+A", "Win+I", "Win+X", "Win+P", "Win+K", "Win+H",
-        "Alt+Tab", "Alt+F4", "Ctrl+Esc", "Ctrl+Shift+Esc"
-    };
+    QStringList names;
+    names << "Win+S" << "Win+E" << "Win+R" << "Win+D" << "Win+Tab" << "Win+L" << "Win+V"
+          << "Win+A" << "Win+I" << "Win+X" << "Win+P" << "Win+K" << "Win+H"
+          << "Alt+Tab" << "Alt+F4" << "Ctrl+Esc" << "Ctrl+Shift+Esc";
+    return names;
 }
