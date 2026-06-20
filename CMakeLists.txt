@@ -106,16 +106,27 @@ execute_process(
     OUTPUT_VARIABLE HKM_QT_CONFIG
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-string(FIND ";${HKM_QT_CONFIG};" ";static;" HKM_QT_STATIC_INDEX)
 set(HKM_QT_IS_STATIC OFF)
-if(HKM_QT_CONFIG MATCHES "(^| )static($| )")
+if(HKM_QT_CONFIG MATCHES "(^|[ ;])static($|[ ;])")
     set(HKM_QT_IS_STATIC ON)
 endif()
 if(NOT HKM_QT_IS_STATIC)
     set(HKM_QCONFIG_PRI "${QT_PREFIX_DIR}/mkspecs/qconfig.pri")
     if(EXISTS "${HKM_QCONFIG_PRI}")
-        file(STRINGS "${HKM_QCONFIG_PRI}" HKM_QCONFIG_PRI_STATIC_LINES REGEX "(^|[ \t])static([ \t]|$)")
-        if(HKM_QCONFIG_PRI_STATIC_LINES)
+        file(STRINGS "${HKM_QCONFIG_PRI}" HKM_QCONFIG_PRI_LINES)
+        foreach(HKM_QCONFIG_PRI_LINE IN LISTS HKM_QCONFIG_PRI_LINES)
+            if(HKM_QCONFIG_PRI_LINE MATCHES "^[ \t]*(QT_CONFIG|CONFIG|QT\\.global\\.enabled_features)[^=]*="
+                AND HKM_QCONFIG_PRI_LINE MATCHES "(^|[ \t;])static([ \t;]|$)")
+                set(HKM_QT_IS_STATIC ON)
+            endif()
+        endforeach()
+    endif()
+endif()
+if(NOT HKM_QT_IS_STATIC)
+    set(HKM_QT_CORE_TARGETS "${QT_PREFIX_DIR}/lib/cmake/Qt${QT_VERSION_MAJOR}Core/Qt${QT_VERSION_MAJOR}CoreTargets.cmake")
+    if(EXISTS "${HKM_QT_CORE_TARGETS}")
+        file(STRINGS "${HKM_QT_CORE_TARGETS}" HKM_QT_CORE_TARGET_STATIC_LINES REGEX "QT_QMAKE_PUBLIC_CONFIG.*static")
+        if(HKM_QT_CORE_TARGET_STATIC_LINES)
             set(HKM_QT_IS_STATIC ON)
         endif()
     endif()
@@ -290,6 +301,13 @@ if(NOT QT_VERSION_MAJOR EQUAL 4)
     )
 endif()
 
+if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
+    target_link_libraries(HotKeyManager PRIVATE
+        ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
+        ${HKM_STATIC_SYSTEM_LIBS}
+    )
+endif()
+
 if(MSVC AND HKM_STATIC_RUNTIME)
     set_property(TARGET HotKeyManager PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
@@ -430,6 +448,13 @@ if(NOT QT_VERSION_MAJOR EQUAL 4)
     target_link_libraries(HotKeyManagerTests PRIVATE
         ${HKM_QT_PACKAGE}::Gui
         ${HKM_QT_PACKAGE}::Core
+    )
+endif()
+
+if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
+    target_link_libraries(HotKeyManagerTests PRIVATE
+        ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
+        ${HKM_STATIC_SYSTEM_LIBS}
     )
 endif()
 

@@ -17,28 +17,84 @@
       "name": "msvc-vs2026-base",
       "hidden": true,
       "inherits": "base",
-      "generator": "Visual Studio 18 2026",
-      "architecture": "x64"
-    },
-    {
-      "name": "msvc-vs2015-base",
-      "hidden": true,
-      "inherits": "base",
-      "generator": "Visual Studio 14 2015",
-      "architecture": "x64"
-    },
-    {
-      "name": "msvc-vs2015-x86-base",
-      "hidden": true,
-      "inherits": "base",
-      "generator": "Visual Studio 14 2015",
-      "architecture": "Win32",
+      "generator": "Ninja",
       "environment": {
-        "PATH": "C:/Program Files (x86)/MSBuild/14.0/Bin;C:/Program Files (x86)/Microsoft Visual Studio 14.0/Common7/IDE;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/BIN;C:/Program Files (x86)/Microsoft Visual Studio 14.0/Common7/Tools;C:/Windows/Microsoft.NET/Framework/v4.0.30319;C:/Program Files (x86)/HTML Help Workshop;C:/Program Files (x86)/Microsoft SDKs/Windows/v7.1A/Bin;$penv{PATH}",
-        "INCLUDE": "C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/INCLUDE;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/ATLMFC/INCLUDE;C:/Program Files (x86)/Windows Kits/10/Include/10.0.10240.0/ucrt;C:/Program Files (x86)/Microsoft SDKs/Windows/v7.1A/Include",
-        "LIB": "C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/LIB;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/ATLMFC/LIB;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.10240.0/ucrt/x86;C:/Program Files (x86)/Microsoft SDKs/Windows/v7.1A/Lib",
-        "LIBPATH": "C:/Windows/Microsoft.NET/Framework/v4.0.30319;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/LIB;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/ATLMFC/LIB",
-        "VCTargetsPath": "C:/Program Files (x86)/MSBuild/Microsoft.Cpp/v4.0/v140/"
+        "PATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x86;$penv{PATH}",
+        "INCLUDE": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/include;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/atlmfc/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/winrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/cppwinrt",
+        "LIB": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/lib/x64;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/atlmfc/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
+        "LIBPATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/lib/x64;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/atlmfc/lib/x64"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_RC_COMPILER": "rc",
+        "CMAKE_MT": "mt",
+        "CMAKE_MAKE_PROGRAM": "C:/Strawberry/c/bin/ninja.exe",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_VERSION": "10.0.26100.0"
+      }
+    },
+    {
+      "name": "msvc-vs2026-x86-base",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Ninja",
+      "environment": {
+        "PATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x86;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x86;C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64;$penv{PATH}",
+        "INCLUDE": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/include;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/atlmfc/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/winrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/cppwinrt",
+        "LIB": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/lib/x86;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/atlmfc/lib/x86;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x86;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x86",
+        "LIBPATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/lib/x86;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/atlmfc/lib/x86"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_RC_COMPILER": "rc",
+        "CMAKE_MT": "mt",
+        "CMAKE_MAKE_PROGRAM": "C:/Strawberry/c/bin/ninja.exe",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_VERSION": "10.0.26100.0"
+      }
+    },
+    {
+      "name": "msvc-vs2019-ninja-x64-base",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Ninja",
+      "environment": {
+        "PATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x86;$penv{PATH}",
+        "INCLUDE": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/include;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/winrt",
+        "LIB": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x64;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/um/x64",
+        "LIBPATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x64;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x64"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_RC_COMPILER": "rc",
+        "CMAKE_MT": "mt",
+        "CMAKE_MAKE_PROGRAM": "C:/Strawberry/c/bin/ninja.exe",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_VERSION": "10.0.19041.0"
+      }
+    },
+    {
+      "name": "msvc-vs2019-ninja-x86-base",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Ninja",
+      "environment": {
+        "PATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/bin/Hostx64/x86;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x86;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x64;$penv{PATH}",
+        "INCLUDE": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/include;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/winrt",
+        "LIB": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x86;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x86;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/ucrt/x86;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/um/x86",
+        "LIBPATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x86;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x86"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_RC_COMPILER": "rc",
+        "CMAKE_MT": "mt",
+        "CMAKE_MAKE_PROGRAM": "C:/Strawberry/c/bin/ninja.exe",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_VERSION": "10.0.19041.0"
       }
     },
     {
@@ -66,6 +122,18 @@
       }
     },
     {
+      "name": "msvc-vs2015-nmake-x64-base",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "NMake Makefiles",
+      "environment": {
+        "PATH": "C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x64;C:/Program Files (x86)/Microsoft Visual Studio 14.0/Common7/IDE;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/BIN/amd64;C:/Program Files (x86)/Microsoft Visual Studio 14.0/Common7/Tools;C:/Windows/Microsoft.NET/Framework64/v4.0.30319;C:/Program Files (x86)/HTML Help Workshop;$penv{PATH}",
+        "INCLUDE": "C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/INCLUDE;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/ATLMFC/INCLUDE;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/winrt",
+        "LIB": "C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/LIB/amd64;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/ATLMFC/LIB/amd64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/um/x64",
+        "LIBPATH": "C:/Windows/Microsoft.NET/Framework64/v4.0.30319;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/LIB/amd64;C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/ATLMFC/LIB/amd64"
+      }
+    },
+    {
       "name": "mingw-base",
       "hidden": true,
       "inherits": "base",
@@ -86,8 +154,7 @@
     {
       "name": "qt5.15.2-msvc2019-dynamic-x64",
       "displayName": "Qt 5.15.2 / MSVC 2019 ABI / dynamic / x64",
-      "inherits": "msvc-vs2026-base",
-      "toolset": "v142",
+      "inherits": "msvc-vs2019-ninja-x64-base",
       "binaryDir": "${sourceDir}/out/build/qt5.15.2-msvc2019-dynamic-x64",
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "D:/Qt/5.15.2/msvc2019_64",
@@ -96,15 +163,14 @@
       }
     },
     {
-      "name": "qt5.6.3-msvc2015-dynamic-x64",
-      "displayName": "Qt 5.6.3 / MSVC 2015 ABI / dynamic / x64",
-      "inherits": "msvc-vs2015-base",
-      "binaryDir": "${sourceDir}/out/build/qt5.6.3-msvc2015-dynamic-x64",
+      "name": "qt5.15.2-msvc2019-dynamic-x86",
+      "displayName": "Qt 5.15.2 / MSVC 2019 ABI / dynamic / x86",
+      "inherits": "msvc-vs2019-ninja-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.15.2-msvc2019-dynamic-x86",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/5.6.3/msvc2015_64",
+        "CMAKE_PREFIX_PATH": "D:/Qt/5.15.2/msvc2019",
         "HKM_QT_MAJOR": "5",
-        "HKM_DEPLOY_QT_RUNTIME": "ON",
-        "HKM_CXX_STANDARD": "14"
+        "HKM_DEPLOY_QT_RUNTIME": "ON"
       }
     },
     {
@@ -123,29 +189,31 @@
       }
     },
     {
-      "name": "qt5.6.3-mingw492-dynamic-x86",
-      "displayName": "Qt 5.6.3 / MinGW 4.9.2 / dynamic / x86",
-      "inherits": "mingw-makefiles-base",
-      "binaryDir": "${sourceDir}/out/build/qt5.6.3-mingw492-dynamic-x86",
-      "environment": {
-        "PATH": "D:/Qt/Tools/mingw492_32/bin;$penv{PATH}"
-      },
-      "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/5.6.3/mingw492_32",
-        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw492_32",
-        "HKM_QT_MAJOR": "5",
-        "HKM_DEPLOY_QT_RUNTIME": "OFF",
-        "HKM_CXX_STANDARD": "14"
-      }
-    },
-    {
       "name": "qt5.15.2-mingw81-dynamic-x64",
       "displayName": "Qt 5.15.2 / MinGW 8.1 / dynamic / x64",
       "inherits": "mingw-base",
       "binaryDir": "${sourceDir}/out/build/qt5.15.2-mingw81-dynamic-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw810_64/bin;$penv{PATH}"
+      },
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "D:/Qt/5.15.2/mingw81_64",
         "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw810_64",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt5.15.2-mingw81-dynamic-x86",
+      "displayName": "Qt 5.15.2 / MinGW 8.1 / dynamic / x86",
+      "inherits": "mingw-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.15.2-mingw81-dynamic-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw810_32/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "D:/Qt/5.15.2/mingw81_32",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw810_32",
         "HKM_QT_MAJOR": "5",
         "HKM_DEPLOY_QT_RUNTIME": "ON"
       }
@@ -162,35 +230,26 @@
       }
     },
     {
+      "name": "qt6.8.3-msvc2022-dynamic-x86",
+      "displayName": "Qt 6.8.3 / MSVC 2022 ABI / dynamic / x86",
+      "inherits": "msvc-vs2026-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.8.3-msvc2022-dynamic-x86",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/6.8.3/msvc2022_32",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "ON"
+      }
+    },
+    {
       "name": "qt6.8.3-mingw13-dynamic-x64",
       "displayName": "Qt 6.8.3 / MinGW 13.1 / dynamic / x64",
       "inherits": "mingw-base",
       "binaryDir": "${sourceDir}/out/build/qt6.8.3-mingw13-dynamic-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw1310_64/bin;$penv{PATH}"
+      },
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "D:/Qt/6.8.3/mingw_64",
-        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw1310_64",
-        "HKM_QT_MAJOR": "6",
-        "HKM_DEPLOY_QT_RUNTIME": "ON"
-      }
-    },
-    {
-      "name": "qt6.10.1-msvc2022-dynamic-x64",
-      "displayName": "Qt 6.10.1 / MSVC 2022 ABI / dynamic / x64",
-      "inherits": "msvc-vs2026-base",
-      "binaryDir": "${sourceDir}/out/build/qt6.10.1-msvc2022-dynamic-x64",
-      "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "D:/Qt/6.10.1/msvc2022_64",
-        "HKM_QT_MAJOR": "6",
-        "HKM_DEPLOY_QT_RUNTIME": "ON"
-      }
-    },
-    {
-      "name": "qt6.10.1-mingw13-dynamic-x64",
-      "displayName": "Qt 6.10.1 / MinGW 13.1 / dynamic / x64",
-      "inherits": "mingw-base",
-      "binaryDir": "${sourceDir}/out/build/qt6.10.1-mingw13-dynamic-x64",
-      "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "D:/Qt/6.10.1/mingw_64",
         "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw1310_64",
         "HKM_QT_MAJOR": "6",
         "HKM_DEPLOY_QT_RUNTIME": "ON"
@@ -230,10 +289,25 @@
       }
     },
     {
-      "name": "qt6.latest-msvc2022-dynamic-x64",
-      "displayName": "Qt latest / MSVC 2022 ABI / dynamic / x64",
+      "name": "qt4.8.7-msvc2015-dynamic-x64",
+      "displayName": "Qt 4.8.7 / MSVC 2015 ABI / dynamic / x64",
+      "inherits": "msvc-vs2015-nmake-x64-base",
+      "binaryDir": "${sourceDir}/out/build/qt4.8.7-msvc2015-dynamic-x64",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/4.8.7/msvc2015_64",
+        "QT_QMAKE_EXECUTABLE": "${sourceDir}/extern/qt/4.8.7/msvc2015_64/bin/qmake.exe",
+        "HKM_QT_MAJOR": "4",
+        "HKM_DEPLOY_QT_RUNTIME": "ON",
+        "HKM_DEPLOY_QT_RUNTIME_MANUAL": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt6.11.1-msvc2022-dynamic-x64",
+      "displayName": "Qt 6.11.1 / MSVC 2022 ABI / dynamic / x64",
       "inherits": "msvc-vs2026-base",
-      "binaryDir": "${sourceDir}/out/build/qt6.latest-msvc2022-dynamic-x64",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-msvc2022-dynamic-x64",
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/6.11.1/msvc2022_64",
         "HKM_QT_MAJOR": "6",
@@ -241,10 +315,24 @@
       }
     },
     {
-      "name": "qt6.latest-mingw13-dynamic-x64",
-      "displayName": "Qt latest / MinGW 13.1 / dynamic / x64",
+      "name": "qt6.11.1-msvc2022-dynamic-x86",
+      "displayName": "Qt 6.11.1 / MSVC 2022 ABI / dynamic / x86",
+      "inherits": "msvc-vs2026-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-msvc2022-dynamic-x86",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/6.11.1/msvc2022_32",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt6.11.1-mingw13-dynamic-x64",
+      "displayName": "Qt 6.11.1 / MinGW 13.1 / dynamic / x64",
       "inherits": "mingw-base",
-      "binaryDir": "${sourceDir}/out/build/qt6.latest-mingw13-dynamic-x64",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-mingw13-dynamic-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw1310_64/bin;$penv{PATH}"
+      },
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/6.11.1/mingw_64",
         "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw1310_64",
@@ -253,12 +341,42 @@
       }
     },
     {
-      "name": "qt6.10.1-msvc2022-static-x64",
-      "displayName": "Qt 6.10.1 / MSVC 2022 ABI / static / x64",
+      "name": "qt6.11.1-msvc2022-static-x64",
+      "displayName": "Qt 6.11.1 / MSVC 2022 ABI / static / x64",
       "inherits": "msvc-vs2026-base",
-      "binaryDir": "${sourceDir}/out/build/qt6.10.1-msvc2022-static-x64",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-msvc2022-static-x64",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.10.1-msvc2022-static-x64",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.11.1-msvc2022-static-x64",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt6.11.1-msvc2022-static-x86",
+      "displayName": "Qt 6.11.1 / MSVC 2022 ABI / static / x86",
+      "inherits": "msvc-vs2026-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-msvc2022-static-x86",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.11.1-msvc2022-static-x86",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt6.11.1-mingw13-static-x64",
+      "displayName": "Qt 6.11.1 / MinGW 13.1 / static / x64",
+      "inherits": "mingw-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-mingw13-static-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw1310_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.11.1-mingw13-static-x64",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw1310_64",
         "HKM_QT_MAJOR": "6",
         "HKM_DEPLOY_QT_RUNTIME": "OFF",
         "HKM_REQUIRE_STATIC_QT": "ON",
@@ -279,10 +397,22 @@
       }
     },
     {
+      "name": "qt6.8.3-msvc2022-static-x86",
+      "displayName": "Qt 6.8.3 / MSVC 2022 ABI / static / x86",
+      "inherits": "msvc-vs2026-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.8.3-msvc2022-static-x86",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.8.3-msvc2022-static-x86",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON"
+      }
+    },
+    {
       "name": "qt5.15.2-msvc2019-static-x64",
       "displayName": "Qt 5.15.2 / MSVC 2019 ABI / static / x64",
-      "inherits": "msvc-vs2026-base",
-      "toolset": "v142",
+      "inherits": "msvc-vs2019-ninja-x64-base",
       "binaryDir": "${sourceDir}/out/build/qt5.15.2-msvc2019-static-x64",
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.15.2-msvc2019-static-x64",
@@ -293,17 +423,16 @@
       }
     },
     {
-      "name": "qt5.6.3-msvc2015-static-x64",
-      "displayName": "Qt 5.6.3 / MSVC 2015 ABI / static / x64",
-      "inherits": "msvc-vs2015-base",
-      "binaryDir": "${sourceDir}/out/build/qt5.6.3-msvc2015-static-x64",
+      "name": "qt5.15.2-msvc2019-static-x86",
+      "displayName": "Qt 5.15.2 / MSVC 2019 ABI / static / x86",
+      "inherits": "msvc-vs2019-ninja-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.15.2-msvc2019-static-x86",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.6.3-msvc2015-static-x64",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.15.2-msvc2019-static-x86",
         "HKM_QT_MAJOR": "5",
         "HKM_DEPLOY_QT_RUNTIME": "OFF",
         "HKM_REQUIRE_STATIC_QT": "ON",
-        "HKM_STATIC_RUNTIME": "ON",
-        "HKM_CXX_STANDARD": "14"
+        "HKM_STATIC_RUNTIME": "ON"
       }
     },
     {
@@ -323,31 +452,33 @@
       }
     },
     {
-      "name": "qt5.6.3-mingw492-static-x86",
-      "displayName": "Qt 5.6.3 / MinGW 4.9.2 / static / x86",
-      "inherits": "mingw-makefiles-base",
-      "binaryDir": "${sourceDir}/out/build/qt5.6.3-mingw492-static-x86",
-      "environment": {
-        "PATH": "D:/Qt/Tools/mingw492_32/bin;$penv{PATH}"
-      },
-      "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.6.3-mingw492-static-x86",
-        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw492_32",
-        "HKM_QT_MAJOR": "5",
-        "HKM_DEPLOY_QT_RUNTIME": "OFF",
-        "HKM_REQUIRE_STATIC_QT": "ON",
-        "HKM_STATIC_RUNTIME": "ON",
-        "HKM_CXX_STANDARD": "14"
-      }
-    },
-    {
       "name": "qt5.15.2-mingw81-static-x64",
       "displayName": "Qt 5.15.2 / MinGW 8.1 / static / x64",
       "inherits": "mingw-base",
       "binaryDir": "${sourceDir}/out/build/qt5.15.2-mingw81-static-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw810_64/bin;$penv{PATH}"
+      },
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.15.2-mingw81-static-x64",
         "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw810_64",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt5.15.2-mingw81-static-x86",
+      "displayName": "Qt 5.15.2 / MinGW 8.1 / static / x86",
+      "inherits": "mingw-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.15.2-mingw81-static-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw810_32/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.15.2-mingw81-static-x86",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw810_32",
         "HKM_QT_MAJOR": "5",
         "HKM_DEPLOY_QT_RUNTIME": "OFF",
         "HKM_REQUIRE_STATIC_QT": "ON",
@@ -359,22 +490,11 @@
       "displayName": "Qt 6.8.3 / MinGW 13.1 / static / x64",
       "inherits": "mingw-base",
       "binaryDir": "${sourceDir}/out/build/qt6.8.3-mingw13-static-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw1310_64/bin;$penv{PATH}"
+      },
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.8.3-mingw13-static-x64",
-        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw1310_64",
-        "HKM_QT_MAJOR": "6",
-        "HKM_DEPLOY_QT_RUNTIME": "OFF",
-        "HKM_REQUIRE_STATIC_QT": "ON",
-        "HKM_STATIC_RUNTIME": "ON"
-      }
-    },
-    {
-      "name": "qt6.10.1-mingw13-static-x64",
-      "displayName": "Qt 6.10.1 / MinGW 13.1 / static / x64",
-      "inherits": "mingw-base",
-      "binaryDir": "${sourceDir}/out/build/qt6.10.1-mingw13-static-x64",
-      "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.10.1-mingw13-static-x64",
         "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw1310_64",
         "HKM_QT_MAJOR": "6",
         "HKM_DEPLOY_QT_RUNTIME": "OFF",
@@ -417,6 +537,258 @@
         "HKM_CXX_STANDARD": "14",
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "qt4.8.7-msvc2015-static-x64",
+      "displayName": "Qt 4.8.7 / MSVC 2015 ABI / static / x64",
+      "inherits": "msvc-vs2015-nmake-x64-base",
+      "binaryDir": "${sourceDir}/out/build/qt4.8.7-msvc2015-static-x64",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt4.8.7-msvc2015-static-x64",
+        "QT_QMAKE_EXECUTABLE": "${sourceDir}/extern/qt-static/qt4.8.7-msvc2015-static-x64/bin/qmake.exe",
+        "HKM_QT_MAJOR": "4",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt6.8.3-llvm-mingw17-dynamic-x86",
+      "displayName": "Qt 6.8.3 / LLVM-MinGW 17 / dynamic / x86",
+      "inherits": "mingw-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.8.3-llvm-mingw17-dynamic-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/llvm-mingw1706_64/i686-w64-mingw32/bin;D:/Qt/Tools/llvm-mingw1706_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/6.8.3/llvm-mingw17_32",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/llvm-mingw1706_64",
+        "HKM_MINGW_TRIPLET": "i686-w64-mingw32",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt6.8.3-llvm-mingw17-static-x86",
+      "displayName": "Qt 6.8.3 / LLVM-MinGW 17 / static / x86",
+      "inherits": "mingw-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.8.3-llvm-mingw17-static-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/llvm-mingw1706_64/i686-w64-mingw32/bin;D:/Qt/Tools/llvm-mingw1706_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.8.3-llvm-mingw17-static-x86",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/llvm-mingw1706_64",
+        "HKM_MINGW_TRIPLET": "i686-w64-mingw32",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt6.11.1-llvm-mingw17-dynamic-x86",
+      "displayName": "Qt 6.11.1 / LLVM-MinGW 17 / dynamic / x86",
+      "inherits": "mingw-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-llvm-mingw17-dynamic-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/llvm-mingw1706_64/i686-w64-mingw32/bin;D:/Qt/Tools/llvm-mingw1706_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/6.11.1/llvm-mingw17_32",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/llvm-mingw1706_64",
+        "HKM_MINGW_TRIPLET": "i686-w64-mingw32",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt6.11.1-llvm-mingw17-static-x86",
+      "displayName": "Qt 6.11.1 / LLVM-MinGW 17 / static / x86",
+      "inherits": "mingw-base",
+      "binaryDir": "${sourceDir}/out/build/qt6.11.1-llvm-mingw17-static-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/llvm-mingw1706_64/i686-w64-mingw32/bin;D:/Qt/Tools/llvm-mingw1706_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt6.11.1-llvm-mingw17-static-x86",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/llvm-mingw1706_64",
+        "HKM_MINGW_TRIPLET": "i686-w64-mingw32",
+        "HKM_QT_MAJOR": "6",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON"
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-dynamic-x86",
+      "displayName": "Qt 5.6.3 / MSVC 2015 ABI / dynamic / x86",
+      "inherits": "msvc-vs2015-nmake-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-msvc2015-dynamic-x86",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/5.6.3/msvc2015_32",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "ON",
+        "HKM_DEPLOY_QT_RUNTIME_MANUAL": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-dynamic-x64",
+      "displayName": "Qt 5.6.3 / MSVC 2015 ABI / dynamic / x64",
+      "inherits": "msvc-vs2015-nmake-x64-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-msvc2015-dynamic-x64",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/5.6.3/msvc2015_64",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "ON",
+        "HKM_DEPLOY_QT_RUNTIME_MANUAL": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw492-dynamic-x86",
+      "displayName": "Qt 5.6.3 / MinGW 4.9.2 / dynamic / x86",
+      "inherits": "mingw-makefiles-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-mingw492-dynamic-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw492_32/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/5.6.3/mingw492_32",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw492_32",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw730-dynamic-x64",
+      "displayName": "Qt 5.6.3 / MinGW 7.3 / dynamic / x64",
+      "inherits": "mingw-makefiles-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-mingw730-dynamic-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw730_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/5.6.3/mingw730_64",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw730_64",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-static-x86",
+      "displayName": "Qt 5.6.3 / MSVC 2015 ABI / static / x86",
+      "inherits": "msvc-vs2015-nmake-x86-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-msvc2015-static-x86",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.6.3-msvc2015-static-x86",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-static-x64",
+      "displayName": "Qt 5.6.3 / MSVC 2015 ABI / static / x64",
+      "inherits": "msvc-vs2015-nmake-x64-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-msvc2015-static-x64",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.6.3-msvc2015-static-x64",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw492-static-x86",
+      "displayName": "Qt 5.6.3 / MinGW 4.9.2 / static / x86",
+      "inherits": "mingw-makefiles-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-mingw492-static-x86",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw492_32/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.6.3-mingw492-static-x86",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw492_32",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw730-static-x64",
+      "displayName": "Qt 5.6.3 / MinGW 7.3 / static / x64",
+      "inherits": "mingw-makefiles-base",
+      "binaryDir": "${sourceDir}/out/build/qt5.6.3-mingw730-static-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw730_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt5.6.3-mingw730-static-x64",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw730_64",
+        "HKM_QT_MAJOR": "5",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt4.8.7-mingw730-dynamic-x64",
+      "displayName": "Qt 4.8.7 / MinGW 7.3 / dynamic / x64",
+      "inherits": "mingw-makefiles-base",
+      "binaryDir": "${sourceDir}/out/build/qt4.8.7-mingw730-dynamic-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw730_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt/4.8.7/mingw730_64",
+        "QT_QMAKE_EXECUTABLE": "${sourceDir}/extern/qt/4.8.7/mingw730_64/bin/qmake.exe",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw730_64",
+        "HKM_QT_MAJOR": "4",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "qt4.8.7-mingw730-static-x64",
+      "displayName": "Qt 4.8.7 / MinGW 7.3 / static / x64",
+      "inherits": "mingw-makefiles-base",
+      "binaryDir": "${sourceDir}/out/build/qt4.8.7-mingw730-static-x64",
+      "environment": {
+        "PATH": "D:/Qt/Tools/mingw730_64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/extern/qt-static/qt4.8.7-mingw730-static-x64",
+        "QT_QMAKE_EXECUTABLE": "${sourceDir}/extern/qt-static/qt4.8.7-mingw730-static-x64/bin/qmake.exe",
+        "HKM_MINGW_ROOT": "D:/Qt/Tools/mingw730_64",
+        "HKM_QT_MAJOR": "4",
+        "HKM_DEPLOY_QT_RUNTIME": "OFF",
+        "HKM_REQUIRE_STATIC_QT": "ON",
+        "HKM_STATIC_RUNTIME": "ON",
+        "HKM_CXX_STANDARD": "14",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
@@ -431,28 +803,18 @@
       "configuration": "Release"
     },
     {
-      "name": "qt5.6.3-msvc2015-dynamic-x64-debug",
-      "configurePreset": "qt5.6.3-msvc2015-dynamic-x64",
+      "name": "qt5.15.2-msvc2019-dynamic-x86-debug",
+      "configurePreset": "qt5.15.2-msvc2019-dynamic-x86",
       "configuration": "Debug"
     },
     {
-      "name": "qt5.6.3-msvc2015-dynamic-x64-release",
-      "configurePreset": "qt5.6.3-msvc2015-dynamic-x64",
+      "name": "qt5.15.2-msvc2019-dynamic-x86-release",
+      "configurePreset": "qt5.15.2-msvc2019-dynamic-x86",
       "configuration": "Release"
     },
     {
       "name": "qt5.6.3-msvc2015-xp-dynamic-x86-release",
       "configurePreset": "qt5.6.3-msvc2015-xp-dynamic-x86",
-      "configuration": "Release"
-    },
-    {
-      "name": "qt5.6.3-mingw492-dynamic-x86-debug",
-      "configurePreset": "qt5.6.3-mingw492-dynamic-x86",
-      "configuration": "Debug"
-    },
-    {
-      "name": "qt5.6.3-mingw492-dynamic-x86-release",
-      "configurePreset": "qt5.6.3-mingw492-dynamic-x86",
       "configuration": "Release"
     },
     {
@@ -466,6 +828,16 @@
       "configuration": "Release"
     },
     {
+      "name": "qt5.15.2-mingw81-dynamic-x86-debug",
+      "configurePreset": "qt5.15.2-mingw81-dynamic-x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "qt5.15.2-mingw81-dynamic-x86-release",
+      "configurePreset": "qt5.15.2-mingw81-dynamic-x86",
+      "configuration": "Release"
+    },
+    {
       "name": "qt6.8.3-msvc2022-dynamic-x64-debug",
       "configurePreset": "qt6.8.3-msvc2022-dynamic-x64",
       "configuration": "Debug"
@@ -473,6 +845,16 @@
     {
       "name": "qt6.8.3-msvc2022-dynamic-x64-release",
       "configurePreset": "qt6.8.3-msvc2022-dynamic-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.8.3-msvc2022-dynamic-x86-debug",
+      "configurePreset": "qt6.8.3-msvc2022-dynamic-x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "qt6.8.3-msvc2022-dynamic-x86-release",
+      "configurePreset": "qt6.8.3-msvc2022-dynamic-x86",
       "configuration": "Release"
     },
     {
@@ -486,23 +868,23 @@
       "configuration": "Release"
     },
     {
-      "name": "qt6.10.1-msvc2022-dynamic-x64-debug",
-      "configurePreset": "qt6.10.1-msvc2022-dynamic-x64",
+      "name": "qt6.11.1-msvc2022-dynamic-x64-debug",
+      "configurePreset": "qt6.11.1-msvc2022-dynamic-x64",
       "configuration": "Debug"
     },
     {
-      "name": "qt6.10.1-msvc2022-dynamic-x64-release",
-      "configurePreset": "qt6.10.1-msvc2022-dynamic-x64",
+      "name": "qt6.11.1-msvc2022-dynamic-x64-release",
+      "configurePreset": "qt6.11.1-msvc2022-dynamic-x64",
       "configuration": "Release"
     },
     {
-      "name": "qt6.10.1-mingw13-dynamic-x64-debug",
-      "configurePreset": "qt6.10.1-mingw13-dynamic-x64",
+      "name": "qt6.11.1-mingw13-dynamic-x64-debug",
+      "configurePreset": "qt6.11.1-mingw13-dynamic-x64",
       "configuration": "Debug"
     },
     {
-      "name": "qt6.10.1-mingw13-dynamic-x64-release",
-      "configurePreset": "qt6.10.1-mingw13-dynamic-x64",
+      "name": "qt6.11.1-mingw13-dynamic-x64-release",
+      "configurePreset": "qt6.11.1-mingw13-dynamic-x64",
       "configuration": "Release"
     },
     {
@@ -516,8 +898,18 @@
       "configuration": "Release"
     },
     {
+      "name": "qt4.8.7-msvc2015-dynamic-x64-release",
+      "configurePreset": "qt4.8.7-msvc2015-dynamic-x64",
+      "configuration": "Release"
+    },
+    {
       "name": "qt5.15.2-msvc2019-static-x64-release",
       "configurePreset": "qt5.15.2-msvc2019-static-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt5.15.2-msvc2019-static-x86-release",
+      "configurePreset": "qt5.15.2-msvc2019-static-x86",
       "configuration": "Release"
     },
     {
@@ -526,8 +918,8 @@
       "configuration": "Release"
     },
     {
-      "name": "qt5.6.3-msvc2015-static-x64-release",
-      "configurePreset": "qt5.6.3-msvc2015-static-x64",
+      "name": "qt5.15.2-mingw81-static-x86-release",
+      "configurePreset": "qt5.15.2-mingw81-static-x86",
       "configuration": "Release"
     },
     {
@@ -536,28 +928,18 @@
       "configuration": "Release"
     },
     {
-      "name": "qt5.6.3-mingw492-static-x86-release",
-      "configurePreset": "qt5.6.3-mingw492-static-x86",
-      "configuration": "Release"
-    },
-    {
       "name": "qt6.8.3-msvc2022-static-x64-release",
       "configurePreset": "qt6.8.3-msvc2022-static-x64",
       "configuration": "Release"
     },
     {
+      "name": "qt6.8.3-msvc2022-static-x86-release",
+      "configurePreset": "qt6.8.3-msvc2022-static-x86",
+      "configuration": "Release"
+    },
+    {
       "name": "qt6.8.3-mingw13-static-x64-release",
       "configurePreset": "qt6.8.3-mingw13-static-x64",
-      "configuration": "Release"
-    },
-    {
-      "name": "qt6.10.1-msvc2022-static-x64-release",
-      "configurePreset": "qt6.10.1-msvc2022-static-x64",
-      "configuration": "Release"
-    },
-    {
-      "name": "qt6.10.1-mingw13-static-x64-release",
-      "configurePreset": "qt6.10.1-mingw13-static-x64",
       "configuration": "Release"
     },
     {
@@ -569,6 +951,107 @@
       "name": "qt4.8.7-msvc2015-static-x86-release",
       "configurePreset": "qt4.8.7-msvc2015-static-x86",
       "configuration": "Release"
+    },
+    {
+      "name": "qt4.8.7-msvc2015-static-x64-release",
+      "configurePreset": "qt4.8.7-msvc2015-static-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-msvc2022-dynamic-x86-debug",
+      "configurePreset": "qt6.11.1-msvc2022-dynamic-x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "qt6.11.1-msvc2022-dynamic-x86-release",
+      "configurePreset": "qt6.11.1-msvc2022-dynamic-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-msvc2022-static-x64-release",
+      "configurePreset": "qt6.11.1-msvc2022-static-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-msvc2022-static-x86-release",
+      "configurePreset": "qt6.11.1-msvc2022-static-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-mingw13-static-x64-release",
+      "configurePreset": "qt6.11.1-mingw13-static-x64"
+    },
+    {
+      "name": "qt6.8.3-llvm-mingw17-dynamic-x86-debug",
+      "configurePreset": "qt6.8.3-llvm-mingw17-dynamic-x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "qt6.8.3-llvm-mingw17-dynamic-x86-release",
+      "configurePreset": "qt6.8.3-llvm-mingw17-dynamic-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.8.3-llvm-mingw17-static-x86-release",
+      "configurePreset": "qt6.8.3-llvm-mingw17-static-x86"
+    },
+    {
+      "name": "qt6.11.1-llvm-mingw17-dynamic-x86-debug",
+      "configurePreset": "qt6.11.1-llvm-mingw17-dynamic-x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "qt6.11.1-llvm-mingw17-dynamic-x86-release",
+      "configurePreset": "qt6.11.1-llvm-mingw17-dynamic-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-llvm-mingw17-static-x86-release",
+      "configurePreset": "qt6.11.1-llvm-mingw17-static-x86"
+    },
+    {
+      "name": "qt5.6.3-msvc2015-dynamic-x86-release",
+      "configurePreset": "qt5.6.3-msvc2015-dynamic-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt5.6.3-msvc2015-dynamic-x64-release",
+      "configurePreset": "qt5.6.3-msvc2015-dynamic-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt5.6.3-mingw492-dynamic-x86-release",
+      "configurePreset": "qt5.6.3-mingw492-dynamic-x86"
+    },
+    {
+      "name": "qt5.6.3-mingw730-dynamic-x64-release",
+      "configurePreset": "qt5.6.3-mingw730-dynamic-x64"
+    },
+    {
+      "name": "qt4.8.7-mingw730-dynamic-x64-release",
+      "configurePreset": "qt4.8.7-mingw730-dynamic-x64"
+    },
+    {
+      "name": "qt5.6.3-msvc2015-static-x86-release",
+      "configurePreset": "qt5.6.3-msvc2015-static-x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt5.6.3-msvc2015-static-x64-release",
+      "configurePreset": "qt5.6.3-msvc2015-static-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt5.6.3-mingw492-static-x86-release",
+      "configurePreset": "qt5.6.3-mingw492-static-x86"
+    },
+    {
+      "name": "qt5.6.3-mingw730-static-x64-release",
+      "configurePreset": "qt5.6.3-mingw730-static-x64"
+    },
+    {
+      "name": "qt4.8.7-mingw730-static-x64-release",
+      "configurePreset": "qt4.8.7-mingw730-static-x64"
     }
   ],
   "testPresets": [
@@ -581,8 +1064,8 @@
       }
     },
     {
-      "name": "qt5.6.3-msvc2015-dynamic-x64-release",
-      "configurePreset": "qt5.6.3-msvc2015-dynamic-x64",
+      "name": "qt5.15.2-msvc2019-dynamic-x86-release",
+      "configurePreset": "qt5.15.2-msvc2019-dynamic-x86",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
@@ -597,8 +1080,15 @@
       }
     },
     {
-      "name": "qt5.6.3-mingw492-dynamic-x86-release",
-      "configurePreset": "qt5.6.3-mingw492-dynamic-x86",
+      "name": "qt5.15.2-mingw81-dynamic-x64-release",
+      "configurePreset": "qt5.15.2-mingw81-dynamic-x64",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.15.2-mingw81-dynamic-x86-release",
+      "configurePreset": "qt5.15.2-mingw81-dynamic-x86",
       "output": {
         "outputOnFailure": true
       }
@@ -619,6 +1109,14 @@
       }
     },
     {
+      "name": "qt4.8.7-msvc2015-dynamic-x64-release",
+      "configurePreset": "qt4.8.7-msvc2015-dynamic-x64",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
       "name": "qt6.8.3-msvc2022-dynamic-x64-release",
       "configurePreset": "qt6.8.3-msvc2022-dynamic-x64",
       "configuration": "Release",
@@ -627,17 +1125,31 @@
       }
     },
     {
-      "name": "qt6.10.1-msvc2022-dynamic-x64-release",
-      "configurePreset": "qt6.10.1-msvc2022-dynamic-x64",
+      "name": "qt6.8.3-msvc2022-dynamic-x86-release",
+      "configurePreset": "qt6.8.3-msvc2022-dynamic-x86",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
     },
     {
-      "name": "qt6.10.1-msvc2022-static-x64-release",
-      "configurePreset": "qt6.10.1-msvc2022-static-x64",
+      "name": "qt6.8.3-mingw13-dynamic-x64-release",
+      "configurePreset": "qt6.8.3-mingw13-dynamic-x64",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt6.11.1-msvc2022-dynamic-x64-release",
+      "configurePreset": "qt6.11.1-msvc2022-dynamic-x64",
       "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt6.11.1-mingw13-dynamic-x64-release",
+      "configurePreset": "qt6.11.1-mingw13-dynamic-x64",
       "output": {
         "outputOnFailure": true
       }
@@ -651,8 +1163,8 @@
       }
     },
     {
-      "name": "qt5.6.3-msvc2015-static-x64-release",
-      "configurePreset": "qt5.6.3-msvc2015-static-x64",
+      "name": "qt5.15.2-msvc2019-static-x86-release",
+      "configurePreset": "qt5.15.2-msvc2019-static-x86",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
@@ -667,15 +1179,15 @@
       }
     },
     {
-      "name": "qt5.6.3-mingw492-static-x86-release",
-      "configurePreset": "qt5.6.3-mingw492-static-x86",
+      "name": "qt5.15.2-mingw81-static-x64-release",
+      "configurePreset": "qt5.15.2-mingw81-static-x64",
       "output": {
         "outputOnFailure": true
       }
     },
     {
-      "name": "qt5.15.2-mingw81-static-x64-release",
-      "configurePreset": "qt5.15.2-mingw81-static-x64",
+      "name": "qt5.15.2-mingw81-static-x86-release",
+      "configurePreset": "qt5.15.2-mingw81-static-x86",
       "output": {
         "outputOnFailure": true
       }
@@ -689,15 +1201,16 @@
       }
     },
     {
-      "name": "qt6.8.3-mingw13-static-x64-release",
-      "configurePreset": "qt6.8.3-mingw13-static-x64",
+      "name": "qt6.8.3-msvc2022-static-x86-release",
+      "configurePreset": "qt6.8.3-msvc2022-static-x86",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
     },
     {
-      "name": "qt6.10.1-mingw13-static-x64-release",
-      "configurePreset": "qt6.10.1-mingw13-static-x64",
+      "name": "qt6.8.3-mingw13-static-x64-release",
+      "configurePreset": "qt6.8.3-mingw13-static-x64",
       "output": {
         "outputOnFailure": true
       }
@@ -713,6 +1226,149 @@
       "name": "qt4.8.7-msvc2015-static-x86-release",
       "configurePreset": "qt4.8.7-msvc2015-static-x86",
       "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt4.8.7-msvc2015-static-x64-release",
+      "configurePreset": "qt4.8.7-msvc2015-static-x64",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt6.11.1-msvc2022-dynamic-x86-release",
+      "configurePreset": "qt6.11.1-msvc2022-dynamic-x86",
+      "output": {
+        "outputOnFailure": true
+      },
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-msvc2022-static-x64-release",
+      "configurePreset": "qt6.11.1-msvc2022-static-x64",
+      "output": {
+        "outputOnFailure": true
+      },
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-msvc2022-static-x86-release",
+      "configurePreset": "qt6.11.1-msvc2022-static-x86",
+      "output": {
+        "outputOnFailure": true
+      },
+      "configuration": "Release"
+    },
+    {
+      "name": "qt6.11.1-mingw13-static-x64-release",
+      "configurePreset": "qt6.11.1-mingw13-static-x64",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt6.8.3-llvm-mingw17-dynamic-x86-release",
+      "configurePreset": "qt6.8.3-llvm-mingw17-dynamic-x86",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt6.8.3-llvm-mingw17-static-x86-release",
+      "configurePreset": "qt6.8.3-llvm-mingw17-static-x86",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt6.11.1-llvm-mingw17-dynamic-x86-release",
+      "configurePreset": "qt6.11.1-llvm-mingw17-dynamic-x86",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt6.11.1-llvm-mingw17-static-x86-release",
+      "configurePreset": "qt6.11.1-llvm-mingw17-static-x86",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-dynamic-x86-release",
+      "configurePreset": "qt5.6.3-msvc2015-dynamic-x86",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-dynamic-x64-release",
+      "configurePreset": "qt5.6.3-msvc2015-dynamic-x64",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw492-dynamic-x86-release",
+      "configurePreset": "qt5.6.3-mingw492-dynamic-x86",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw730-dynamic-x64-release",
+      "configurePreset": "qt5.6.3-mingw730-dynamic-x64",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt4.8.7-mingw730-dynamic-x64-release",
+      "configurePreset": "qt4.8.7-mingw730-dynamic-x64",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-static-x86-release",
+      "configurePreset": "qt5.6.3-msvc2015-static-x86",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-msvc2015-static-x64-release",
+      "configurePreset": "qt5.6.3-msvc2015-static-x64",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw492-static-x86-release",
+      "configurePreset": "qt5.6.3-mingw492-static-x86",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt5.6.3-mingw730-static-x64-release",
+      "configurePreset": "qt5.6.3-mingw730-static-x64",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt4.8.7-mingw730-static-x64-release",
+      "configurePreset": "qt4.8.7-mingw730-static-x64",
       "output": {
         "outputOnFailure": true
       }

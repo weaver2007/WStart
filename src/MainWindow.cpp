@@ -59,6 +59,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -558,6 +559,53 @@ QString windowsKnownExecutablePath(const QString &fileName)
     return normalized;
 }
 
+QPixmap pixmapFromNativeIcon(HICON icon, int width, int height)
+{
+    if (!icon || width <= 0 || height <= 0) {
+        return QPixmap();
+    }
+
+    HDC screenDc = GetDC(nullptr);
+    if (!screenDc) {
+        return QPixmap();
+    }
+
+    BITMAPINFO bitmapInfo = {};
+    bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bitmapInfo.bmiHeader.biWidth = width;
+    bitmapInfo.bmiHeader.biHeight = -height;
+    bitmapInfo.bmiHeader.biPlanes = 1;
+    bitmapInfo.bmiHeader.biBitCount = 32;
+    bitmapInfo.bmiHeader.biCompression = BI_RGB;
+
+    void *bits = nullptr;
+    HBITMAP bitmap = CreateDIBSection(screenDc, &bitmapInfo, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HDC dc = bitmap ? CreateCompatibleDC(screenDc) : nullptr;
+    ReleaseDC(nullptr, screenDc);
+
+    if (!bitmap || !dc || !bits) {
+        if (dc) {
+            DeleteDC(dc);
+        }
+        if (bitmap) {
+            DeleteObject(bitmap);
+        }
+        return QPixmap();
+    }
+
+    std::memset(bits, 0, static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
+    HGDIOBJ previousBitmap = SelectObject(dc, bitmap);
+    DrawIconEx(dc, 0, 0, icon, width, height, 0, nullptr, DI_NORMAL);
+
+    QImage image(static_cast<uchar *>(bits), width, height, QImage::Format_ARGB32);
+    QPixmap pixmap = QPixmap::fromImage(image.copy());
+
+    SelectObject(dc, previousBitmap);
+    DeleteDC(dc);
+    DeleteObject(bitmap);
+    return pixmap;
+}
+
 QIcon nativeFileIcon(const QString &path)
 {
     const QString resolvedPath = windowsKnownExecutablePath(path);
@@ -574,24 +622,7 @@ QIcon nativeFileIcon(const QString &path)
     if (!result || !fileInfo.hIcon) {
         return QIcon();
     }
-    QPixmap pixmap(GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
-    pixmap.fill(Qt::transparent);
-    HDC dc = CreateCompatibleDC(nullptr);
-    HBITMAP bitmap = CreateCompatibleBitmap(GetDC(nullptr), pixmap.width(), pixmap.height());
-    HGDIOBJ previousBitmap = SelectObject(dc, bitmap);
-    RECT rect = {0, 0, pixmap.width(), pixmap.height()};
-    HBRUSH brush = CreateSolidBrush(RGB(0, 0, 0));
-    FillRect(dc, &rect, brush);
-    DeleteObject(brush);
-    DrawIconEx(dc, 0, 0, fileInfo.hIcon, pixmap.width(), pixmap.height(), 0, nullptr, DI_NORMAL);
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-    pixmap = QPixmap::fromWinHBITMAP(bitmap, QPixmap::PremultipliedAlpha);
-#else
-    pixmap = QPixmap::fromImage(QImage::fromHBITMAP(bitmap));
-#endif
-    SelectObject(dc, previousBitmap);
-    DeleteObject(bitmap);
-    DeleteDC(dc);
+    const QPixmap pixmap = pixmapFromNativeIcon(fileInfo.hIcon, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
     QIcon icon(pixmap);
     DestroyIcon(fileInfo.hIcon);
     return icon;

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("4.8.7", "5.6.3")]
+    [ValidateSet("4.8.7", "5.6.3", "6.8.3", "6.11.1")]
     [string]$QtVersion,
 
     [Parameter(Mandatory = $true)]
@@ -11,6 +11,8 @@ param(
     [string]$InstallDir,
     [string]$BuildDir,
     [string]$MingwRoot,
+    [string]$MingwTriplet,
+    [string]$Generator,
     [string]$Architecture = "x64",
     [switch]$WindowsXp,
     [switch]$Force
@@ -20,12 +22,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..").Path
 
-if ($WindowsXp -and $Toolchain -ne "msvc") {
+if ($WindowsXp -and ($QtVersion -ne "5.6.3" -or $Toolchain -ne "msvc")) {
     throw "-WindowsXp is only supported for the Qt 5.6.3 MSVC2015 x86 dynamic variant."
-}
-if ($QtVersion -eq "4.8.7" -and $Toolchain -eq "msvc" -and $Architecture -ne "x86") {
-    Write-Host "Qt 4.8.7 MSVC builds are forced to x86 because Qt 4.8.7 ships a win32-msvc2015 mkspec."
-    $Architecture = "x86"
 }
 if ($WindowsXp -and $Architecture -ne "x86") {
     Write-Host "Windows XP builds are forced to x86 because the maintained XP target uses VS2015/Win32."
@@ -34,6 +32,77 @@ if ($WindowsXp -and $Architecture -ne "x86") {
 
 function ConvertTo-CMakePath([string]$Path) {
     return $Path.Replace('\', '/')
+}
+
+function Get-MingwToolchainTag([string]$Version, [string]$Arch) {
+    if ($Version -eq "4.8.7") {
+        return $(if ($Arch -eq "x86") { "mingw482" } else { "mingw730" })
+    }
+    if ($Version -eq "5.6.3") {
+        return $(if ($Arch -eq "x86") { "mingw492" } else { "mingw730" })
+    }
+    if ($Version.StartsWith("6.")) {
+        return $(if ($Arch -eq "x86") { "llvm-mingw17" } else { "mingw13" })
+    }
+    return "mingw"
+}
+
+function Get-MingwInstallSuffix([string]$Version, [string]$Arch) {
+    if ($Version.StartsWith("6.")) {
+        return $(if ($Arch -eq "x86") { "llvm-mingw17_32" } else { "mingw_64" })
+    }
+    $tag = Get-MingwToolchainTag -Version $Version -Arch $Arch
+    $archSuffix = if ($Arch -eq "x86") { "32" } else { "64" }
+    return "$tag`_$archSuffix"
+}
+
+function Get-DefaultMingwRoot([string]$Version, [string]$Arch) {
+    if ($Version -eq "4.8.7") {
+        return $(if ($Arch -eq "x86") { "D:\Qt\Tools\mingw482_32" } else { "D:\Qt\Tools\mingw730_64" })
+    }
+    if ($Version -eq "5.6.3") {
+        return $(if ($Arch -eq "x86") { "D:\Qt\Tools\mingw492_32" } else { "D:\Qt\Tools\mingw730_64" })
+    }
+    if ($Version.StartsWith("6.")) {
+        return $(if ($Arch -eq "x86") { "D:\Qt\Tools\llvm-mingw1706_64" } else { "D:\Qt\Tools\mingw1310_64" })
+    }
+    return "D:\Qt\Tools\mingw810_64"
+}
+
+function Get-DefaultMingwTriplet([string]$Version, [string]$Arch) {
+    if ($Version.StartsWith("6.") -and $Arch -eq "x86") {
+        return "i686-w64-mingw32"
+    }
+    return ""
+}
+
+function Get-MingwToolPath([string]$ToolName) {
+    if (-not [string]::IsNullOrWhiteSpace($MingwTriplet)) {
+        $tripletTool = Join-Path $MingwRoot "bin\$MingwTriplet-$ToolName.exe"
+        if (Test-Path $tripletTool) {
+            return $tripletTool
+        }
+    }
+    $tool = Join-Path $MingwRoot "bin\$ToolName.exe"
+    if (Test-Path $tool) {
+        return $tool
+    }
+    throw "Unable to locate $ToolName.exe in $MingwRoot\bin."
+}
+
+function Get-MingwRuntimePathEntries() {
+    $paths = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($MingwTriplet)) {
+        $tripletBin = Join-Path $MingwRoot "$MingwTriplet\bin"
+        if (Test-Path $tripletBin) {
+            $paths.Add($tripletBin)
+        }
+    }
+    $bin = Join-Path $MingwRoot "bin"
+    if (Test-Path $bin) {
+        $paths.Add($bin)
+    }
+    return $paths
 }
 
 function Set-ProcessPathValue([string]$Value) {
@@ -69,6 +138,99 @@ function Use-Vs2015CompatibleWindowsSdk() {
     }
 }
 
+function Add-ProcessEnvironmentPaths([string]$Name, [string[]]$Paths) {
+    $items = New-Object System.Collections.Generic.List[string]
+    foreach ($path in $Paths) {
+        if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path $path) -and -not $items.Contains($path)) {
+            $items.Add($path)
+        }
+    }
+
+    $current = [Environment]::GetEnvironmentVariable($Name, "Process")
+    if (-not [string]::IsNullOrWhiteSpace($current)) {
+        foreach ($path in ($current -split ';')) {
+            if (-not [string]::IsNullOrWhiteSpace($path) -and -not $items.Contains($path)) {
+                $items.Add($path)
+            }
+        }
+    }
+
+    $value = $items -join ';'
+    [Environment]::SetEnvironmentVariable($Name, $value, "Process")
+    Set-Item -Path "Env:$Name" -Value $value
+}
+
+function Get-WindowsSdkVersion() {
+    $kitRoot = "C:\Program Files (x86)\Windows Kits\10"
+    $includeRoot = Join-Path $kitRoot "Include"
+    if (-not (Test-Path $includeRoot)) {
+        return $null
+    }
+
+    $versions = Get-ChildItem -LiteralPath $includeRoot -Directory |
+        Where-Object {
+            (Test-Path (Join-Path $_.FullName "ucrt")) -and
+            (Test-Path (Join-Path $_.FullName "um\windows.h"))
+        } |
+        Sort-Object Name -Descending
+    if ($versions.Count -eq 0) {
+        return $null
+    }
+    return $versions[0].Name
+}
+
+function Ensure-ModernMsvcEnvironment([string]$Arch) {
+    $clCommand = Get-Command cl.exe -ErrorAction SilentlyContinue
+    if (-not $clCommand) {
+        throw "cl.exe was not found after Visual Studio environment setup."
+    }
+    $clPath = $clCommand.Source
+    if ($clPath -notmatch '^(.*\\VC\\Tools\\MSVC\\[^\\]+)\\bin\\') {
+        throw "Unable to locate MSVC tool root from cl.exe path: $clPath"
+    }
+
+    $msvcRoot = $matches[1]
+    $targetArch = if ($Arch -eq "x86") { "x86" } else { "x64" }
+    $sdkVersion = Get-WindowsSdkVersion
+    if (-not $sdkVersion) {
+        throw "Unable to locate a Windows 10 SDK include directory."
+    }
+
+    $kitRoot = "C:\Program Files (x86)\Windows Kits\10"
+    Add-ProcessEnvironmentPaths -Name "INCLUDE" -Paths @(
+        (Join-Path $msvcRoot "include"),
+        (Join-Path $msvcRoot "atlmfc\include"),
+        (Join-Path $kitRoot "Include\$sdkVersion\ucrt"),
+        (Join-Path $kitRoot "Include\$sdkVersion\shared"),
+        (Join-Path $kitRoot "Include\$sdkVersion\um"),
+        (Join-Path $kitRoot "Include\$sdkVersion\winrt"),
+        (Join-Path $kitRoot "Include\$sdkVersion\cppwinrt")
+    )
+
+    Add-ProcessEnvironmentPaths -Name "LIB" -Paths @(
+        (Join-Path $msvcRoot "lib\$targetArch"),
+        (Join-Path $msvcRoot "atlmfc\lib\$targetArch"),
+        (Join-Path $kitRoot "Lib\$sdkVersion\ucrt\$targetArch"),
+        (Join-Path $kitRoot "Lib\$sdkVersion\um\$targetArch")
+    )
+
+    $frameworkRoot = if ($targetArch -eq "x86") {
+        "C:\Windows\Microsoft.NET\Framework\v4.0.30319"
+    } else {
+        "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
+    }
+    Add-ProcessEnvironmentPaths -Name "LIBPATH" -Paths @(
+        $frameworkRoot,
+        (Join-Path $msvcRoot "lib\$targetArch"),
+        (Join-Path $msvcRoot "atlmfc\lib\$targetArch")
+    )
+
+    $initializerList = Join-Path $msvcRoot "include\initializer_list"
+    if (-not (Test-Path $initializerList)) {
+        throw "MSVC standard library header not found: $initializerList"
+    }
+}
+
 function Resolve-QtSourceDirectory([string]$RequestedPath, [string]$Version) {
     if (-not [string]::IsNullOrWhiteSpace($RequestedPath) -and (Test-Path (Join-Path $RequestedPath "configure.exe"))) {
         return (Resolve-Path $RequestedPath).Path
@@ -83,6 +245,14 @@ function Resolve-QtSourceDirectory([string]$RequestedPath, [string]$Version) {
     }
     if (Test-Path (Join-Path $expandedSource "configure.bat")) {
         return (Resolve-Path $expandedSource).Path
+    }
+
+    $externSource = Join-Path $repoRoot "extern\src\qt-everywhere-src-$Version"
+    if (Test-Path (Join-Path $externSource "configure.exe")) {
+        return (Resolve-Path $externSource).Path
+    }
+    if (Test-Path (Join-Path $externSource "configure.bat")) {
+        return (Resolve-Path $externSource).Path
     }
 
     $zipPath = Join-Path "D:\Qt\$Version\Src" "qt-everywhere-opensource-src-$Version.zip"
@@ -101,7 +271,26 @@ function Resolve-QtSourceDirectory([string]$RequestedPath, [string]$Version) {
     throw "Qt source directory not found or does not contain configure: $RequestedPath"
 }
 
+function Update-Qt4MinGWSourceCompatibility([string]$SourcePath) {
+    $itemViews = Join-Path $SourcePath "src\plugins\accessible\widgets\itemviews.cpp"
+    if (-not (Test-Path $itemViews)) {
+        return
+    }
+
+    $content = Get-Content -LiteralPath $itemViews -Raw
+    $old = "QItemSelectionModel::Columns & QItemSelectionModel::Deselect"
+    $new = "QItemSelectionModel::Columns | QItemSelectionModel::Deselect"
+    if ($content.Contains($old)) {
+        $content = $content.Replace($old, $new)
+        Set-Content -LiteralPath $itemViews -Value $content -Encoding ASCII
+    }
+}
+
 function Import-Vs2015BuildEnvironment([string]$Arch) {
+    if ($Arch -eq "x64") {
+        $Arch = "amd64"
+    }
+
     $vcvarsCandidates = @(
         "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat",
         "D:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat",
@@ -148,6 +337,102 @@ function Import-Vs2015BuildEnvironment([string]$Arch) {
     }
 
     throw "Failed to initialize Visual Studio 2015 build environment."
+}
+
+function Get-VsWherePath() {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere) {
+        return $vswhere
+    }
+    return $null
+}
+
+function Get-VcVarsAllCandidates() {
+    $candidates = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($env:HKM_VCVARSALL) -and (Test-Path $env:HKM_VCVARSALL)) {
+        $candidates.Add($env:HKM_VCVARSALL)
+    }
+
+    $vswhere = Get-VsWherePath
+    if ($vswhere) {
+        $installations = & $vswhere -all -products * -property installationPath 2>$null
+        foreach ($installation in $installations) {
+            $vcvars = Join-Path $installation "VC\Auxiliary\Build\vcvarsall.bat"
+            if (Test-Path $vcvars) {
+                $candidates.Add($vcvars)
+            }
+        }
+    }
+
+    foreach ($path in @(
+        "D:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat",
+        "D:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat",
+        "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
+    )) {
+        if (Test-Path $path) {
+            $candidates.Add($path)
+        }
+    }
+
+    return $candidates | Select-Object -Unique
+}
+
+function Import-VsDevEnvironment([string]$Arch) {
+    $vcvarsCandidates = Get-VcVarsAllCandidates
+    if (-not $vcvarsCandidates) {
+        throw "Visual Studio vcvarsall.bat not found. Install the required MSVC build tools or set HKM_VCVARSALL."
+    }
+    if ($QtVersion.StartsWith("6.")) {
+        $vcvarsCandidates = $vcvarsCandidates |
+            Sort-Object @{ Expression = { if ($_ -match "\\Microsoft Visual Studio\\18\\") { 0 } else { 1 } } }, @{ Expression = { $_ } }
+    }
+
+    foreach ($vcvars in $vcvarsCandidates) {
+        $cmd = '"' + $vcvars + '" ' + $Arch + ' >nul && set'
+        $environmentLines = cmd.exe /d /s /c $cmd 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            continue
+        }
+
+        $pathCandidates = New-Object System.Collections.Generic.List[string]
+        $environmentLines | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') {
+                $key = $matches[1]
+                $value = $matches[2]
+                if ($key -ieq "PATH") {
+                    $pathCandidates.Add($value)
+                } else {
+                    [Environment]::SetEnvironmentVariable($key, $value, "Process")
+                }
+            }
+        }
+        $selectedPath = $pathCandidates |
+            Where-Object { $_ -match "\\VC\\Tools\\MSVC\\" } |
+            Select-Object -First 1
+        if (-not $selectedPath -and $pathCandidates.Count -gt 0) {
+            $selectedPath = $pathCandidates[0]
+        }
+        if ($selectedPath) {
+            Set-ProcessPathValue -Value $selectedPath
+        }
+        if ($QtVersion.StartsWith("6.")) {
+            Ensure-ModernMsvcEnvironment -Arch $Arch
+        }
+
+        $missingTools = @()
+        foreach ($tool in @("cl.exe", "link.exe", "rc.exe", "mt.exe")) {
+            if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+                $missingTools += $tool
+            }
+        }
+        if ($missingTools.Count -eq 0) {
+            Write-Host "Using Visual Studio environment: $vcvars"
+            return
+        }
+        Write-Host "Skipping incomplete Visual Studio environment from $vcvars. Missing: $($missingTools -join ', ')"
+    }
+
+    throw "Failed to initialize Visual Studio build environment for Qt $QtVersion."
 }
 
 function Update-Qt4MsvcMkspec([string]$SourcePath, [bool]$StaticRuntime) {
@@ -507,34 +792,55 @@ if ([string]::IsNullOrWhiteSpace($QtSourceDir)) {
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
     if ($QtVersion -eq "4.8.7") {
         if ($Toolchain -eq "msvc") {
-            $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\msvc2015_32"
+            $msvcInstallSuffix = if ($Architecture -eq "x86") { "msvc2015_32" } else { "msvc2015_64" }
+            $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\$msvcInstallSuffix"
         } else {
-            $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\mingw482_32"
+            $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\$(Get-MingwInstallSuffix -Version $QtVersion -Arch $Architecture)"
         }
     } elseif ($Toolchain -eq "msvc" -and $WindowsXp) {
         $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\msvc2015_xp"
+    } elseif ($Toolchain -eq "msvc" -and $QtVersion -eq "5.6.3") {
+        $msvcInstallSuffix = if ($Architecture -eq "x86") { "msvc2015_32" } else { "msvc2015_64" }
+        $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\$msvcInstallSuffix"
+    } elseif ($Toolchain -eq "msvc" -and $QtVersion.StartsWith("6.")) {
+        $msvcInstallSuffix = if ($Architecture -eq "x86") { "msvc2022_32" } else { "msvc2022_64" }
+        $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\$msvcInstallSuffix"
+    } elseif ($Toolchain -eq "mingw") {
+        $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\$(Get-MingwInstallSuffix -Version $QtVersion -Arch $Architecture)"
     } else {
-        $InstallDir = Join-Path $repoRoot "extern\qt\$QtVersion\mingw492_32"
+        throw "Unsupported dynamic Qt variant: Qt $QtVersion / $Toolchain / $Architecture"
     }
 }
 if ([string]::IsNullOrWhiteSpace($BuildDir)) {
     if ($QtVersion -eq "4.8.7") {
         if ($Toolchain -eq "msvc") {
-            $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-msvc2015-dynamic-x86"
+            $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-msvc2015-dynamic-$Architecture"
         } else {
-            $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-mingw482-dynamic-x86"
+            $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-$(Get-MingwToolchainTag -Version $QtVersion -Arch $Architecture)-dynamic-$Architecture"
         }
     } elseif ($Toolchain -eq "msvc" -and $WindowsXp) {
         $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-msvc2015-xp-dynamic-x86"
+    } elseif ($Toolchain -eq "msvc" -and $QtVersion -eq "5.6.3") {
+        $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-msvc2015-dynamic-$Architecture"
+    } elseif ($Toolchain -eq "msvc" -and $QtVersion.StartsWith("6.")) {
+        $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-msvc2022-dynamic-$Architecture"
+    } elseif ($Toolchain -eq "mingw") {
+        $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-$(Get-MingwToolchainTag -Version $QtVersion -Arch $Architecture)-dynamic-$Architecture"
     } else {
-        $BuildDir = Join-Path $repoRoot "out\qt-build\qt$QtVersion-mingw492-dynamic-x86"
+        throw "Unsupported dynamic Qt variant: Qt $QtVersion / $Toolchain / $Architecture"
     }
 }
-if ([string]::IsNullOrWhiteSpace($MingwRoot)) {
-    if ($QtVersion -eq "4.8.7") {
-        $MingwRoot = "D:\Qt\Tools\mingw482_32"
+if ($Toolchain -eq "mingw" -and [string]::IsNullOrWhiteSpace($MingwRoot)) {
+    $MingwRoot = Get-DefaultMingwRoot -Version $QtVersion -Arch $Architecture
+}
+if ($Toolchain -eq "mingw" -and [string]::IsNullOrWhiteSpace($MingwTriplet)) {
+    $MingwTriplet = Get-DefaultMingwTriplet -Version $QtVersion -Arch $Architecture
+}
+if ([string]::IsNullOrWhiteSpace($Generator)) {
+    if ($Toolchain -eq "msvc") {
+        $Generator = if ($QtVersion.StartsWith("6.")) { "Ninja" } else { "Visual Studio 18 2026" }
     } else {
-        $MingwRoot = "D:\Qt\Tools\mingw492_32"
+        $Generator = "Ninja"
     }
 }
 
@@ -545,6 +851,9 @@ $installCMakePath = ConvertTo-CMakePath $installPath
 
 if ($QtVersion -eq "4.8.7" -and $Toolchain -eq "msvc") {
     Update-Qt4MsvcMkspec -SourcePath $qtSource -StaticRuntime:$false
+}
+if ($QtVersion -eq "4.8.7" -and $Toolchain -eq "mingw") {
+    Update-Qt4MinGWSourceCompatibility -SourcePath $qtSource
 }
 
 if ($Force) {
@@ -569,14 +878,24 @@ New-Item -ItemType Directory -Force -Path $installPath | Out-Null
 
 $oldPath = $env:PATH
 if ($Toolchain -eq "mingw") {
-    $mingwBin = Join-Path $MingwRoot "bin"
-    $env:PATH = "$mingwBin;$oldPath"
+    $mingwPaths = Get-MingwRuntimePathEntries
+    $env:PATH = "$($mingwPaths -join ';');$oldPath"
 } elseif ($WindowsXp) {
     Set-Vs2015XpBuildEnvironment -OriginalPath $oldPath
 } elseif ($Toolchain -eq "msvc" -and $QtVersion -eq "4.8.7") {
-    Import-Vs2015BuildEnvironment -Arch "x86"
+    Import-Vs2015BuildEnvironment -Arch $Architecture
+} elseif ($Toolchain -eq "msvc" -and $QtVersion -eq "5.6.3") {
+    Import-Vs2015BuildEnvironment -Arch $Architecture
+} elseif ($Toolchain -eq "msvc" -and $QtVersion.StartsWith("6.")) {
+    Import-VsDevEnvironment -Arch $Architecture
 } else {
     throw "Only the MSVC Windows XP dynamic variant is currently supported by this script."
+}
+if ($Generator -eq "Ninja") {
+    $ninjaBin = "D:\Qt\Tools\Ninja"
+    if (Test-Path (Join-Path $ninjaBin "ninja.exe")) {
+        Set-ProcessPathValue -Value "$ninjaBin;$env:PATH"
+    }
 }
 
 Push-Location $buildPath
@@ -611,7 +930,7 @@ try {
             "-no-native-gestures",
             "-platform", $(if ($Toolchain -eq "msvc") { "win32-msvc2015" } else { "win32-g++" })
         )
-    } else {
+    } elseif ($QtVersion.StartsWith("5.")) {
         $configureArgs = @(
             "-release",
             "-shared",
@@ -657,6 +976,74 @@ try {
         } else {
             $configureArgs += @("-platform", "win32-msvc2015")
         }
+    } else {
+        $cmakeConfigureArgs = @("-DCMAKE_INSTALL_PREFIX=$installCMakePath")
+        if ($Toolchain -eq "msvc" -and $Generator -like "Visual Studio*") {
+            $vsCmakeArchitecture = if ($Architecture -eq "x86") { "Win32" } else { $Architecture }
+            $cmakeConfigureArgs += @("-A", $vsCmakeArchitecture)
+        }
+        if ($Toolchain -eq "mingw") {
+            $mingwCc = ConvertTo-CMakePath (Get-MingwToolPath "gcc")
+            $mingwCxx = ConvertTo-CMakePath (Get-MingwToolPath "g++")
+            $mingwRc = ConvertTo-CMakePath (Get-MingwToolPath "windres")
+            $cmakeConfigureArgs += @(
+                "-DCMAKE_C_COMPILER=$mingwCc",
+                "-DCMAKE_CXX_COMPILER=$mingwCxx",
+                "-DCMAKE_RC_COMPILER=$mingwRc"
+            )
+        }
+
+        $qt6CompatibilityArgs = @()
+        if ($QtVersion -eq "6.11.1") {
+            $qt6CompatibilityArgs = @("-force-bundled-libs", "-no-feature-winsdkicu")
+        }
+        if ($QtVersion.StartsWith("6.") -and $Toolchain -eq "msvc" -and $Architecture -eq "x86") {
+            $qt6CompatibilityArgs += "-no-feature-windows-ioring"
+        }
+
+        $configureArgs = @(
+            "-release",
+            "-shared",
+            "-opensource",
+            "-confirm-license"
+        ) + $qt6CompatibilityArgs + @(
+            "-prefix", $installCMakePath,
+            "-submodules", "qtbase,qtsvg",
+            "-nomake", "examples",
+            "-nomake", "tests",
+            "-no-icu",
+            "-no-opengl",
+            "-no-openssl",
+            "-schannel",
+            "-cmake-generator", $Generator,
+            "--"
+        ) + $cmakeConfigureArgs
+
+        & $configure @configureArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Qt configure failed with exit code $LASTEXITCODE."
+        }
+
+        $buildArgs = @("--build", ".", "--parallel")
+        if ($Toolchain -eq "msvc" -and $Generator -like "Visual Studio*") {
+            $buildArgs += @("--config", "Release")
+        }
+        cmake @buildArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Qt build failed with exit code $LASTEXITCODE."
+        }
+
+        $installArgs = @("--install", ".")
+        if ($Toolchain -eq "msvc" -and $Generator -like "Visual Studio*") {
+            $installArgs += @("--config", "Release")
+        }
+        cmake @installArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Qt install failed with exit code $LASTEXITCODE."
+        }
+
+        Write-Host "Dynamic Qt installed to: $installPath"
+        exit 0
     }
 
     & $configure @configureArgs
@@ -684,7 +1071,7 @@ try {
         }
     }
 
-    if ($WindowsXp -and $Toolchain -eq "msvc") {
+    if ($QtVersion -eq "5.6.3" -and $Toolchain -eq "msvc") {
         $qmodulePri = Join-Path $buildPath "qtbase\mkspecs\qmodule.pri"
         if (-not (Test-Path $qmodulePri)) {
             throw "Qt qmodule.pri was not generated: $qmodulePri"

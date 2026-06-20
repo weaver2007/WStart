@@ -30,59 +30,90 @@ ctest --list-presets
 ```
 
 Build outputs are organized under `out/build/<qt>-<toolchain>-<linkage>-<arch>`.
-Dynamic Qt variants run `windeployqt` after build, so the required Qt DLLs and plugins are copied next to `HotKeyManager.exe`.
+Dynamic Qt variants run `windeployqt` after build when the Qt version supports reliable deployment; older compatibility variants may copy runtime files manually.
 
-Currently maintained variants:
+## Variant Intent
+
+- Qt 4.8.7 is kept as the Qt4 compatibility line and for the broadest legacy Windows coverage.
+- Qt 5.6.3 is kept as the legacy Qt5 line for Windows XP-capable builds and older toolchain coverage. The explicit XP presets are x86 MSVC2015 builds; additional MSVC2015 and MinGW x86/x64 ABI variants are also maintained.
+- Qt 5.15.2 is kept as the final Qt5 LTS line and the main Win7-capable Qt5 target.
+- Qt 6.8.3 is kept as the Qt6 LTS line.
+- Qt 6.11.1 is kept as the current latest Qt line.
+
+## Maintained Variants
+
+Qt 4.8.7:
 
 - `qt4.8.7-mingw482-dynamic-x86`
 - `qt4.8.7-mingw482-static-x86`
-- `qt5.6.3-mingw492-dynamic-x86`
-- `qt5.6.3-mingw492-static-x86`
-- `qt5.15.2-msvc2019-dynamic-x64`
-- `qt5.15.2-mingw81-dynamic-x64`
-- `qt6.8.3-msvc2022-dynamic-x64`
-- `qt6.8.3-mingw13-dynamic-x64`
-- `qt6.10.1-msvc2022-dynamic-x64`
-- `qt6.10.1-mingw13-dynamic-x64`
-- matching `*-static-x64` variants for the same Qt/toolchain pairs
+- `qt4.8.7-mingw730-dynamic-x64`
+- `qt4.8.7-mingw730-static-x64`
+- `qt4.8.7-msvc2015-dynamic-x86`
+- `qt4.8.7-msvc2015-dynamic-x64`
+- `qt4.8.7-msvc2015-static-x86`
+- `qt4.8.7-msvc2015-static-x64`
 
-The `qt5.6.3-msvc2015-*` presets are defined, but they require a VS2015/v140 toolchain and a matching Qt 5.6.3 MSVC2015 build under `extern/qt/5.6.3/msvc2015_64` or `extern/qt-static/qt5.6.3-msvc2015-static-x64`.
-
-Windows XP is maintained as separate Qt 5.6.3 MSVC2015 x86 variants:
+Qt 5.6.3 legacy:
 
 - `qt5.6.3-msvc2015-xp-dynamic-x86`
 - `qt5.6.3-msvc2015-xp-static-x86`
+- `qt5.6.3-msvc2015-dynamic-x86`
+- `qt5.6.3-msvc2015-dynamic-x64`
+- `qt5.6.3-msvc2015-static-x86`
+- `qt5.6.3-msvc2015-static-x64`
+- `qt5.6.3-mingw492-dynamic-x86`
+- `qt5.6.3-mingw492-static-x86`
+- `qt5.6.3-mingw730-dynamic-x64`
+- `qt5.6.3-mingw730-static-x64`
 
-This variant uses the VS2015 x86 compiler with XP-targeted Windows SDK libraries, builds Qt with `-target xp`, sets `WINVER/_WIN32_WINNT=0x0501`, links the MSVC runtime statically with `/MT`, and sets the executable subsystem version to `5.01`.
+Qt 5.15.2 LTS:
 
-## Qt 5.6.3 MinGW
+- `qt5.15.2-msvc2019-dynamic-x86`
+- `qt5.15.2-msvc2019-dynamic-x64`
+- `qt5.15.2-msvc2019-static-x86`
+- `qt5.15.2-msvc2019-static-x64`
+- `qt5.15.2-mingw81-dynamic-x86`
+- `qt5.15.2-mingw81-dynamic-x64`
+- `qt5.15.2-mingw81-static-x86`
+- `qt5.15.2-mingw81-static-x64`
 
-Qt 5.6.3 MinGW uses Qt's legacy 32-bit MinGW 4.9.2 toolchain:
+Qt 6.8.3 LTS:
+
+- `qt6.8.3-msvc2022-dynamic-x86`
+- `qt6.8.3-msvc2022-dynamic-x64`
+- `qt6.8.3-msvc2022-static-x86`
+- `qt6.8.3-msvc2022-static-x64`
+- `qt6.8.3-mingw13-dynamic-x64`
+- `qt6.8.3-mingw13-static-x64`
+- `qt6.8.3-llvm-mingw17-dynamic-x86`
+- `qt6.8.3-llvm-mingw17-static-x86`
+
+Qt 6.11.1 latest:
+
+- `qt6.11.1-msvc2022-dynamic-x86`
+- `qt6.11.1-msvc2022-dynamic-x64`
+- `qt6.11.1-msvc2022-static-x86`
+- `qt6.11.1-msvc2022-static-x64`
+- `qt6.11.1-mingw13-dynamic-x64`
+- `qt6.11.1-mingw13-static-x64`
+- `qt6.11.1-llvm-mingw17-dynamic-x86`
+- `qt6.11.1-llvm-mingw17-static-x86`
+
+Qt 6 MinGW x86 variants use LLVM-MinGW 17 with the `i686-w64-mingw32` target because current Qt 6 MinGW packages no longer provide a conventional 32-bit MinGW toolchain.
+
+## Qt 4.8.7
+
+Qt 4.8.7 uses a dedicated compatibility path. MinGW x86 is maintained with the legacy MinGW 4.8.2 toolchain, MinGW x64 is maintained with MinGW 7.3, and MSVC2015 supports x86 and x64:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 5.6.3 -Toolchain mingw
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain mingw
-```
-
-Then build and test the application:
-
-```powershell
-cmake --preset qt5.6.3-mingw492-dynamic-x86
-cmake --build --preset qt5.6.3-mingw492-dynamic-x86-release
-ctest --preset qt5.6.3-mingw492-dynamic-x86-release
-
-cmake --preset qt5.6.3-mingw492-static-x86
-cmake --build --preset qt5.6.3-mingw492-static-x86-release
-ctest --preset qt5.6.3-mingw492-static-x86-release
-```
-
-## Qt 4.8.7 MinGW
-
-Qt 4.8.7 uses a dedicated compatibility path and the legacy 32-bit MinGW 4.8.2 toolchain:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 4.8.7 -Toolchain mingw
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain mingw
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 4.8.7 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 4.8.7 -Toolchain mingw -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain mingw -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 4.8.7 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 4.8.7 -Toolchain msvc -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain msvc -Architecture x86
 ```
 
 By default, the scripts expect the Qt source tree at `D:/Qt/4.8.7/Src`. If the source is elsewhere, pass `-QtSourceDir <path>`.
@@ -97,9 +128,33 @@ ctest --preset qt4.8.7-mingw482-dynamic-x86-release
 cmake --preset qt4.8.7-mingw482-static-x86
 cmake --build --preset qt4.8.7-mingw482-static-x86-release
 ctest --preset qt4.8.7-mingw482-static-x86-release
+
+cmake --preset qt4.8.7-mingw730-dynamic-x64
+cmake --build --preset qt4.8.7-mingw730-dynamic-x64-release
+ctest --preset qt4.8.7-mingw730-dynamic-x64-release
+
+cmake --preset qt4.8.7-mingw730-static-x64
+cmake --build --preset qt4.8.7-mingw730-static-x64-release
+ctest --preset qt4.8.7-mingw730-static-x64-release
+
+cmake --preset qt4.8.7-msvc2015-dynamic-x64
+cmake --build --preset qt4.8.7-msvc2015-dynamic-x64-release
+ctest --preset qt4.8.7-msvc2015-dynamic-x64-release
+
+cmake --preset qt4.8.7-msvc2015-dynamic-x86
+cmake --build --preset qt4.8.7-msvc2015-dynamic-x86-release
+ctest --preset qt4.8.7-msvc2015-dynamic-x86-release
+
+cmake --preset qt4.8.7-msvc2015-static-x64
+cmake --build --preset qt4.8.7-msvc2015-static-x64-release
+ctest --preset qt4.8.7-msvc2015-static-x64-release
+
+cmake --preset qt4.8.7-msvc2015-static-x86
+cmake --build --preset qt4.8.7-msvc2015-static-x86-release
+ctest --preset qt4.8.7-msvc2015-static-x86-release
 ```
 
-Qt 4.8.7 support is maintained as a 32-bit MinGW compatibility target. It uses local Qt4 compatibility shims for APIs that were introduced in Qt 5, including JSON document handling, standard paths, lock files, and screen helpers.
+Qt 4.8.7 support uses local Qt4 compatibility shims for APIs that were introduced in Qt 5, including JSON document handling, standard paths, lock files, and screen helpers.
 
 ## Static Qt / Single EXE
 
@@ -108,26 +163,37 @@ The normal Qt installer packages under `D:/Qt` are shared Qt builds. A single-fi
 Build and install a minimal static Qt for one variant:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.10.1 -Toolchain msvc
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.10.1 -Toolchain mingw
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.8.3 -Toolchain msvc
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.8.3 -Toolchain mingw
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain mingw
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.15.2 -Toolchain msvc
-powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.15.2 -Toolchain mingw
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.11.1 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.11.1 -Toolchain mingw -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.11.1 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.8.3 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.8.3 -Toolchain mingw -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 6.8.3 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.15.2 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.15.2 -Toolchain msvc -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.15.2 -Toolchain mingw -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.15.2 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain msvc -Architecture x86 -WindowsXp
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain mingw -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain msvc -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 4.8.7 -Toolchain mingw -Architecture x64
 ```
 
 Then build the application against that static Qt:
 
 ```powershell
-cmake --preset qt6.10.1-msvc2022-static-x64
-cmake --build --preset qt6.10.1-msvc2022-static-x64-release
-ctest --preset qt6.10.1-msvc2022-static-x64-release
+cmake --preset qt6.11.1-msvc2022-static-x64
+cmake --build --preset qt6.11.1-msvc2022-static-x64-release
+ctest --preset qt6.11.1-msvc2022-static-x64-release
 ```
 
 The static presets set `HKM_REQUIRE_STATIC_QT=ON`, disable `windeployqt`, and import the required static Qt plugins into `HotKeyManager.exe`. MSVC static variants also set `HKM_STATIC_RUNTIME=ON` for `/MT`; MinGW static variants link with `-static -static-libgcc -static-libstdc++`.
 
-## Qt 5.6.3 MSVC2015 Windows XP
+## Qt 5.6.3 Legacy Builds
 
 Build and install the XP-targeted dynamic Qt:
 
@@ -165,3 +231,18 @@ Expected output locations:
 - Static application: `out/build/qt5.6.3-msvc2015-xp-static-x86/HotKeyManager.exe`
 
 The XP variants are intentionally x86. They use the NMake generator in this environment because the full VS2015 MSBuild integration is not required for this target. The Qt XP builds disable PCH and qmake batch inference for this variant to avoid VS2015 compiler crashes seen during Qt 5.6.3 XP builds. The dynamic application preset deploys the minimal Qt DLL and plugin set manually because Qt 5.6.3 `windeployqt` can mis-detect XP-subsystem executables.
+
+Additional Qt 5.6.3 ABI variants are available for coverage of older MSVC and MinGW deployments:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 5.6.3 -Toolchain msvc -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 5.6.3 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 5.6.3 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-dynamic.ps1 -QtVersion 5.6.3 -Toolchain mingw -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain msvc -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain msvc -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain mingw -Architecture x86
+powershell -ExecutionPolicy Bypass -File scripts/build-qt-static.ps1 -QtVersion 5.6.3 -Toolchain mingw -Architecture x64
+```
+
+Qt 5.6.3 MinGW x86 uses MinGW 4.9.2. Qt 5.6.3 MinGW x64 uses MinGW 7.3.
