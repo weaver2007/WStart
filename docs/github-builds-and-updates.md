@@ -2,12 +2,31 @@
 
 ## Build workflows
 
-The workflow in `.github/workflows/build.yml` has two build paths:
+The workflow in `.github/workflows/build.yml` builds one primary GitHub-hosted variant:
 
-- `hosted-qt6-smoke` runs on GitHub-hosted `windows-latest` and installs Qt 6 dynamically with `aqtinstall`.
-- `all-variants` runs on a self-hosted Windows runner with labels `self-hosted`, `Windows`, and `hstart-build`.
+- Qt 6.8.3
+- MSVC 2022 ABI
+- dynamic Qt
+- x64
 
-The full variant matrix uses the release presets from `CMakePresets.json`. That runner must have the same local Qt and toolchain layout referenced by the presets, including legacy Qt 4.8.7, Qt 5.6.3 XP builds, static Qt builds, MSVC toolsets, and MinGW toolchains.
+The workflow uploads a zip artifact for each successful run. It does not build the legacy/static matrix by default,
+because those variants need preinstalled Qt/toolchain layouts that GitHub-hosted runners do not provide.
+
+The full local variant matrix remains represented by `CMakePresets.json`. Running every variant in GitHub Actions would
+require a custom image or a self-hosted Windows runner with the same local Qt/toolchain layout referenced by the presets,
+including legacy Qt 4.8.7, Qt 5.6.3 XP builds, static Qt builds, MSVC toolsets, and MinGW toolchains.
+
+## Releases
+
+`.github/workflows/release.yml` publishes the primary variant when a tag matching `v*` is pushed:
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+It can also be started manually with `workflow_dispatch` and a tag input. Normal pushes to `main` do not create tags or
+releases automatically.
 
 ## Update manifest
 
