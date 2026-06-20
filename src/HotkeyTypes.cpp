@@ -312,6 +312,7 @@ QJsonObject AppSettings::toJson() const {
                                                                                           : "system";
     return {{"language", normalizedLanguage},
             {"hotkeysEnabled", hotkeysEnabled},
+            {"updatesEnabled", updatesEnabled},
             {"themeMode", normalizedTheme},
             {"itemAppearance", itemAppearance.toJson()},
             {"sectionAppearance", sectionAppearance.toJson()},
@@ -415,6 +416,7 @@ AppSettings AppSettings::fromJson(const QJsonObject& object) {
                             ? "en-US"
                             : "zh-CN";
     settings.hotkeysEnabled = object.value("hotkeysEnabled").toBool(true);
+    settings.updatesEnabled = object.value("updatesEnabled").toBool(true);
     const QString themeValue = object.value("themeMode").toString(settings.themeMode);
     settings.themeMode = themeValue.compare("light", Qt::CaseInsensitive) == 0  ? "light"
                          : themeValue.compare("dark", Qt::CaseInsensitive) == 0 ? "dark"

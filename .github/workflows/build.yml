@@ -1,0 +1,115 @@
+name: Build HotKeyManager
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/update.json
+
+jobs:
+  hosted-qt6-smoke:
+    name: Hosted Qt ${{ matrix.qt }} dynamic x64 smoke
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        qt: ["6.8.3", "6.11.1"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Qt
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip aqtinstall
+          python -m aqt install-qt windows desktop ${{ matrix.qt }} win64_msvc2022_64 --outputdir "$env:RUNNER_TEMP\Qt"
+          "QT_PREFIX=$env:RUNNER_TEMP\Qt\${{ matrix.qt }}\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$env:RUNNER_TEMP\Qt\${{ matrix.qt }}\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B "out/build/hosted-qt${{ matrix.qt }}-msvc2022-dynamic-x64"
+          -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_PREFIX_PATH="$env:QT_PREFIX"
+          -DHKM_QT_MAJOR=6
+          -DHKM_DEPLOY_QT_RUNTIME=OFF
+          -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build "out/build/hosted-qt${{ matrix.qt }}-msvc2022-dynamic-x64" --config Release --parallel
+
+      - name: Test
+        shell: pwsh
+        run: ctest --test-dir "out/build/hosted-qt${{ matrix.qt }}-msvc2022-dynamic-x64" -C Release --output-on-failure
+
+  collect-release-presets:
+    name: Collect release presets
+    runs-on: windows-latest
+    outputs:
+      matrix: ${{ steps.presets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: presets
+        shell: pwsh
+        run: |
+          $json = Get-Content -Raw CMakePresets.json | ConvertFrom-Json
+          $include = @(
+            $json.buildPresets |
+              Where-Object { $_.name -like '*-release' } |
+              ForEach-Object { @{ preset = $_.name; configurePreset = $_.configurePreset } }
+          )
+          $matrix = @{ include = $include } | ConvertTo-Json -Depth 5 -Compress
+          "matrix=$matrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+  all-variants:
+    name: ${{ matrix.preset }}
+    needs: collect-release-presets
+    runs-on: [self-hosted, Windows, hstart-build]
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.collect-release-presets.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        shell: pwsh
+        run: cmake --preset "${{ matrix.configurePreset }}" "-DHKM_UPDATE_MANIFEST_URL=$env:UPDATE_MANIFEST_URL"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build --preset "${{ matrix.preset }}"
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $json = Get-Content -Raw CMakePresets.json | ConvertFrom-Json
+          $testNames = @($json.testPresets | ForEach-Object { $_.name })
+          if ($testNames -contains "${{ matrix.preset }}") {
+            ctest --preset "${{ matrix.preset }}"
+          }
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path "out/build" "${{ matrix.configurePreset }}"
+          $artifactDir = "artifacts"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+          Compress-Archive -Path (Join-Path $buildDir "*") -DestinationPath (Join-Path $artifactDir "${{ matrix.preset }}.zip") -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.preset }}
+          path: artifacts/${{ matrix.preset }}.zip
+          if-no-files-found: error
+          retention-days: 14

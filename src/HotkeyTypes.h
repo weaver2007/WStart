@@ -134,6 +134,7 @@ struct LauncherCategoryAppearance {
 struct AppSettings {
     QString language = "zh-CN";
     bool hotkeysEnabled = true;
+    bool updatesEnabled = true;
     QString themeMode = "system";
     LauncherItemAppearance itemAppearance;
     LauncherSectionAppearance sectionAppearance;

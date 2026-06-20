@@ -123,6 +123,7 @@ void CoreTests::appSettingsRoundTrip() {
     AppSettings settings;
     settings.language = "en-US";
     settings.hotkeysEnabled = false;
+    settings.updatesEnabled = false;
     settings.themeMode = "dark";
     settings.itemAppearance.itemWidth = 88;
     settings.itemAppearance.showEllipsis = true;
@@ -138,6 +139,7 @@ void CoreTests::appSettingsRoundTrip() {
     const AppSettings parsed = AppSettings::fromJson(settings.toJson());
     QCOMPARE(parsed.language, QString("en-US"));
     QCOMPARE(parsed.hotkeysEnabled, false);
+    QCOMPARE(parsed.updatesEnabled, false);
     QCOMPARE(parsed.themeMode, QString("dark"));
     QCOMPARE(parsed.itemAppearance.itemWidth, 88);
     QCOMPARE(parsed.itemAppearance.showEllipsis, true);
@@ -155,6 +157,7 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback() {
     AppSettings defaults = AppSettings::fromJson({});
     QCOMPARE(defaults.language, QString("zh-CN"));
     QCOMPARE(defaults.hotkeysEnabled, true);
+    QCOMPARE(defaults.updatesEnabled, true);
     QCOMPARE(defaults.themeMode, QString("system"));
     QCOMPARE(defaults.itemAppearance.iconWidth, 48);
     QCOMPARE(defaults.itemAppearance.itemWidth, 64);
@@ -168,10 +171,12 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback() {
     QJsonObject invalid;
     invalid["language"] = "fr-FR";
     invalid["hotkeysEnabled"] = false;
+    invalid["updatesEnabled"] = false;
     invalid["themeMode"] = "sepia";
     const AppSettings parsed = AppSettings::fromJson(invalid);
     QCOMPARE(parsed.language, QString("zh-CN"));
     QCOMPARE(parsed.hotkeysEnabled, false);
+    QCOMPARE(parsed.updatesEnabled, false);
     QCOMPARE(parsed.themeMode, QString("system"));
 }
 

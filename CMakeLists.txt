@@ -17,6 +17,7 @@ set(HKM_QT_MAJOR "AUTO" CACHE STRING "Qt major version to use: AUTO, 6, 5, or 4.
 set_property(CACHE HKM_QT_MAJOR PROPERTY STRINGS AUTO 6 5 4)
 set(HKM_CXX_STANDARD "17" CACHE STRING "C++ standard used by HotKeyManager targets.")
 set_property(CACHE HKM_CXX_STANDARD PROPERTY STRINGS 14 17)
+set(HKM_UPDATE_MANIFEST_URL "" CACHE STRING "HTTPS URL of the update manifest JSON used by the in-app update checker.")
 
 set(CMAKE_CXX_STANDARD ${HKM_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -240,6 +241,7 @@ set(HKM_SOURCES
     src/RuleStore.cpp
     src/TrayController.cpp
     src/UiText.cpp
+    src/UpdateChecker.cpp
 )
 
 set(HKM_HEADERS
@@ -252,6 +254,7 @@ set(HKM_HEADERS
     src/RuleStore.h
     src/TrayController.h
     src/UiText.h
+    src/UpdateChecker.h
 )
 
 if(QT_VERSION_MAJOR EQUAL 4)
@@ -293,6 +296,11 @@ target_link_libraries(HotKeyManager PRIVATE
     ${HKM_QT5_STATIC_PLATFORM_COMPAT_LIBS}
     ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
     ${HKM_STATIC_SYSTEM_LIBS}
+)
+
+target_compile_definitions(HotKeyManager PRIVATE
+    HKM_APP_VERSION="${PROJECT_VERSION}"
+    HKM_UPDATE_MANIFEST_URL="${HKM_UPDATE_MANIFEST_URL}"
 )
 
 if(NOT QT_VERSION_MAJOR EQUAL 4)
@@ -442,6 +450,11 @@ target_link_libraries(HotKeyManagerTests PRIVATE
     ${HKM_QT_TEST_LIBS}
     ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
     ${HKM_STATIC_SYSTEM_LIBS}
+)
+
+target_compile_definitions(HotKeyManagerTests PRIVATE
+    HKM_APP_VERSION="${PROJECT_VERSION}"
+    HKM_UPDATE_MANIFEST_URL=""
 )
 
 if(NOT QT_VERSION_MAJOR EQUAL 4)

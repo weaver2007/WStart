@@ -30,6 +30,23 @@ QString text(const QString& language, Key key) {
         return en ? "Close" : QString::fromUtf8("关闭");
     case Key::HotkeysEnabled:
         return en ? "Enable global hotkeys" : QString::fromUtf8("启用全局快捷键");
+    case Key::UpdatesEnabled:
+        return en ? "Check for updates automatically" : QString::fromUtf8("自动检查更新");
+    case Key::CheckForUpdates:
+        return en ? "Check for updates" : QString::fromUtf8("检查更新");
+    case Key::UpdateChecking:
+        return en ? "Checking for updates..." : QString::fromUtf8("正在检查更新...");
+    case Key::UpdateAvailableTitle:
+        return en ? "Update available" : QString::fromUtf8("发现新版本");
+    case Key::UpdateAvailableMessage:
+        return en ? "Version %1 is available. Current version: %2.\n\n%3"
+                  : QString::fromUtf8("发现版本 %1，当前版本：%2。\n\n%3");
+    case Key::UpdateNotAvailable:
+        return en ? "You are already using the latest version: %1." : QString::fromUtf8("当前已是最新版本：%1。");
+    case Key::UpdateFailed:
+        return en ? "Update check failed: %1" : QString::fromUtf8("检查更新失败：%1");
+    case Key::OpenDownloadPage:
+        return en ? "Open download page" : QString::fromUtf8("打开下载页面");
     case Key::Language:
         return en ? "Language" : QString::fromUtf8("语言");
     case Key::Theme:

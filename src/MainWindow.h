@@ -5,6 +5,7 @@
 #include "LauncherWindowInterface.h"
 #include "RuleStore.h"
 #include "UiText.h"
+#include "UpdateChecker.h"
 
 #include <QButtonGroup>
 #include <QByteArray>
@@ -84,6 +85,10 @@ private slots:
     void setThemeSystem();
     void setThemeLight();
     void setThemeDark();
+    void setUpdatesEnabled(bool enabled);
+    void checkForUpdates();
+    void onUpdateCheckFinished(bool updateAvailable, QString latestVersion, QString downloadUrl, QString releaseNotes,
+                               QString error, bool silent);
     void showSectionContextMenu(const QPoint& pos);
     void showListContextMenu(const QPoint& pos);
     void runClickedRule(QListWidgetItem* item);
@@ -178,6 +183,7 @@ private:
     RuleStore m_store;
     ActionRunner m_runner;
     HotkeyHookService m_hookService;
+    UpdateChecker m_updateChecker;
     LauncherDocument m_document;
     LauncherCategory m_currentCategory = LauncherCategory::Program;
     QSet<QString> m_unlockedSectionIds;
@@ -195,7 +201,11 @@ private:
     QToolButton* m_minButton = nullptr;
     QToolButton* m_closeButton = nullptr;
     QMenu* m_settingsMenu = nullptr;
+    QMenu* m_languageMenu = nullptr;
+    QMenu* m_themeMenu = nullptr;
     QAction* m_hotkeysEnabledAction = nullptr;
+    QAction* m_updatesEnabledAction = nullptr;
+    QAction* m_checkUpdatesAction = nullptr;
     QAction* m_chineseAction = nullptr;
     QAction* m_englishAction = nullptr;
     QAction* m_themeSystemAction = nullptr;

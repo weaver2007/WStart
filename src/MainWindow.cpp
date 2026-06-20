@@ -16,6 +16,7 @@
 #include <QCryptographicHash>
 #include <QCursor>
 #include <QDate>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -1035,6 +1036,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     connect(&m_hookService, SIGNAL(hotkeyTriggered(HotkeyRule)), this, SLOT(onHotkeyTriggered(HotkeyRule)));
     connect(&m_hookService, SIGNAL(hookError(QString)), this, SLOT(setStatus(QString)));
+    connect(&m_updateChecker, SIGNAL(checkFinished(bool, QString, QString, QString, QString, bool)), this,
+            SLOT(onUpdateCheckFinished(bool, QString, QString, QString, QString, bool)));
 
     loadDocument();
 
@@ -1044,6 +1047,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         setStatus(hookError);
     } else {
         setStatus(uiText(UiText::Key::HookRunning));
+    }
+
+    if (m_document.settings.updatesEnabled) {
+        QTimer::singleShot(1500, &m_updateChecker, SLOT(checkSilently()));
     }
 }
 
@@ -1244,18 +1251,25 @@ void MainWindow::buildSettingsMenu() {
     if (m_settingsMenu) {
         m_settingsMenu->deleteLater();
     }
+    m_languageMenu = nullptr;
+    m_themeMenu = nullptr;
     m_settingsMenu = new QMenu(this);
     m_hotkeysEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeysEnabled));
     m_hotkeysEnabledAction->setCheckable(true);
     connect(m_hotkeysEnabledAction, SIGNAL(toggled(bool)), this, SLOT(applyHotkeysEnabled(bool)));
+    m_updatesEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::UpdatesEnabled));
+    m_updatesEnabledAction->setCheckable(true);
+    connect(m_updatesEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setUpdatesEnabled(bool)));
+    m_checkUpdatesAction = m_settingsMenu->addAction(uiText(UiText::Key::CheckForUpdates));
+    connect(m_checkUpdatesAction, SIGNAL(triggered()), this, SLOT(checkForUpdates()));
     m_hotkeyListAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeyList));
     connect(m_hotkeyListAction, SIGNAL(triggered()), this, SLOT(showHotkeyListDialog()));
 
-    auto* languageMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Language));
-    auto* languageGroup = new QActionGroup(languageMenu);
+    m_languageMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Language));
+    auto* languageGroup = new QActionGroup(m_languageMenu);
     languageGroup->setExclusive(true);
-    m_chineseAction = languageMenu->addAction(uiText(UiText::Key::Chinese));
-    m_englishAction = languageMenu->addAction(uiText(UiText::Key::English));
+    m_chineseAction = m_languageMenu->addAction(uiText(UiText::Key::Chinese));
+    m_englishAction = m_languageMenu->addAction(uiText(UiText::Key::English));
     QList<QAction*> languageActions;
     languageActions << m_chineseAction << m_englishAction;
     for (QAction* action : languageActions) {
@@ -1265,12 +1279,12 @@ void MainWindow::buildSettingsMenu() {
     connect(m_chineseAction, SIGNAL(triggered()), this, SLOT(setLanguageChinese()));
     connect(m_englishAction, SIGNAL(triggered()), this, SLOT(setLanguageEnglish()));
 
-    auto* themeMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Theme));
-    auto* themeGroup = new QActionGroup(themeMenu);
+    m_themeMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Theme));
+    auto* themeGroup = new QActionGroup(m_themeMenu);
     themeGroup->setExclusive(true);
-    m_themeSystemAction = themeMenu->addAction(uiText(UiText::Key::ThemeSystem));
-    m_themeLightAction = themeMenu->addAction(uiText(UiText::Key::ThemeLight));
-    m_themeDarkAction = themeMenu->addAction(uiText(UiText::Key::ThemeDark));
+    m_themeSystemAction = m_themeMenu->addAction(uiText(UiText::Key::ThemeSystem));
+    m_themeLightAction = m_themeMenu->addAction(uiText(UiText::Key::ThemeLight));
+    m_themeDarkAction = m_themeMenu->addAction(uiText(UiText::Key::ThemeDark));
     QList<QAction*> themeActions;
     themeActions << m_themeSystemAction << m_themeLightAction << m_themeDarkAction;
     for (QAction* action : themeActions) {
@@ -1309,14 +1323,22 @@ void MainWindow::retranslateUi() {
         m_hotkeysEnabledAction->setText(uiText(UiText::Key::HotkeysEnabled));
         m_hotkeysEnabledAction->setChecked(m_document.settings.hotkeysEnabled);
     }
+    if (m_updatesEnabledAction) {
+        const QSignalBlocker blocker(m_updatesEnabledAction);
+        m_updatesEnabledAction->setText(uiText(UiText::Key::UpdatesEnabled));
+        m_updatesEnabledAction->setChecked(m_document.settings.updatesEnabled);
+    }
+    if (m_checkUpdatesAction) {
+        m_checkUpdatesAction->setText(uiText(UiText::Key::CheckForUpdates));
+    }
     if (m_hotkeyListAction) {
         m_hotkeyListAction->setText(uiText(UiText::Key::HotkeyList));
     }
-    if (m_settingsMenu && m_settingsMenu->actions().size() > 2 && m_settingsMenu->actions().at(2)->menu()) {
-        m_settingsMenu->actions().at(2)->menu()->setTitle(uiText(UiText::Key::Language));
+    if (m_languageMenu) {
+        m_languageMenu->setTitle(uiText(UiText::Key::Language));
     }
-    if (m_settingsMenu && m_settingsMenu->actions().size() > 3 && m_settingsMenu->actions().at(3)->menu()) {
-        m_settingsMenu->actions().at(3)->menu()->setTitle(uiText(UiText::Key::Theme));
+    if (m_themeMenu) {
+        m_themeMenu->setTitle(uiText(UiText::Key::Theme));
     }
     if (m_itemAppearanceAction) {
         m_itemAppearanceAction->setText(uiText(UiText::Key::ItemAppearance));
@@ -1410,6 +1432,61 @@ void MainWindow::setThemeLight() {
 
 void MainWindow::setThemeDark() {
     setThemeMode("dark");
+}
+
+void MainWindow::setUpdatesEnabled(bool enabled) {
+    if (m_document.settings.updatesEnabled != enabled) {
+        m_document.settings.updatesEnabled = enabled;
+        saveDocumentSilently();
+    }
+    if (m_updatesEnabledAction && m_updatesEnabledAction->isChecked() != enabled) {
+        const QSignalBlocker blocker(m_updatesEnabledAction);
+        m_updatesEnabledAction->setChecked(enabled);
+    }
+}
+
+void MainWindow::checkForUpdates() {
+    setStatus(uiText(UiText::Key::UpdateChecking));
+    m_updateChecker.checkNow(false);
+}
+
+void MainWindow::onUpdateCheckFinished(bool updateAvailable, QString latestVersion, QString downloadUrl,
+                                       QString releaseNotes, QString error, bool silent) {
+    if (!error.isEmpty()) {
+        if (!silent) {
+            showWarning(this, language(), uiText(UiText::Key::CheckForUpdates),
+                        uiText(UiText::Key::UpdateFailed).arg(error));
+            setStatus(uiText(UiText::Key::UpdateFailed).arg(error));
+        }
+        return;
+    }
+
+    if (!updateAvailable) {
+        if (!silent) {
+            QMessageBox box(QMessageBox::Information, uiText(UiText::Key::CheckForUpdates),
+                            uiText(UiText::Key::UpdateNotAvailable).arg(latestVersion), QMessageBox::Ok, this);
+            if (QAbstractButton* button = box.button(QMessageBox::Ok)) {
+                button->setText(uiText(UiText::Key::Ok));
+            }
+            box.exec();
+            setStatus(uiText(UiText::Key::UpdateNotAvailable).arg(latestVersion));
+        }
+        return;
+    }
+
+    const QString notes = releaseNotes.isEmpty() ? downloadUrl : releaseNotes;
+    QMessageBox box(
+        QMessageBox::Information, uiText(UiText::Key::UpdateAvailableTitle),
+        uiText(UiText::Key::UpdateAvailableMessage).arg(latestVersion, m_updateChecker.currentVersion(), notes),
+        QMessageBox::NoButton, this);
+    QPushButton* openButton = box.addButton(uiText(UiText::Key::OpenDownloadPage), QMessageBox::AcceptRole);
+    QPushButton* cancelButton = box.addButton(uiText(UiText::Key::Cancel), QMessageBox::RejectRole);
+    box.exec();
+    if (box.clickedButton() == openButton && !downloadUrl.isEmpty()) {
+        QDesktopServices::openUrl(QUrl(downloadUrl));
+    }
+    Q_UNUSED(cancelButton);
+    setStatus(QString("%1: %2").arg(uiText(UiText::Key::UpdateAvailableTitle), latestVersion));
 }
 
 void MainWindow::setHotkeysPaused(bool paused) {
