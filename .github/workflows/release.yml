@@ -16,70 +16,195 @@ permissions:
 
 env:
   QT_VERSION: 6.8.3
-  QT_ARCH: win64_msvc2022_64
-  BUILD_DIR: out/build/github-qt6.8.3-msvc2022-dynamic-x64
-  ARTIFACT_NAME: WStart-qt6.8.3-msvc2022-dynamic-x64
   UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/update.json
 
 jobs:
-  release-main-variant:
-    name: Build and publish Qt 6.8.3 / MSVC 2022 / dynamic / x64
-    runs-on: windows-2022
+  build-packages:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows / Qt 6.8.3 / MSVC / x64
+            os: windows-2022
+            qt-host: windows
+            qt-arch: win64_msvc2022_64
+            qt-dir: msvc2022_64
+            build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64
+            artifact-name: WStart-qt6.8.3-windows-msvc2022-dynamic-x64
+          - name: macOS / Qt 6.8.3 / clang
+            os: macos-14
+            qt-host: mac
+            qt-arch: clang_64
+            qt-dir: clang_64
+            build-dir: out/build/release-macos-qt6.8.3-clang
+            artifact-name: WStart-qt6.8.3-macos-clang
+          - name: Linux / Qt 6.8.3 / gcc / x64
+            os: ubuntu-22.04
+            qt-host: linux
+            qt-arch: gcc_64
+            qt-dir: gcc_64
+            build-dir: out/build/release-linux-qt6.8.3-gcc-x64
+            artifact-name: WStart-qt6.8.3-linux-gcc-x64
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      - name: Resolve release tag
-        id: release_tag
-        shell: pwsh
+      - name: Install Linux system packages
+        if: runner.os == 'Linux'
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            "tag=${{ inputs.tag }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          } else {
-            "tag=${{ github.ref_name }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          }
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install macOS system packages
+        if: runner.os == 'macOS'
+        run: brew install ninja
 
       - name: Install Qt
         shell: pwsh
         run: |
           python -m pip install --upgrade pip aqtinstall
-          python -m aqt install-qt windows desktop "$env:QT_VERSION" "$env:QT_ARCH" --outputdir "$env:RUNNER_TEMP\Qt"
-          "QT_PREFIX=$env:RUNNER_TEMP\Qt\$env:QT_VERSION\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "$env:RUNNER_TEMP\Qt\$env:QT_VERSION\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          python -m aqt install-qt "${{ matrix.qt-host }}" desktop "$env:QT_VERSION" "${{ matrix.qt-arch }}" --outputdir "$env:RUNNER_TEMP/Qt"
+          "QT_PREFIX=$env:RUNNER_TEMP/Qt/$env:QT_VERSION/${{ matrix.qt-dir }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$env:RUNNER_TEMP/Qt/$env:QT_VERSION/${{ matrix.qt-dir }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-      - name: Configure
+      - name: Configure Windows
+        if: runner.os == 'Windows'
         shell: pwsh
-        run: >
-          cmake -S . -B "$env:BUILD_DIR"
-          -G "Visual Studio 17 2022" -A x64
-          -DCMAKE_PREFIX_PATH="$env:QT_PREFIX"
-          -DHKM_QT_MAJOR=6
-          -DHKM_DEPLOY_QT_RUNTIME=ON
-          -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL"
+        run: |
+          cmake -S . -B "${{ matrix.build-dir }}" `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
+            -DHKM_QT_MAJOR=6 `
+            -DHKM_DEPLOY_QT_RUNTIME=ON `
+            -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL"
+
+      - name: Configure Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cmake -S . -B "${{ matrix.build-dir }}" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
+            -DHKM_QT_MAJOR=6 \
+            -DHKM_DEPLOY_QT_RUNTIME=OFF \
+            -DHKM_UPDATE_MANIFEST_URL="$UPDATE_MANIFEST_URL"
 
       - name: Build
         shell: pwsh
-        run: cmake --build "$env:BUILD_DIR" --config Release --parallel
+        run: cmake --build "${{ matrix.build-dir }}" --config Release --parallel
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir "$env:BUILD_DIR" -C Release --output-on-failure
+        run: ctest --test-dir "${{ matrix.build-dir }}" -C Release --output-on-failure
 
-      - name: Package
+      - name: Package Windows zip
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $packageRoot = Join-Path $env:RUNNER_TEMP $env:ARTIFACT_NAME
+          $artifactName = "${{ matrix.artifact-name }}"
+          $packageRoot = Join-Path $env:RUNNER_TEMP $artifactName
           New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
-          Copy-Item -Path (Join-Path $env:BUILD_DIR "Release\*") -Destination $packageRoot -Recurse -Force
-          Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath "$env:ARTIFACT_NAME.zip" -Force
+          Copy-Item -Path (Join-Path "${{ matrix.build-dir }}" "Release\*") -Destination $packageRoot -Recurse -Force
+          $packagePath = Join-Path (Get-Location) "$artifactName.zip"
+          Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $packagePath -Force
+          "PACKAGE_PATH=$packagePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Package macOS dmg
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_name="${{ matrix.artifact-name }}"
+          app_path="${{ matrix.build-dir }}/WStart.app"
+          package_path="$PWD/${artifact_name}.dmg"
+          test -d "$app_path"
+          "$QT_PREFIX/bin/macdeployqt" "$app_path" -verbose=2
+          hdiutil create -volname WStart -srcfolder "$app_path" -ov -format UDZO "$package_path"
+          echo "PACKAGE_PATH=$package_path" >> "$GITHUB_ENV"
+
+      - name: Package Linux tarball
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_name="${{ matrix.artifact-name }}"
+          package_root="$RUNNER_TEMP/$artifact_name"
+          install_root="$package_root/WStart"
+          cmake --install "${{ matrix.build-dir }}" --prefix "$install_root"
+
+          mkdir -p "$install_root/lib" "$install_root/plugins" "$install_root/bin"
+
+          copy_qt_deps() {
+            local target="$1"
+            if [[ ! -f "$target" ]]; then
+              return
+            fi
+            ldd "$target" | awk '{ if ($3 ~ /^\/.*\/Qt\/.*\.so/) print $3; }' | while read -r dep; do
+              cp -L -n "$dep" "$install_root/lib/" || true
+            done
+          }
+
+          for plugin_type in platforms imageformats iconengines styles tls networkinformation; do
+            if [[ -d "$QT_PREFIX/plugins/$plugin_type" ]]; then
+              mkdir -p "$install_root/plugins/$plugin_type"
+              cp -R "$QT_PREFIX/plugins/$plugin_type/." "$install_root/plugins/$plugin_type/"
+            fi
+          done
+
+          copy_qt_deps "$install_root/bin/WStart"
+          for pass in 1 2 3; do
+            while IFS= read -r -d '' file; do
+              copy_qt_deps "$file"
+            done < <(find "$install_root/plugins" "$install_root/lib" -type f \( -name "*.so" -o -name "*.so.*" \) -print0)
+          done
+
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' 'set -euo pipefail'
+            printf '%s\n' 'APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
+            printf '%s\n' 'export LD_LIBRARY_PATH="$APP_DIR/lib:${LD_LIBRARY_PATH:-}"'
+            printf '%s\n' 'export QT_PLUGIN_PATH="$APP_DIR/plugins"'
+            printf '%s\n' 'exec "$APP_DIR/bin/WStart" "$@"'
+          } > "$install_root/wstart.sh"
+          chmod +x "$install_root/wstart.sh"
+
+          package_path="$PWD/${artifact_name}.tar.gz"
+          tar -C "$package_root" -czf "$package_path" WStart
+          echo "PACKAGE_PATH=$package_path" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ env.PACKAGE_PATH }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-22.04
+    needs: build-packages
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -la dist
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_tag.outputs.tag }}
-          name: WStart ${{ steps.release_tag.outputs.tag }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: WStart ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           draft: false
           prerelease: false
-          files: ${{ env.ARTIFACT_NAME }}.zip
+          files: dist/*

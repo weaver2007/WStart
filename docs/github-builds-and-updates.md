@@ -20,7 +20,7 @@ global hotkeys remain disabled until platform-specific backends are implemented.
 
 ## Releases
 
-`.github/workflows/release.yml` publishes the primary variant when a tag matching `v*` is pushed:
+`.github/workflows/release.yml` publishes release packages when a tag matching `v*` is pushed:
 
 ```powershell
 git tag v0.2.0
@@ -29,6 +29,16 @@ git push origin v0.2.0
 
 It can also be started manually with `workflow_dispatch` and a tag input. Normal pushes to `main` do not create tags or
 releases automatically.
+
+The release workflow currently attaches these assets to the GitHub Release:
+
+- `WStart-qt6.8.3-windows-msvc2022-dynamic-x64.zip`
+- `WStart-qt6.8.3-macos-clang.dmg`
+- `WStart-qt6.8.3-linux-gcc-x64.tar.gz`
+
+The macOS package is an unsigned `.dmg` generated from `WStart.app` with `macdeployqt`. The Linux package is a portable
+`.tar.gz` containing the installed executable, Qt libraries/plugins copied from the GitHub-hosted Qt installation, the
+desktop file, the SVG icon, and a `wstart.sh` launcher script.
 
 ## Update manifest
 
