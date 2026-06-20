@@ -11,26 +11,44 @@ public:
     typedef QMap<QString, QJsonValue>::const_iterator const_iterator;
 
     QJsonObject() {}
-    QJsonObject(std::initializer_list<QPair<QString, QJsonValue> > values)
-    {
-        for (std::initializer_list<QPair<QString, QJsonValue> >::const_iterator it = values.begin(); it != values.end(); ++it) {
+    QJsonObject(std::initializer_list<QPair<QString, QJsonValue>> values) {
+        for (std::initializer_list<QPair<QString, QJsonValue>>::const_iterator it = values.begin(); it != values.end();
+             ++it) {
             m_values.insert(it->first, it->second);
         }
     }
 
-    bool contains(const QString &key) const { return m_values.contains(key); }
-    bool isEmpty() const { return m_values.isEmpty(); }
-    void remove(const QString &key) { m_values.remove(key); }
-    QJsonValue value(const QString &key) const { return m_values.value(key); }
-    QJsonValue &operator[](const QString &key) { return m_values[key]; }
+    bool contains(const QString& key) const {
+        return m_values.contains(key);
+    }
+    bool isEmpty() const {
+        return m_values.isEmpty();
+    }
+    void remove(const QString& key) {
+        m_values.remove(key);
+    }
+    QJsonValue value(const QString& key) const {
+        return m_values.value(key);
+    }
+    QJsonValue& operator[](const QString& key) {
+        return m_values[key];
+    }
 
-    iterator begin() { return m_values.begin(); }
-    iterator end() { return m_values.end(); }
-    const_iterator begin() const { return m_values.begin(); }
-    const_iterator end() const { return m_values.end(); }
+    iterator begin() {
+        return m_values.begin();
+    }
+    iterator end() {
+        return m_values.end();
+    }
+    const_iterator begin() const {
+        return m_values.begin();
+    }
+    const_iterator end() const {
+        return m_values.end();
+    }
 
     QVariantMap toVariantMap() const;
-    static QJsonObject fromVariantMap(const QVariantMap &values);
+    static QJsonObject fromVariantMap(const QVariantMap& values);
 
 private:
     QMap<QString, QJsonValue> m_values;

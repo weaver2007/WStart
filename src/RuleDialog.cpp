@@ -14,15 +14,10 @@
 #include <QUuid>
 #include <QVBoxLayout>
 
-RuleDialog::RuleDialog(QWidget *parent)
-    : RuleDialog("zh-CN", parent)
-{
-}
+RuleDialog::RuleDialog(QWidget* parent) : RuleDialog("zh-CN", parent) {}
 
-RuleDialog::RuleDialog(const QString &language, QWidget *parent)
-    : QDialog(parent)
-    , m_language(UiText::normalizeLanguage(language))
-{
+RuleDialog::RuleDialog(const QString& language, QWidget* parent)
+    : QDialog(parent), m_language(UiText::normalizeLanguage(language)) {
     resize(520, 300);
 
     m_hotkeyEdit = new HotkeyEdit(this);
@@ -31,62 +26,60 @@ RuleDialog::RuleDialog(const QString &language, QWidget *parent)
     m_workingDirectoryEdit = new QLineEdit(this);
     m_descriptionEdit = new QLineEdit(this);
 
-    auto *recordButton = new QPushButton(uiText(UiText::Key::Record), this);
+    auto* recordButton = new QPushButton(uiText(UiText::Key::Record), this);
     connect(recordButton, SIGNAL(clicked()), m_hotkeyEdit, SLOT(beginRecording()));
-    auto *checkHotkeyButton = new QPushButton(uiText(UiText::Key::HotkeyCheck), this);
+    auto* checkHotkeyButton = new QPushButton(uiText(UiText::Key::HotkeyCheck), this);
     connect(checkHotkeyButton, SIGNAL(clicked()), this, SLOT(checkHotkeyOccupancy()));
 
     m_browseButton = new QPushButton(uiText(UiText::Key::Browse), this);
     connect(m_browseButton, SIGNAL(clicked()), this, SLOT(browseTarget()));
 
-    auto *hotkeyLayout = new QHBoxLayout;
+    auto* hotkeyLayout = new QHBoxLayout;
     hotkeyLayout->addWidget(m_hotkeyEdit, 1);
     hotkeyLayout->addWidget(recordButton);
     hotkeyLayout->addWidget(checkHotkeyButton);
 
-    auto *targetLayout = new QHBoxLayout;
+    auto* targetLayout = new QHBoxLayout;
     targetLayout->addWidget(m_targetEdit);
     targetLayout->addWidget(m_browseButton);
 
     m_argumentsRow = new QWidget(this);
-    auto *argumentsLayout = new QHBoxLayout(m_argumentsRow);
+    auto* argumentsLayout = new QHBoxLayout(m_argumentsRow);
     argumentsLayout->setContentsMargins(0, 0, 0, 0);
     argumentsLayout->addWidget(m_argumentsEdit);
 
     m_workingDirectoryRow = new QWidget(this);
-    auto *workingDirectoryLayout = new QHBoxLayout(m_workingDirectoryRow);
+    auto* workingDirectoryLayout = new QHBoxLayout(m_workingDirectoryRow);
     workingDirectoryLayout->setContentsMargins(0, 0, 0, 0);
     workingDirectoryLayout->addWidget(m_workingDirectoryEdit);
 
-    auto *form = new QFormLayout;
+    auto* form = new QFormLayout;
     form->addRow(uiText(UiText::Key::Description), m_descriptionEdit);
     form->addRow(uiText(UiText::Key::Target), targetLayout);
     form->addRow(uiText(UiText::Key::Arguments), m_argumentsRow);
     form->addRow(uiText(UiText::Key::WorkingDirectory), m_workingDirectoryRow);
     form->addRow(uiText(UiText::Key::Hotkey), hotkeyLayout);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, this);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, this);
     buttons->button(QDialogButtonBox::Ok)->setText(uiText(UiText::Key::Ok));
     buttons->button(QDialogButtonBox::Cancel)->setText(uiText(UiText::Key::Cancel));
     connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
     connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
 
-    auto *layout = new QVBoxLayout(this);
+    auto* layout = new QVBoxLayout(this);
     layout->addLayout(form);
     layout->addWidget(buttons);
 
     updateUiForCategory();
 }
 
-void RuleDialog::setContext(LauncherCategory category, const QString &sectionId)
-{
+void RuleDialog::setContext(LauncherCategory category, const QString& sectionId) {
     m_category = category;
     m_sectionId = sectionId;
     updateUiForCategory();
 }
 
-void RuleDialog::setRule(const HotkeyRule &rule)
-{
+void RuleDialog::setRule(const HotkeyRule& rule) {
     m_rule = rule;
     m_category = rule.category;
     m_sectionId = rule.sectionId;
@@ -98,8 +91,7 @@ void RuleDialog::setRule(const HotkeyRule &rule)
     updateUiForCategory();
 }
 
-HotkeyRule RuleDialog::rule() const
-{
+HotkeyRule RuleDialog::rule() const {
     HotkeyRule result = m_rule;
     if (result.id.isEmpty()) {
         result.id = QtCompat::uuidWithoutBraces();
@@ -111,7 +103,8 @@ HotkeyRule RuleDialog::rule() const
     result.action.type = actionTypeForCategory();
     result.action.target = m_targetEdit->text().trimmed();
     result.action.arguments = m_category == LauncherCategory::Program ? m_argumentsEdit->text().trimmed() : QString();
-    result.action.workingDirectory = m_category == LauncherCategory::Program ? m_workingDirectoryEdit->text().trimmed() : QString();
+    result.action.workingDirectory =
+        m_category == LauncherCategory::Program ? m_workingDirectoryEdit->text().trimmed() : QString();
     if (m_category == LauncherCategory::Program && result.action.workingDirectory.isEmpty()) {
         const QFileInfo targetInfo(result.action.target);
         if (targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && !targetInfo.absolutePath().isEmpty()) {
@@ -122,8 +115,7 @@ HotkeyRule RuleDialog::rule() const
     return result;
 }
 
-void RuleDialog::browseTarget()
-{
+void RuleDialog::browseTarget() {
     QString selected;
     if (m_category == LauncherCategory::Folder) {
         selected = QFileDialog::getExistingDirectory(this, uiText(UiText::Key::SelectFolder));
@@ -136,36 +128,35 @@ void RuleDialog::browseTarget()
         m_targetEdit->setText(selected);
         if (m_category == LauncherCategory::Program) {
             const QFileInfo selectedInfo(selected);
-            if (selectedInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && m_descriptionEdit->text().trimmed().isEmpty()) {
+            if (selectedInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 &&
+                m_descriptionEdit->text().trimmed().isEmpty()) {
                 m_descriptionEdit->setText(selectedInfo.completeBaseName());
             }
-            if (selectedInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && m_workingDirectoryEdit->text().trimmed().isEmpty()) {
+            if (selectedInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 &&
+                m_workingDirectoryEdit->text().trimmed().isEmpty()) {
                 m_workingDirectoryEdit->setText(selectedInfo.absolutePath());
             }
         }
     }
 }
 
-void RuleDialog::checkHotkeyOccupancy()
-{
+void RuleDialog::checkHotkeyOccupancy() {
     const HotkeyConflictDetector::Result result = HotkeyConflictDetector::check(m_hotkeyEdit->hotkey(), m_language);
     const QMessageBox::Icon icon = result.availability == HotkeyConflictDetector::Availability::Available
-        ? QMessageBox::Information
-        : QMessageBox::Warning;
+                                       ? QMessageBox::Information
+                                       : QMessageBox::Warning;
     QMessageBox box(icon, uiText(UiText::Key::HotkeyCheck), result.notes.join("\n"), QMessageBox::Ok, this);
-    if (QAbstractButton *button = box.button(QMessageBox::Ok)) {
+    if (QAbstractButton* button = box.button(QMessageBox::Ok)) {
         button->setText(uiText(UiText::Key::Ok));
     }
     box.exec();
 }
 
-QString RuleDialog::uiText(UiText::Key key) const
-{
+QString RuleDialog::uiText(UiText::Key key) const {
     return UiText::text(m_language, key);
 }
 
-void RuleDialog::updateUiForCategory()
-{
+void RuleDialog::updateUiForCategory() {
     QString title;
     QString placeholder;
     switch (m_category) {
@@ -199,8 +190,7 @@ void RuleDialog::updateUiForCategory()
     m_hotkeyEdit->setPlaceholderText(uiText(UiText::Key::HotkeyPlaceholder));
 }
 
-LaunchActionType RuleDialog::actionTypeForCategory() const
-{
+LaunchActionType RuleDialog::actionTypeForCategory() const {
     switch (m_category) {
     case LauncherCategory::Program:
         return LaunchActionType::Application;

@@ -22,18 +22,19 @@ struct WindowSearch {
     HWND window = nullptr;
 };
 
-QString fromWideString(const wchar_t *value, int length = -1)
-{
-    return QString::fromUtf16(reinterpret_cast<const ushort *>(value), length);
+QString fromWideString(const wchar_t* value, int length = -1) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    return QString::fromUtf16(reinterpret_cast<const char16_t*>(value), length);
+#else
+    return QString::fromUtf16(reinterpret_cast<const ushort*>(value), length);
+#endif
 }
 
-std::wstring toWideString(const QString &value)
-{
-    return std::wstring(reinterpret_cast<const wchar_t *>(value.utf16()), static_cast<size_t>(value.length()));
+std::wstring toWideString(const QString& value) {
+    return std::wstring(reinterpret_cast<const wchar_t*>(value.utf16()), static_cast<size_t>(value.length()));
 }
 
-QString processImagePath(DWORD processId)
-{
+QString processImagePath(DWORD processId) {
     HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
     if (!process) {
         return {};
@@ -41,7 +42,8 @@ QString processImagePath(DWORD processId)
 
     wchar_t buffer[MAX_PATH * 4] = {};
     QString path;
-    const DWORD size = GetModuleFileNameExW(process, nullptr, buffer, static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0])));
+    const DWORD size =
+        GetModuleFileNameExW(process, nullptr, buffer, static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0])));
     if (size > 0) {
         path = fromWideString(buffer, static_cast<int>(size));
     }
@@ -49,9 +51,8 @@ QString processImagePath(DWORD processId)
     return QDir::toNativeSeparators(path);
 }
 
-BOOL CALLBACK enumWindowsForProcessPath(HWND window, LPARAM parameter)
-{
-    auto *search = reinterpret_cast<WindowSearch *>(parameter);
+BOOL CALLBACK enumWindowsForProcessPath(HWND window, LPARAM parameter) {
+    auto* search = reinterpret_cast<WindowSearch*>(parameter);
     if (!search || !IsWindowVisible(window)) {
         return TRUE;
     }
@@ -76,8 +77,7 @@ BOOL CALLBACK enumWindowsForProcessPath(HWND window, LPARAM parameter)
     return FALSE;
 }
 
-bool forceForegroundWindow(HWND window)
-{
+bool forceForegroundWindow(HWND window) {
     if (!window) {
         return false;
     }
@@ -113,16 +113,14 @@ bool forceForegroundWindow(HWND window)
     return GetForegroundWindow() == window;
 }
 
-bool activateExistingApplicationWindow(const QString &target)
-{
+bool activateExistingApplicationWindow(const QString& target) {
     const QFileInfo fileInfo(target);
     if (!fileInfo.exists() || fileInfo.suffix().compare("exe", Qt::CaseInsensitive) != 0) {
         return false;
     }
 
-    const QString targetPath = QDir::toNativeSeparators(fileInfo.canonicalFilePath().isEmpty()
-        ? fileInfo.absoluteFilePath()
-        : fileInfo.canonicalFilePath());
+    const QString targetPath = QDir::toNativeSeparators(
+        fileInfo.canonicalFilePath().isEmpty() ? fileInfo.absoluteFilePath() : fileInfo.canonicalFilePath());
 
     for (int attempt = 0; attempt < 8; ++attempt) {
         WindowSearch search;
@@ -137,16 +135,12 @@ bool activateExistingApplicationWindow(const QString &target)
     return false;
 }
 
-}
+} // namespace
 #endif
 
-ActionRunner::ActionRunner(QObject *parent)
-    : QObject(parent)
-{
-}
+ActionRunner::ActionRunner(QObject* parent) : QObject(parent) {}
 
-bool ActionRunner::run(const LaunchAction &action, QString *error) const
-{
+bool ActionRunner::run(const LaunchAction& action, QString* error) const {
     if (!action.isValid()) {
         if (error) {
             *error = "Action target is empty.";

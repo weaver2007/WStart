@@ -15,8 +15,7 @@
 
 namespace {
 
-QString normalizedOptionalColor(const QString &value)
-{
+QString normalizedOptionalColor(const QString& value) {
     const QString trimmed = value.trimmed();
     if (trimmed.isEmpty()) {
         return {};
@@ -25,15 +24,13 @@ QString normalizedOptionalColor(const QString &value)
     return color.isValid() ? color.name() : QString();
 }
 
-}
+} // namespace
 
-bool HotkeyCombination::isValid() const
-{
+bool HotkeyCombination::isValid() const {
     return key > 0 && !isModifierKey(key);
 }
 
-QString HotkeyCombination::displayText() const
-{
+QString HotkeyCombination::displayText() const {
     QStringList parts;
     if (modifiers.testFlag(ModifierCtrl)) {
         parts << "Ctrl";
@@ -53,30 +50,22 @@ QString HotkeyCombination::displayText() const
     return parts.join("+");
 }
 
-QString HotkeyCombination::stableId() const
-{
+QString HotkeyCombination::stableId() const {
     return QString("%1:%2").arg(static_cast<int>(modifiers)).arg(key);
 }
 
-QJsonObject HotkeyCombination::toJson() const
-{
-    return {
-        {"modifiers", static_cast<int>(modifiers)},
-        {"key", key},
-        {"displayText", displayText()}
-    };
+QJsonObject HotkeyCombination::toJson() const {
+    return {{"modifiers", static_cast<int>(modifiers)}, {"key", key}, {"displayText", displayText()}};
 }
 
-HotkeyCombination HotkeyCombination::fromJson(const QJsonObject &object)
-{
+HotkeyCombination HotkeyCombination::fromJson(const QJsonObject& object) {
     HotkeyCombination hotkey;
     hotkey.modifiers = HotkeyModifiers(QFlag(object.value("modifiers").toInt()));
     hotkey.key = object.value("key").toInt();
     return hotkey;
 }
 
-QString HotkeyCombination::keyName(int virtualKey)
-{
+QString HotkeyCombination::keyName(int virtualKey) {
 #ifdef Q_OS_WIN
     if (virtualKey >= VK_F1 && virtualKey <= VK_F24) {
         return QString("F%1").arg(virtualKey - VK_F1 + 1);
@@ -88,40 +77,66 @@ QString HotkeyCombination::keyName(int virtualKey)
         return QString(QChar(static_cast<ushort>(virtualKey)));
     }
     switch (virtualKey) {
-    case VK_SPACE: return "Space";
-    case VK_TAB: return "Tab";
-    case VK_ESCAPE: return "Esc";
-    case VK_RETURN: return "Enter";
-    case VK_BACK: return "Backspace";
-    case VK_DELETE: return "Delete";
-    case VK_INSERT: return "Insert";
-    case VK_HOME: return "Home";
-    case VK_END: return "End";
-    case VK_PRIOR: return "PageUp";
-    case VK_NEXT: return "PageDown";
-    case VK_LEFT: return "Left";
-    case VK_RIGHT: return "Right";
-    case VK_UP: return "Up";
-    case VK_DOWN: return "Down";
-    case VK_OEM_MINUS: return "-";
-    case VK_OEM_PLUS: return "=";
-    case VK_OEM_4: return "[";
-    case VK_OEM_6: return "]";
-    case VK_OEM_5: return "\\";
-    case VK_OEM_1: return ";";
-    case VK_OEM_7: return "'";
-    case VK_OEM_COMMA: return ",";
-    case VK_OEM_PERIOD: return ".";
-    case VK_OEM_2: return "/";
-    case VK_OEM_3: return "`";
-    default: break;
+    case VK_SPACE:
+        return "Space";
+    case VK_TAB:
+        return "Tab";
+    case VK_ESCAPE:
+        return "Esc";
+    case VK_RETURN:
+        return "Enter";
+    case VK_BACK:
+        return "Backspace";
+    case VK_DELETE:
+        return "Delete";
+    case VK_INSERT:
+        return "Insert";
+    case VK_HOME:
+        return "Home";
+    case VK_END:
+        return "End";
+    case VK_PRIOR:
+        return "PageUp";
+    case VK_NEXT:
+        return "PageDown";
+    case VK_LEFT:
+        return "Left";
+    case VK_RIGHT:
+        return "Right";
+    case VK_UP:
+        return "Up";
+    case VK_DOWN:
+        return "Down";
+    case VK_OEM_MINUS:
+        return "-";
+    case VK_OEM_PLUS:
+        return "=";
+    case VK_OEM_4:
+        return "[";
+    case VK_OEM_6:
+        return "]";
+    case VK_OEM_5:
+        return "\\";
+    case VK_OEM_1:
+        return ";";
+    case VK_OEM_7:
+        return "'";
+    case VK_OEM_COMMA:
+        return ",";
+    case VK_OEM_PERIOD:
+        return ".";
+    case VK_OEM_2:
+        return "/";
+    case VK_OEM_3:
+        return "`";
+    default:
+        break;
     }
 #endif
     return QString("VK_%1").arg(virtualKey);
 }
 
-bool HotkeyCombination::isModifierKey(int virtualKey)
-{
+bool HotkeyCombination::isModifierKey(int virtualKey) {
 #ifdef Q_OS_WIN
     switch (virtualKey) {
     case VK_CONTROL:
@@ -145,34 +160,29 @@ bool HotkeyCombination::isModifierKey(int virtualKey)
 #endif
 }
 
-bool LaunchAction::isValid() const
-{
+bool LaunchAction::isValid() const {
     return !target.trimmed().isEmpty();
 }
 
-QString LaunchAction::typeName() const
-{
+QString LaunchAction::typeName() const {
     switch (type) {
-    case LaunchActionType::Application: return "Application";
-    case LaunchActionType::File: return "File";
-    case LaunchActionType::Folder: return "Folder";
-    case LaunchActionType::Url: return "Url";
+    case LaunchActionType::Application:
+        return "Application";
+    case LaunchActionType::File:
+        return "File";
+    case LaunchActionType::Folder:
+        return "Folder";
+    case LaunchActionType::Url:
+        return "Url";
     }
     return "Application";
 }
 
-QJsonObject LaunchAction::toJson() const
-{
-    return {
-        {"type", typeName()},
-        {"target", target},
-        {"arguments", arguments},
-        {"workingDirectory", workingDirectory}
-    };
+QJsonObject LaunchAction::toJson() const {
+    return {{"type", typeName()}, {"target", target}, {"arguments", arguments}, {"workingDirectory", workingDirectory}};
 }
 
-LaunchAction LaunchAction::fromJson(const QJsonObject &object)
-{
+LaunchAction LaunchAction::fromJson(const QJsonObject& object) {
     LaunchAction action;
     action.type = typeFromName(object.value("type").toString());
     action.target = object.value("target").toString();
@@ -181,8 +191,7 @@ LaunchAction LaunchAction::fromJson(const QJsonObject &object)
     return action;
 }
 
-LaunchActionType LaunchAction::typeFromName(const QString &name)
-{
+LaunchActionType LaunchAction::typeFromName(const QString& name) {
     if (name.compare("File", Qt::CaseInsensitive) == 0) {
         return LaunchActionType::File;
     }
@@ -195,32 +204,26 @@ LaunchActionType LaunchAction::typeFromName(const QString &name)
     return LaunchActionType::Application;
 }
 
-bool LauncherSection::isValid() const
-{
+bool LauncherSection::isValid() const {
     return !id.isEmpty() && !name.trimmed().isEmpty();
 }
 
-QString LauncherSection::categoryName() const
-{
+QString LauncherSection::categoryName() const {
     return categoryName(category);
 }
 
-QJsonObject LauncherSection::toJson() const
-{
-    return {
-        {"id", id},
-        {"category", categoryName()},
-        {"name", name},
-        {"iconKey", iconKey},
-        {"sortOrder", sortOrder},
-        {"encrypted", encrypted},
-        {"passwordHash", passwordHash},
-        {"collapsed", collapsed}
-    };
+QJsonObject LauncherSection::toJson() const {
+    return {{"id", id},
+            {"category", categoryName()},
+            {"name", name},
+            {"iconKey", iconKey},
+            {"sortOrder", sortOrder},
+            {"encrypted", encrypted},
+            {"passwordHash", passwordHash},
+            {"collapsed", collapsed}};
 }
 
-LauncherSection LauncherSection::fromJson(const QJsonObject &object)
-{
+LauncherSection LauncherSection::fromJson(const QJsonObject& object) {
     LauncherSection section;
     section.id = object.value("id").toString();
     if (section.id.isEmpty()) {
@@ -236,8 +239,7 @@ LauncherSection LauncherSection::fromJson(const QJsonObject &object)
     return section;
 }
 
-LauncherCategory LauncherSection::categoryFromName(const QString &name)
-{
+LauncherCategory LauncherSection::categoryFromName(const QString& name) {
     if (name.compare("Folder", Qt::CaseInsensitive) == 0) {
         return LauncherCategory::Folder;
     }
@@ -247,36 +249,33 @@ LauncherCategory LauncherSection::categoryFromName(const QString &name)
     return LauncherCategory::Program;
 }
 
-QString LauncherSection::categoryName(LauncherCategory category)
-{
+QString LauncherSection::categoryName(LauncherCategory category) {
     switch (category) {
-    case LauncherCategory::Program: return "Program";
-    case LauncherCategory::Folder: return "Folder";
-    case LauncherCategory::Website: return "Website";
+    case LauncherCategory::Program:
+        return "Program";
+    case LauncherCategory::Folder:
+        return "Folder";
+    case LauncherCategory::Website:
+        return "Website";
     }
     return "Program";
 }
 
-bool HotkeyRule::isValid() const
-{
+bool HotkeyRule::isValid() const {
     return !id.isEmpty() && !sectionId.isEmpty() && action.isValid();
 }
 
-QJsonObject HotkeyRule::toJson() const
-{
-    return {
-        {"id", id},
-        {"enabled", enabled},
-        {"category", LauncherSection::categoryName(category)},
-        {"sectionId", sectionId},
-        {"hotkey", hotkey.toJson()},
-        {"action", action.toJson()},
-        {"description", description}
-    };
+QJsonObject HotkeyRule::toJson() const {
+    return {{"id", id},
+            {"enabled", enabled},
+            {"category", LauncherSection::categoryName(category)},
+            {"sectionId", sectionId},
+            {"hotkey", hotkey.toJson()},
+            {"action", action.toJson()},
+            {"description", description}};
 }
 
-HotkeyRule HotkeyRule::fromJson(const QJsonObject &object)
-{
+HotkeyRule HotkeyRule::fromJson(const QJsonObject& object) {
     HotkeyRule rule;
     rule.id = object.value("id").toString();
     if (rule.id.isEmpty()) {
@@ -306,139 +305,120 @@ HotkeyRule HotkeyRule::fromJson(const QJsonObject &object)
     return rule;
 }
 
-QJsonObject AppSettings::toJson() const
-{
+QJsonObject AppSettings::toJson() const {
     const QString normalizedLanguage = language.compare("en-US", Qt::CaseInsensitive) == 0 ? "en-US" : "zh-CN";
-    const QString normalizedTheme = themeMode.compare("light", Qt::CaseInsensitive) == 0 ? "light" :
-        themeMode.compare("dark", Qt::CaseInsensitive) == 0 ? "dark" : "system";
-    return {
-        {"language", normalizedLanguage},
-        {"hotkeysEnabled", hotkeysEnabled},
-        {"themeMode", normalizedTheme},
-        {"itemAppearance", itemAppearance.toJson()},
-        {"sectionAppearance", sectionAppearance.toJson()},
-        {"categoryAppearance", categoryAppearance.toJson()}
-    };
+    const QString normalizedTheme = themeMode.compare("light", Qt::CaseInsensitive) == 0  ? "light"
+                                    : themeMode.compare("dark", Qt::CaseInsensitive) == 0 ? "dark"
+                                                                                          : "system";
+    return {{"language", normalizedLanguage},
+            {"hotkeysEnabled", hotkeysEnabled},
+            {"themeMode", normalizedTheme},
+            {"itemAppearance", itemAppearance.toJson()},
+            {"sectionAppearance", sectionAppearance.toJson()},
+            {"categoryAppearance", categoryAppearance.toJson()}};
 }
 
-QJsonObject LauncherItemAppearance::toJson() const
-{
-    LauncherItemAppearance normalized = LauncherItemAppearance::fromJson({
-        {"iconWidth", iconWidth},
-        {"iconHeight", iconHeight},
-        {"itemWidth", itemWidth},
-        {"itemHeight", itemHeight},
-        {"fontFamily", fontFamily},
-        {"fontPointSize", fontPointSize},
-        {"horizontalSpacing", horizontalSpacing},
-        {"verticalSpacing", verticalSpacing},
-        {"multilineText", multilineText},
-        {"showEllipsis", showEllipsis}
-    });
-    return {
-        {"iconWidth", normalized.iconWidth},
-        {"iconHeight", normalized.iconHeight},
-        {"itemWidth", normalized.itemWidth},
-        {"itemHeight", normalized.itemHeight},
-        {"fontFamily", normalized.fontFamily},
-        {"fontPointSize", normalized.fontPointSize},
-        {"horizontalSpacing", normalized.horizontalSpacing},
-        {"verticalSpacing", normalized.verticalSpacing},
-        {"multilineText", normalized.multilineText},
-        {"showEllipsis", normalized.showEllipsis}
-    };
+QJsonObject LauncherItemAppearance::toJson() const {
+    LauncherItemAppearance normalized = LauncherItemAppearance::fromJson({{"iconWidth", iconWidth},
+                                                                          {"iconHeight", iconHeight},
+                                                                          {"itemWidth", itemWidth},
+                                                                          {"itemHeight", itemHeight},
+                                                                          {"fontFamily", fontFamily},
+                                                                          {"fontPointSize", fontPointSize},
+                                                                          {"horizontalSpacing", horizontalSpacing},
+                                                                          {"verticalSpacing", verticalSpacing},
+                                                                          {"multilineText", multilineText},
+                                                                          {"showEllipsis", showEllipsis}});
+    return {{"iconWidth", normalized.iconWidth},
+            {"iconHeight", normalized.iconHeight},
+            {"itemWidth", normalized.itemWidth},
+            {"itemHeight", normalized.itemHeight},
+            {"fontFamily", normalized.fontFamily},
+            {"fontPointSize", normalized.fontPointSize},
+            {"horizontalSpacing", normalized.horizontalSpacing},
+            {"verticalSpacing", normalized.verticalSpacing},
+            {"multilineText", normalized.multilineText},
+            {"showEllipsis", normalized.showEllipsis}};
 }
 
-LauncherItemAppearance LauncherItemAppearance::fromJson(const QJsonObject &object)
-{
+LauncherItemAppearance LauncherItemAppearance::fromJson(const QJsonObject& object) {
     LauncherItemAppearance appearance;
     appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 16, 128);
     appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 16, 128);
     appearance.itemWidth = QtCompat::boundedInt(object.value("itemWidth").toInt(appearance.itemWidth), 40, 180);
     appearance.itemHeight = QtCompat::boundedInt(object.value("itemHeight").toInt(appearance.itemHeight), 44, 220);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
-    appearance.fontPointSize = QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
-    appearance.horizontalSpacing = QtCompat::boundedInt(object.value("horizontalSpacing").toInt(appearance.horizontalSpacing), 0, 40);
-    appearance.verticalSpacing = QtCompat::boundedInt(object.value("verticalSpacing").toInt(appearance.verticalSpacing), 0, 40);
+    appearance.fontPointSize =
+        QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.horizontalSpacing =
+        QtCompat::boundedInt(object.value("horizontalSpacing").toInt(appearance.horizontalSpacing), 0, 40);
+    appearance.verticalSpacing =
+        QtCompat::boundedInt(object.value("verticalSpacing").toInt(appearance.verticalSpacing), 0, 40);
     appearance.multilineText = object.value("multilineText").toBool(appearance.multilineText);
     appearance.showEllipsis = object.value("showEllipsis").toBool(appearance.showEllipsis);
     return appearance;
 }
 
-QJsonObject LauncherSectionAppearance::toJson() const
-{
-    LauncherSectionAppearance normalized = LauncherSectionAppearance::fromJson({
-        {"iconWidth", iconWidth},
-        {"iconHeight", iconHeight},
-        {"headerHeight", headerHeight},
-        {"fontFamily", fontFamily},
-        {"fontPointSize", fontPointSize},
-        {"textColor", textColor}
-    });
-    return {
-        {"iconWidth", normalized.iconWidth},
-        {"iconHeight", normalized.iconHeight},
-        {"headerHeight", normalized.headerHeight},
-        {"fontFamily", normalized.fontFamily},
-        {"fontPointSize", normalized.fontPointSize},
-        {"textColor", normalized.textColor}
-    };
+QJsonObject LauncherSectionAppearance::toJson() const {
+    LauncherSectionAppearance normalized = LauncherSectionAppearance::fromJson({{"iconWidth", iconWidth},
+                                                                                {"iconHeight", iconHeight},
+                                                                                {"headerHeight", headerHeight},
+                                                                                {"fontFamily", fontFamily},
+                                                                                {"fontPointSize", fontPointSize},
+                                                                                {"textColor", textColor}});
+    return {{"iconWidth", normalized.iconWidth},         {"iconHeight", normalized.iconHeight},
+            {"headerHeight", normalized.headerHeight},   {"fontFamily", normalized.fontFamily},
+            {"fontPointSize", normalized.fontPointSize}, {"textColor", normalized.textColor}};
 }
 
-LauncherSectionAppearance LauncherSectionAppearance::fromJson(const QJsonObject &object)
-{
+LauncherSectionAppearance LauncherSectionAppearance::fromJson(const QJsonObject& object) {
     LauncherSectionAppearance appearance;
     appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
     appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
     appearance.headerHeight = QtCompat::boundedInt(object.value("headerHeight").toInt(appearance.headerHeight), 24, 96);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
-    appearance.fontPointSize = QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.fontPointSize =
+        QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
     appearance.textColor = normalizedOptionalColor(object.value("textColor").toString(appearance.textColor));
     return appearance;
 }
 
-QJsonObject LauncherCategoryAppearance::toJson() const
-{
-    LauncherCategoryAppearance normalized = LauncherCategoryAppearance::fromJson({
-        {"iconWidth", iconWidth},
-        {"iconHeight", iconHeight},
-        {"buttonHeight", buttonHeight},
-        {"fontFamily", fontFamily},
-        {"fontPointSize", fontPointSize},
-        {"textColor", textColor}
-    });
-    return {
-        {"iconWidth", normalized.iconWidth},
-        {"iconHeight", normalized.iconHeight},
-        {"buttonHeight", normalized.buttonHeight},
-        {"fontFamily", normalized.fontFamily},
-        {"fontPointSize", normalized.fontPointSize},
-        {"textColor", normalized.textColor}
-    };
+QJsonObject LauncherCategoryAppearance::toJson() const {
+    LauncherCategoryAppearance normalized = LauncherCategoryAppearance::fromJson({{"iconWidth", iconWidth},
+                                                                                  {"iconHeight", iconHeight},
+                                                                                  {"buttonHeight", buttonHeight},
+                                                                                  {"fontFamily", fontFamily},
+                                                                                  {"fontPointSize", fontPointSize},
+                                                                                  {"textColor", textColor}});
+    return {{"iconWidth", normalized.iconWidth},         {"iconHeight", normalized.iconHeight},
+            {"buttonHeight", normalized.buttonHeight},   {"fontFamily", normalized.fontFamily},
+            {"fontPointSize", normalized.fontPointSize}, {"textColor", normalized.textColor}};
 }
 
-LauncherCategoryAppearance LauncherCategoryAppearance::fromJson(const QJsonObject &object)
-{
+LauncherCategoryAppearance LauncherCategoryAppearance::fromJson(const QJsonObject& object) {
     LauncherCategoryAppearance appearance;
     appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
     appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
     appearance.buttonHeight = QtCompat::boundedInt(object.value("buttonHeight").toInt(appearance.buttonHeight), 24, 96);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
-    appearance.fontPointSize = QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
+    appearance.fontPointSize =
+        QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
     appearance.textColor = normalizedOptionalColor(object.value("textColor").toString(appearance.textColor));
     return appearance;
 }
 
-AppSettings AppSettings::fromJson(const QJsonObject &object)
-{
+AppSettings AppSettings::fromJson(const QJsonObject& object) {
     AppSettings settings;
     const QString languageValue = object.value("language").toString(settings.language);
     settings.language = languageValue.compare("en-US", Qt::CaseInsensitive) == 0 ||
-            languageValue.compare("en", Qt::CaseInsensitive) == 0 ? "en-US" : "zh-CN";
+                                languageValue.compare("en", Qt::CaseInsensitive) == 0
+                            ? "en-US"
+                            : "zh-CN";
     settings.hotkeysEnabled = object.value("hotkeysEnabled").toBool(true);
     const QString themeValue = object.value("themeMode").toString(settings.themeMode);
-    settings.themeMode = themeValue.compare("light", Qt::CaseInsensitive) == 0 ? "light" :
-        themeValue.compare("dark", Qt::CaseInsensitive) == 0 ? "dark" : "system";
+    settings.themeMode = themeValue.compare("light", Qt::CaseInsensitive) == 0  ? "light"
+                         : themeValue.compare("dark", Qt::CaseInsensitive) == 0 ? "dark"
+                                                                                : "system";
     settings.itemAppearance = LauncherItemAppearance::fromJson(object.value("itemAppearance").toObject());
     settings.sectionAppearance = LauncherSectionAppearance::fromJson(object.value("sectionAppearance").toObject());
     settings.categoryAppearance = LauncherCategoryAppearance::fromJson(object.value("categoryAppearance").toObject());

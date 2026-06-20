@@ -7,19 +7,16 @@
 
 class QGuiApplication {
 public:
-    static QScreen *primaryScreen()
-    {
+    static QScreen* primaryScreen() {
         static QScreen screen;
         return &screen;
     }
 
-    static QList<QScreen *> screens()
-    {
-        return QList<QScreen *>() << primaryScreen();
+    static QList<QScreen*> screens() {
+        return QList<QScreen*>() << primaryScreen();
     }
 
-    static QScreen *screenAt(const QPoint &point)
-    {
+    static QScreen* screenAt(const QPoint& point) {
         Q_UNUSED(point);
         return primaryScreen();
     }

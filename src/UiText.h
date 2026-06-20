@@ -141,8 +141,8 @@ enum class Key {
     SystemTrayUnavailable
 };
 
-QString normalizeLanguage(const QString &language);
-QString text(const QString &language, Key key);
-QString categoryName(const QString &language, LauncherCategory category);
+QString normalizeLanguage(const QString& language);
+QString text(const QString& language, Key key);
+QString categoryName(const QString& language, LauncherCategory category);
 
-}
+} // namespace UiText

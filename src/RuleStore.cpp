@@ -15,8 +15,8 @@
 
 namespace {
 
-HotkeyRule makeProgramRule(const QString &sectionId, const QString &name, const QString &target, const QString &arguments = QString())
-{
+HotkeyRule makeProgramRule(const QString& sectionId, const QString& name, const QString& target,
+                           const QString& arguments = QString()) {
     HotkeyRule rule;
     rule.id = QtCompat::uuidWithoutBraces();
     rule.category = LauncherCategory::Program;
@@ -28,8 +28,7 @@ HotkeyRule makeProgramRule(const QString &sectionId, const QString &name, const 
     return rule;
 }
 
-HotkeyRule makeFolderRule(const QString &sectionId, const QString &name, const QString &target)
-{
+HotkeyRule makeFolderRule(const QString& sectionId, const QString& name, const QString& target) {
     HotkeyRule rule;
     rule.id = QtCompat::uuidWithoutBraces();
     rule.category = LauncherCategory::Folder;
@@ -40,8 +39,7 @@ HotkeyRule makeFolderRule(const QString &sectionId, const QString &name, const Q
     return rule;
 }
 
-HotkeyRule makeWebsiteRule(const QString &sectionId, const QString &name, const QString &target)
-{
+HotkeyRule makeWebsiteRule(const QString& sectionId, const QString& name, const QString& target) {
     HotkeyRule rule;
     rule.id = QtCompat::uuidWithoutBraces();
     rule.category = LauncherCategory::Website;
@@ -54,13 +52,9 @@ HotkeyRule makeWebsiteRule(const QString &sectionId, const QString &name, const 
 
 } // namespace
 
-RuleStore::RuleStore(QObject *parent)
-    : QObject(parent)
-{
-}
+RuleStore::RuleStore(QObject* parent) : QObject(parent) {}
 
-LauncherDocument RuleStore::loadDocument(QString *error) const
-{
+LauncherDocument RuleStore::loadDocument(QString* error) const {
     QFile file(configPath());
     if (!file.exists()) {
         return createDefaultDocument();
@@ -85,7 +79,7 @@ LauncherDocument RuleStore::loadDocument(QString *error) const
     document.settings = AppSettings::fromJson(root.value("settings").toObject());
 
     const QJsonArray sectionArray = root.value("sections").toArray();
-    for (const QJsonValue &value : sectionArray) {
+    for (const QJsonValue& value : sectionArray) {
         LauncherSection section = LauncherSection::fromJson(value.toObject());
         if (section.isValid()) {
             document.sections.push_back(section);
@@ -95,7 +89,7 @@ LauncherDocument RuleStore::loadDocument(QString *error) const
     ensureDefaultSections(&document);
 
     const QJsonArray ruleArray = root.value("rules").toArray();
-    for (const QJsonValue &value : ruleArray) {
+    for (const QJsonValue& value : ruleArray) {
         HotkeyRule rule = HotkeyRule::fromJson(value.toObject());
         if (rule.sectionId.isEmpty()) {
             rule.sectionId = defaultSectionId(rule.category, 1);
@@ -110,8 +104,7 @@ LauncherDocument RuleStore::loadDocument(QString *error) const
     return document;
 }
 
-bool RuleStore::saveDocument(const LauncherDocument &document, QString *error) const
-{
+bool RuleStore::saveDocument(const LauncherDocument& document, QString* error) const {
     QDir directory(configDirectory());
     if (!directory.exists() && !directory.mkpath(".")) {
         if (error) {
@@ -121,14 +114,14 @@ bool RuleStore::saveDocument(const LauncherDocument &document, QString *error) c
     }
 
     QJsonArray sections;
-    for (const LauncherSection &section : document.sections) {
+    for (const LauncherSection& section : document.sections) {
         if (section.isValid()) {
             sections.append(section.toJson());
         }
     }
 
     QJsonArray rules;
-    for (const HotkeyRule &rule : document.rules) {
+    for (const HotkeyRule& rule : document.rules) {
         if (rule.isValid()) {
             rules.append(rule.toJson());
         }
@@ -151,30 +144,28 @@ bool RuleStore::saveDocument(const LauncherDocument &document, QString *error) c
     return true;
 }
 
-QVector<HotkeyRule> RuleStore::load(QString *error) const
-{
+QVector<HotkeyRule> RuleStore::load(QString* error) const {
     return loadDocument(error).rules;
 }
 
-bool RuleStore::save(const QVector<HotkeyRule> &rules, QString *error) const
-{
+bool RuleStore::save(const QVector<HotkeyRule>& rules, QString* error) const {
     LauncherDocument document = loadDocument();
     document.rules = rules;
     ensureDefaultSections(&document);
     return saveDocument(document, error);
 }
 
-QString RuleStore::configPath() const
-{
+QString RuleStore::configPath() const {
     return QDir(configDirectory()).filePath("rules.json");
 }
 
-QStringList RuleStore::warningsForRule(const HotkeyRule &rule, const QVector<HotkeyRule> &rules, const QString &language) const
-{
+QStringList RuleStore::warningsForRule(const HotkeyRule& rule, const QVector<HotkeyRule>& rules,
+                                       const QString& language) const {
     QStringList warnings;
     if (rule.hotkey.isValid()) {
-        for (const HotkeyRule &existing : rules) {
-            if (existing.id != rule.id && existing.enabled && existing.hotkey.isValid() && existing.hotkey.stableId() == rule.hotkey.stableId()) {
+        for (const HotkeyRule& existing : rules) {
+            if (existing.id != rule.id && existing.enabled && existing.hotkey.isValid() &&
+                existing.hotkey.stableId() == rule.hotkey.stableId()) {
                 warnings << UiText::text(language, UiText::Key::HotkeyDuplicateWarning);
                 break;
             }
@@ -187,23 +178,21 @@ QStringList RuleStore::warningsForRule(const HotkeyRule &rule, const QVector<Hot
     return warnings;
 }
 
-LauncherDocument RuleStore::createDefaultDocument() const
-{
+LauncherDocument RuleStore::createDefaultDocument() const {
     LauncherDocument document;
     ensureDefaultSections(&document);
     ensureDefaultRules(&document);
     return document;
 }
 
-void RuleStore::ensureDefaultSections(LauncherDocument *document) const
-{
-    auto hasSection = [document](const QString &id) {
-        return std::any_of(document->sections.begin(), document->sections.end(), [&id](const LauncherSection &section) {
-            return section.id == id;
-        });
+void RuleStore::ensureDefaultSections(LauncherDocument* document) const {
+    auto hasSection = [document](const QString& id) {
+        return std::any_of(document->sections.begin(), document->sections.end(),
+                           [&id](const LauncherSection& section) { return section.id == id; });
     };
 
-    auto addSection = [document, &hasSection](LauncherCategory category, int order, const QString &id, const QString &name, const QString &iconKey) {
+    auto addSection = [document, &hasSection](LauncherCategory category, int order, const QString& id,
+                                              const QString& name, const QString& iconKey) {
         if (hasSection(id)) {
             return;
         }
@@ -216,22 +205,27 @@ void RuleStore::ensureDefaultSections(LauncherDocument *document) const
         document->sections.push_back(section);
     };
 
-    addSection(LauncherCategory::Program, 0, defaultSectionId(LauncherCategory::Program, 0), QString::fromUtf8("系统功能"), "system");
-    addSection(LauncherCategory::Program, 1, defaultSectionId(LauncherCategory::Program, 1), QString::fromUtf8("我的程序"), "program");
-    addSection(LauncherCategory::Folder, 0, defaultSectionId(LauncherCategory::Folder, 0), QString::fromUtf8("系统文件夹"), "folder-system");
-    addSection(LauncherCategory::Folder, 1, defaultSectionId(LauncherCategory::Folder, 1), QString::fromUtf8("我的目录"), "folder");
-    addSection(LauncherCategory::Website, 0, defaultSectionId(LauncherCategory::Website, 0), QString::fromUtf8("常用网址"), "website");
-    addSection(LauncherCategory::Website, 1, defaultSectionId(LauncherCategory::Website, 1), QString::fromUtf8("我的网址"), "website-user");
+    addSection(LauncherCategory::Program, 0, defaultSectionId(LauncherCategory::Program, 0),
+               QString::fromUtf8("系统功能"), "system");
+    addSection(LauncherCategory::Program, 1, defaultSectionId(LauncherCategory::Program, 1),
+               QString::fromUtf8("我的程序"), "program");
+    addSection(LauncherCategory::Folder, 0, defaultSectionId(LauncherCategory::Folder, 0),
+               QString::fromUtf8("系统文件夹"), "folder-system");
+    addSection(LauncherCategory::Folder, 1, defaultSectionId(LauncherCategory::Folder, 1),
+               QString::fromUtf8("我的目录"), "folder");
+    addSection(LauncherCategory::Website, 0, defaultSectionId(LauncherCategory::Website, 0),
+               QString::fromUtf8("常用网址"), "website");
+    addSection(LauncherCategory::Website, 1, defaultSectionId(LauncherCategory::Website, 1),
+               QString::fromUtf8("我的网址"), "website-user");
 }
 
-void RuleStore::ensureDefaultRules(LauncherDocument *document) const
-{
+void RuleStore::ensureDefaultRules(LauncherDocument* document) const {
     if (!document) {
         return;
     }
 
-    auto sectionHasRules = [document](const QString &sectionId) {
-        return std::any_of(document->rules.begin(), document->rules.end(), [&sectionId](const HotkeyRule &rule) {
+    auto sectionHasRules = [document](const QString& sectionId) {
+        return std::any_of(document->rules.begin(), document->rules.end(), [&sectionId](const HotkeyRule& rule) {
             return rule.sectionId == sectionId && rule.isValid();
         });
     };
@@ -250,9 +244,12 @@ void RuleStore::ensureDefaultRules(LauncherDocument *document) const
 
     const QString folderSection = defaultSectionId(LauncherCategory::Folder, 0);
     if (!sectionHasRules(folderSection)) {
-        document->rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("我的文档"), QDir::home().filePath("Documents")));
-        document->rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("桌面"), QDir::home().filePath("Desktop")));
-        document->rules.push_back(makeFolderRule(folderSection, QString::fromUtf8("下载"), QDir::home().filePath("Downloads")));
+        document->rules.push_back(
+            makeFolderRule(folderSection, QString::fromUtf8("我的文档"), QDir::home().filePath("Documents")));
+        document->rules.push_back(
+            makeFolderRule(folderSection, QString::fromUtf8("桌面"), QDir::home().filePath("Desktop")));
+        document->rules.push_back(
+            makeFolderRule(folderSection, QString::fromUtf8("下载"), QDir::home().filePath("Downloads")));
     }
 
     const QString websiteSection = defaultSectionId(LauncherCategory::Website, 0);
@@ -262,8 +259,7 @@ void RuleStore::ensureDefaultRules(LauncherDocument *document) const
     }
 }
 
-QString RuleStore::defaultSectionId(LauncherCategory category, int index) const
-{
+QString RuleStore::defaultSectionId(LauncherCategory category, int index) const {
     switch (category) {
     case LauncherCategory::Program:
         return index == 0 ? "program-system" : "program-user";
@@ -275,8 +271,7 @@ QString RuleStore::defaultSectionId(LauncherCategory category, int index) const
     return "program-user";
 }
 
-QString RuleStore::configDirectory() const
-{
+QString RuleStore::configDirectory() const {
     const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     if (!appData.isEmpty()) {
         return appData;

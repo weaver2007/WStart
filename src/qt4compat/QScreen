@@ -6,9 +6,8 @@
 
 class QScreen {
 public:
-    QRect availableGeometry() const
-    {
-        QDesktopWidget *desktop = QApplication::desktop();
+    QRect availableGeometry() const {
+        QDesktopWidget* desktop = QApplication::desktop();
         return desktop ? desktop->availableGeometry(desktop->primaryScreen()) : QRect();
     }
 };

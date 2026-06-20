@@ -2,6 +2,7 @@
 build*/
 out/
 qt-static-msvc/
+extern/
 extern/qt/
 extern/qt-static/
 

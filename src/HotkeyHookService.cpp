@@ -5,27 +5,25 @@
 #include <QMetaType>
 
 #ifdef Q_OS_WIN
-HotkeyHookService *HotkeyHookService::s_instance = nullptr;
+HotkeyHookService* HotkeyHookService::s_instance = nullptr;
 #endif
 
-HotkeyHookService::HotkeyHookService(QObject *parent)
-    : QObject(parent)
-{
+HotkeyHookService::HotkeyHookService(QObject* parent) : QObject(parent) {
 #if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
     qRegisterMetaType<HotkeyRule>("HotkeyRule");
-    connect(this, SIGNAL(queuedHotkeyTriggered(HotkeyRule)), this, SIGNAL(hotkeyTriggered(HotkeyRule)), Qt::QueuedConnection);
+    connect(this, SIGNAL(queuedHotkeyTriggered(HotkeyRule)), this, SIGNAL(hotkeyTriggered(HotkeyRule)),
+            Qt::QueuedConnection);
 #else
-    connect(this, &HotkeyHookService::queuedHotkeyTriggered, this, &HotkeyHookService::hotkeyTriggered, Qt::QueuedConnection);
+    connect(this, &HotkeyHookService::queuedHotkeyTriggered, this, &HotkeyHookService::hotkeyTriggered,
+            Qt::QueuedConnection);
 #endif
 }
 
-HotkeyHookService::~HotkeyHookService()
-{
+HotkeyHookService::~HotkeyHookService() {
     stop();
 }
 
-bool HotkeyHookService::start(QString *error)
-{
+bool HotkeyHookService::start(QString* error) {
 #ifdef Q_OS_WIN
     if (m_hook) {
         return true;
@@ -48,8 +46,7 @@ bool HotkeyHookService::start(QString *error)
 #endif
 }
 
-void HotkeyHookService::stop()
-{
+void HotkeyHookService::stop() {
 #ifdef Q_OS_WIN
     if (m_hook) {
         UnhookWindowsHookEx(m_hook);
@@ -61,8 +58,7 @@ void HotkeyHookService::stop()
 #endif
 }
 
-bool HotkeyHookService::isRunning() const
-{
+bool HotkeyHookService::isRunning() const {
 #ifdef Q_OS_WIN
     return m_hook != nullptr;
 #else
@@ -70,8 +66,7 @@ bool HotkeyHookService::isRunning() const
 #endif
 }
 
-void HotkeyHookService::setPaused(bool paused)
-{
+void HotkeyHookService::setPaused(bool paused) {
     m_paused = paused;
     if (paused) {
         m_activeTriggers.clear();
@@ -83,21 +78,18 @@ void HotkeyHookService::setPaused(bool paused)
     }
 }
 
-bool HotkeyHookService::isPaused() const
-{
+bool HotkeyHookService::isPaused() const {
     return m_paused;
 }
 
-void HotkeyHookService::setRules(const QVector<HotkeyRule> &rules)
-{
+void HotkeyHookService::setRules(const QVector<HotkeyRule>& rules) {
     m_rules = rules;
 }
 
 #ifdef Q_OS_WIN
-LRESULT CALLBACK HotkeyHookService::keyboardProc(int code, WPARAM wParam, LPARAM lParam)
-{
+LRESULT CALLBACK HotkeyHookService::keyboardProc(int code, WPARAM wParam, LPARAM lParam) {
     if (code >= 0 && s_instance) {
-        const auto *event = reinterpret_cast<KBDLLHOOKSTRUCT *>(lParam);
+        const auto* event = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
         const LRESULT result = s_instance->handleKeyboardEvent(wParam, event);
         if (result != 0) {
             return result;
@@ -106,8 +98,7 @@ LRESULT CALLBACK HotkeyHookService::keyboardProc(int code, WPARAM wParam, LPARAM
     return CallNextHookEx(nullptr, code, wParam, lParam);
 }
 
-LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTRUCT *event)
-{
+LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTRUCT* event) {
     if (m_paused || !event) {
         return 0;
     }
@@ -128,6 +119,8 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
         updatePressedModifierState(virtualKey, false);
     }
 
+    // Once a chord is claimed, swallow the matching key-up events too. Letting
+    // the release through is enough for Windows to complete some Win-key system shortcuts.
     if (isTrackedSuppressedKey(virtualKey)) {
         if (isKeyUp) {
             const QString triggerId = m_suppressedTriggerIds.take(virtualKey);
@@ -140,7 +133,7 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
     }
 
     const HotkeyModifiers modifiers = currentModifiers(virtualKey, isKeyDown);
-    const HotkeyRule *rule = matchingRule(virtualKey, modifiers);
+    const HotkeyRule* rule = matchingRule(virtualKey, modifiers);
     if (!rule) {
         if (isKeyUp && isModifier) {
             clearSuppressedKey(virtualKey);
@@ -160,6 +153,8 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
 
     if (!m_activeTriggers.contains(triggerId)) {
         m_activeTriggers.insert(triggerId);
+        // The low-level hook sees each key as a separate event; remember the
+        // non-modifier key so repeated key-down messages do not re-launch the action.
         trackSuppressedChord(rule->hotkey);
         m_suppressedTriggerIds.insert(rule->hotkey.key, triggerId);
         const HotkeyRule ruleCopy = *rule;
@@ -171,8 +166,7 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
     return 1;
 }
 
-HotkeyModifiers HotkeyHookService::currentModifiers(int eventKey, bool isKeyDown)
-{
+HotkeyModifiers HotkeyHookService::currentModifiers(int eventKey, bool isKeyDown) {
     HotkeyModifiers modifiers = ModifierNone;
 
     auto pressed = [eventKey, isKeyDown](int key) {
@@ -198,23 +192,21 @@ HotkeyModifiers HotkeyHookService::currentModifiers(int eventKey, bool isKeyDown
     return modifiers;
 }
 
-const HotkeyRule *HotkeyHookService::matchingRule(int virtualKey, HotkeyModifiers modifiers) const
-{
-    for (const HotkeyRule &rule : m_rules) {
-        if (rule.enabled && rule.hotkey.isValid() && rule.hotkey.key == virtualKey && rule.hotkey.modifiers == modifiers) {
+const HotkeyRule* HotkeyHookService::matchingRule(int virtualKey, HotkeyModifiers modifiers) const {
+    for (const HotkeyRule& rule : m_rules) {
+        if (rule.enabled && rule.hotkey.isValid() && rule.hotkey.key == virtualKey &&
+            rule.hotkey.modifiers == modifiers) {
             return &rule;
         }
     }
     return nullptr;
 }
 
-bool HotkeyHookService::isTrackedSuppressedKey(int virtualKey) const
-{
+bool HotkeyHookService::isTrackedSuppressedKey(int virtualKey) const {
     return m_suppressedKeys.contains(virtualKey);
 }
 
-bool HotkeyHookService::isModifierKey(int virtualKey) const
-{
+bool HotkeyHookService::isModifierKey(int virtualKey) const {
     switch (virtualKey) {
     case VK_CONTROL:
     case VK_LCONTROL:
@@ -233,17 +225,16 @@ bool HotkeyHookService::isModifierKey(int virtualKey) const
     }
 }
 
-void HotkeyHookService::updatePressedModifierState(int virtualKey, bool pressed)
-{
+void HotkeyHookService::updatePressedModifierState(int virtualKey, bool pressed) {
     if (!isModifierKey(virtualKey)) {
         return;
     }
 
     const HotkeyModifier modifier =
-        (virtualKey == VK_CONTROL || virtualKey == VK_LCONTROL || virtualKey == VK_RCONTROL) ? ModifierCtrl :
-        (virtualKey == VK_MENU || virtualKey == VK_LMENU || virtualKey == VK_RMENU) ? ModifierAlt :
-        (virtualKey == VK_SHIFT || virtualKey == VK_LSHIFT || virtualKey == VK_RSHIFT) ? ModifierShift :
-        ModifierWin;
+        (virtualKey == VK_CONTROL || virtualKey == VK_LCONTROL || virtualKey == VK_RCONTROL) ? ModifierCtrl
+        : (virtualKey == VK_MENU || virtualKey == VK_LMENU || virtualKey == VK_RMENU)        ? ModifierAlt
+        : (virtualKey == VK_SHIFT || virtualKey == VK_LSHIFT || virtualKey == VK_RSHIFT)     ? ModifierShift
+                                                                                             : ModifierWin;
 
     if (pressed) {
         m_pressedModifiers |= modifier;
@@ -252,16 +243,14 @@ void HotkeyHookService::updatePressedModifierState(int virtualKey, bool pressed)
     }
 }
 
-void HotkeyHookService::trackSuppressedChord(const HotkeyCombination &hotkey)
-{
+void HotkeyHookService::trackSuppressedChord(const HotkeyCombination& hotkey) {
     if (!hotkey.isValid()) {
         return;
     }
     m_suppressedKeys.insert(hotkey.key);
 }
 
-void HotkeyHookService::clearSuppressedKey(int virtualKey)
-{
+void HotkeyHookService::clearSuppressedKey(int virtualKey) {
     m_suppressedTriggerIds.remove(virtualKey);
     m_suppressedKeys.remove(virtualKey);
 }

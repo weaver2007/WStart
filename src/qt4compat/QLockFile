@@ -5,11 +5,12 @@
 
 class QLockFile {
 public:
-    explicit QLockFile(const QString &fileName) : m_fileName(fileName) {}
-    ~QLockFile() { unlock(); }
+    explicit QLockFile(const QString& fileName) : m_fileName(fileName) {}
+    ~QLockFile() {
+        unlock();
+    }
 
-    bool tryLock(int timeout)
-    {
+    bool tryLock(int timeout) {
         Q_UNUSED(timeout);
         if (m_locked) {
             return true;
@@ -27,8 +28,7 @@ public:
         return true;
     }
 
-    void unlock()
-    {
+    void unlock() {
         if (m_locked) {
             QFile::remove(m_fileName);
             m_locked = false;

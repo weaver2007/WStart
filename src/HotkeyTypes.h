@@ -15,27 +15,16 @@ enum HotkeyModifier {
 Q_DECLARE_FLAGS(HotkeyModifiers, HotkeyModifier)
 Q_DECLARE_OPERATORS_FOR_FLAGS(HotkeyModifiers)
 
-enum class LaunchActionType {
-    Application,
-    File,
-    Folder,
-    Url
-};
+enum class LaunchActionType { Application, File, Folder, Url };
 
-enum class LauncherCategory {
-    Program,
-    Folder,
-    Website
-};
+enum class LauncherCategory { Program, Folder, Website };
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-inline size_t qHash(LauncherCategory category, size_t seed = 0) noexcept
-{
+inline size_t qHash(LauncherCategory category, size_t seed = 0) noexcept {
     return ::qHash(static_cast<int>(category), seed);
 }
 #else
-inline uint qHash(LauncherCategory category, uint seed = 0) noexcept
-{
+inline uint qHash(LauncherCategory category, uint seed = 0) noexcept {
     return ::qHash(static_cast<int>(category)) ^ seed;
 }
 #endif
@@ -54,8 +43,8 @@ struct LauncherSection {
     QString categoryName() const;
     QJsonObject toJson() const;
 
-    static LauncherSection fromJson(const QJsonObject &object);
-    static LauncherCategory categoryFromName(const QString &name);
+    static LauncherSection fromJson(const QJsonObject& object);
+    static LauncherCategory categoryFromName(const QString& name);
     static QString categoryName(LauncherCategory category);
 };
 
@@ -68,7 +57,7 @@ struct HotkeyCombination {
     QString stableId() const;
     QJsonObject toJson() const;
 
-    static HotkeyCombination fromJson(const QJsonObject &object);
+    static HotkeyCombination fromJson(const QJsonObject& object);
     static QString keyName(int virtualKey);
     static bool isModifierKey(int virtualKey);
 };
@@ -83,8 +72,8 @@ struct LaunchAction {
     QString typeName() const;
     QJsonObject toJson() const;
 
-    static LaunchAction fromJson(const QJsonObject &object);
-    static LaunchActionType typeFromName(const QString &name);
+    static LaunchAction fromJson(const QJsonObject& object);
+    static LaunchActionType typeFromName(const QString& name);
 };
 
 struct HotkeyRule {
@@ -99,7 +88,7 @@ struct HotkeyRule {
     bool isValid() const;
     QJsonObject toJson() const;
 
-    static HotkeyRule fromJson(const QJsonObject &object);
+    static HotkeyRule fromJson(const QJsonObject& object);
 };
 
 struct LauncherItemAppearance {
@@ -115,7 +104,7 @@ struct LauncherItemAppearance {
     bool showEllipsis = false;
 
     QJsonObject toJson() const;
-    static LauncherItemAppearance fromJson(const QJsonObject &object);
+    static LauncherItemAppearance fromJson(const QJsonObject& object);
 };
 
 struct LauncherSectionAppearance {
@@ -127,7 +116,7 @@ struct LauncherSectionAppearance {
     QString textColor;
 
     QJsonObject toJson() const;
-    static LauncherSectionAppearance fromJson(const QJsonObject &object);
+    static LauncherSectionAppearance fromJson(const QJsonObject& object);
 };
 
 struct LauncherCategoryAppearance {
@@ -139,7 +128,7 @@ struct LauncherCategoryAppearance {
     QString textColor;
 
     QJsonObject toJson() const;
-    static LauncherCategoryAppearance fromJson(const QJsonObject &object);
+    static LauncherCategoryAppearance fromJson(const QJsonObject& object);
 };
 
 struct AppSettings {
@@ -151,7 +140,7 @@ struct AppSettings {
     LauncherCategoryAppearance categoryAppearance;
 
     QJsonObject toJson() const;
-    static AppSettings fromJson(const QJsonObject &object);
+    static AppSettings fromJson(const QJsonObject& object);
 };
 
 struct LauncherDocument {

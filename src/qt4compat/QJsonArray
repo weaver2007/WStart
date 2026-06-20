@@ -11,20 +11,40 @@ public:
 
     QJsonArray() {}
 
-    void append(const QJsonValue &value) { m_values.append(value); }
-    int size() const { return m_values.size(); }
-    bool isEmpty() const { return m_values.isEmpty(); }
-    QJsonValue at(int index) const { return m_values.at(index); }
+    void append(const QJsonValue& value) {
+        m_values.append(value);
+    }
+    int size() const {
+        return m_values.size();
+    }
+    bool isEmpty() const {
+        return m_values.isEmpty();
+    }
+    QJsonValue at(int index) const {
+        return m_values.at(index);
+    }
 
-    iterator begin() { return m_values.begin(); }
-    iterator end() { return m_values.end(); }
-    const_iterator begin() const { return m_values.begin(); }
-    const_iterator end() const { return m_values.end(); }
-    const_iterator constBegin() const { return m_values.constBegin(); }
-    const_iterator constEnd() const { return m_values.constEnd(); }
+    iterator begin() {
+        return m_values.begin();
+    }
+    iterator end() {
+        return m_values.end();
+    }
+    const_iterator begin() const {
+        return m_values.begin();
+    }
+    const_iterator end() const {
+        return m_values.end();
+    }
+    const_iterator constBegin() const {
+        return m_values.constBegin();
+    }
+    const_iterator constEnd() const {
+        return m_values.constEnd();
+    }
 
     QVariantList toVariantList() const;
-    static QJsonArray fromVariantList(const QVariantList &values);
+    static QJsonArray fromVariantList(const QVariantList& values);
 
 private:
     QVector<QJsonValue> m_values;

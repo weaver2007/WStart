@@ -8,21 +8,34 @@
 
 namespace {
 
-QString escapeJsonString(const QString &value)
-{
+QString escapeJsonString(const QString& value) {
     QString result;
     result.reserve(value.size() + 2);
     result.append('"');
     for (int i = 0; i < value.size(); ++i) {
         const QChar ch = value.at(i);
         switch (ch.unicode()) {
-        case '"': result.append("\\\""); break;
-        case '\\': result.append("\\\\"); break;
-        case '\b': result.append("\\b"); break;
-        case '\f': result.append("\\f"); break;
-        case '\n': result.append("\\n"); break;
-        case '\r': result.append("\\r"); break;
-        case '\t': result.append("\\t"); break;
+        case '"':
+            result.append("\\\"");
+            break;
+        case '\\':
+            result.append("\\\\");
+            break;
+        case '\b':
+            result.append("\\b");
+            break;
+        case '\f':
+            result.append("\\f");
+            break;
+        case '\n':
+            result.append("\\n");
+            break;
+        case '\r':
+            result.append("\\r");
+            break;
+        case '\t':
+            result.append("\\t");
+            break;
         default:
             if (ch.unicode() < 0x20) {
                 result.append(QString("\\u%1").arg(ch.unicode(), 4, 16, QLatin1Char('0')));
@@ -36,15 +49,13 @@ QString escapeJsonString(const QString &value)
     return result;
 }
 
-QString indentString(int depth)
-{
+QString indentString(int depth) {
     return QString(depth * 2, QLatin1Char(' '));
 }
 
-QString serializeVariant(const QVariant &value, bool indented, int depth);
+QString serializeVariant(const QVariant& value, bool indented, int depth);
 
-QString serializeList(const QVariantList &list, bool indented, int depth)
-{
+QString serializeList(const QVariantList& list, bool indented, int depth) {
     if (list.isEmpty()) {
         return "[]";
     }
@@ -61,18 +72,15 @@ QString serializeList(const QVariantList &list, bool indented, int depth)
     return QString("[\n%1\n%2]").arg(parts.join(",\n"), indentString(depth));
 }
 
-QString serializeMap(const QVariantMap &map, bool indented, int depth)
-{
+QString serializeMap(const QVariantMap& map, bool indented, int depth) {
     if (map.isEmpty()) {
         return "{}";
     }
 
     QStringList parts;
     for (QVariantMap::const_iterator it = map.constBegin(); it != map.constEnd(); ++it) {
-        const QString entry = QString("%1%2%3")
-            .arg(escapeJsonString(it.key()),
-                 indented ? ": " : ":",
-                 serializeVariant(it.value(), indented, depth + 1));
+        const QString entry = QString("%1%2%3").arg(escapeJsonString(it.key()), indented ? ": " : ":",
+                                                    serializeVariant(it.value(), indented, depth + 1));
         parts << (indented ? indentString(depth + 1) + entry : entry);
     }
 
@@ -82,8 +90,7 @@ QString serializeMap(const QVariantMap &map, bool indented, int depth)
     return QString("{\n%1\n%2}").arg(parts.join(",\n"), indentString(depth));
 }
 
-QString serializeVariant(const QVariant &value, bool indented, int depth)
-{
+QString serializeVariant(const QVariant& value, bool indented, int depth) {
     switch (value.type()) {
     case QVariant::Map:
         return serializeMap(value.toMap(), indented, depth);
@@ -106,8 +113,7 @@ QString serializeVariant(const QVariant &value, bool indented, int depth)
     }
 }
 
-int hexValue(QChar ch)
-{
+int hexValue(QChar ch) {
     if (ch >= QLatin1Char('0') && ch <= QLatin1Char('9')) {
         return ch.unicode() - '0';
     }
@@ -122,13 +128,9 @@ int hexValue(QChar ch)
 
 class JsonParser {
 public:
-    explicit JsonParser(const QByteArray &json)
-        : m_text(QString::fromUtf8(json))
-    {
-    }
+    explicit JsonParser(const QByteArray& json) : m_text(QString::fromUtf8(json)) {}
 
-    bool parse(QVariant *value)
-    {
+    bool parse(QVariant* value) {
         skipWhitespace();
         if (!parseValue(value)) {
             return false;
@@ -138,15 +140,13 @@ public:
     }
 
 private:
-    void skipWhitespace()
-    {
+    void skipWhitespace() {
         while (m_pos < m_text.size() && m_text.at(m_pos).isSpace()) {
             ++m_pos;
         }
     }
 
-    bool consume(QChar expected)
-    {
+    bool consume(QChar expected) {
         skipWhitespace();
         if (m_pos >= m_text.size() || m_text.at(m_pos) != expected) {
             return false;
@@ -155,8 +155,7 @@ private:
         return true;
     }
 
-    bool consumeLiteral(const QString &literal)
-    {
+    bool consumeLiteral(const QString& literal) {
         skipWhitespace();
         if (m_text.mid(m_pos, literal.size()) != literal) {
             return false;
@@ -165,8 +164,7 @@ private:
         return true;
     }
 
-    bool parseValue(QVariant *value)
-    {
+    bool parseValue(QVariant* value) {
         skipWhitespace();
         if (m_pos >= m_text.size()) {
             return false;
@@ -215,8 +213,7 @@ private:
         return false;
     }
 
-    bool parseObject(QVariantMap *map)
-    {
+    bool parseObject(QVariantMap* map) {
         if (!consume(QLatin1Char('{'))) {
             return false;
         }
@@ -248,8 +245,7 @@ private:
         return false;
     }
 
-    bool parseArray(QVariantList *list)
-    {
+    bool parseArray(QVariantList* list) {
         if (!consume(QLatin1Char('['))) {
             return false;
         }
@@ -276,8 +272,7 @@ private:
         return false;
     }
 
-    bool parseString(QString *value)
-    {
+    bool parseString(QString* value) {
         if (!consume(QLatin1Char('"'))) {
             return false;
         }
@@ -299,14 +294,30 @@ private:
 
             const QChar escaped = m_text.at(m_pos++);
             switch (escaped.unicode()) {
-            case '"': result.append('"'); break;
-            case '\\': result.append('\\'); break;
-            case '/': result.append('/'); break;
-            case 'b': result.append('\b'); break;
-            case 'f': result.append('\f'); break;
-            case 'n': result.append('\n'); break;
-            case 'r': result.append('\r'); break;
-            case 't': result.append('\t'); break;
+            case '"':
+                result.append('"');
+                break;
+            case '\\':
+                result.append('\\');
+                break;
+            case '/':
+                result.append('/');
+                break;
+            case 'b':
+                result.append('\b');
+                break;
+            case 'f':
+                result.append('\f');
+                break;
+            case 'n':
+                result.append('\n');
+                break;
+            case 'r':
+                result.append('\r');
+                break;
+            case 't':
+                result.append('\t');
+                break;
             case 'u': {
                 if (m_pos + 4 > m_text.size()) {
                     return false;
@@ -329,8 +340,7 @@ private:
         return false;
     }
 
-    bool parseNumber(QVariant *value)
-    {
+    bool parseNumber(QVariant* value) {
         skipWhitespace();
         const int start = m_pos;
         if (m_pos < m_text.size() && m_text.at(m_pos) == QLatin1Char('-')) {
@@ -363,7 +373,8 @@ private:
         if (m_pos < m_text.size() && (m_text.at(m_pos) == QLatin1Char('e') || m_text.at(m_pos) == QLatin1Char('E'))) {
             isDouble = true;
             ++m_pos;
-            if (m_pos < m_text.size() && (m_text.at(m_pos) == QLatin1Char('+') || m_text.at(m_pos) == QLatin1Char('-'))) {
+            if (m_pos < m_text.size() &&
+                (m_text.at(m_pos) == QLatin1Char('+') || m_text.at(m_pos) == QLatin1Char('-'))) {
                 ++m_pos;
             }
             if (m_pos >= m_text.size() || !m_text.at(m_pos).isDigit()) {
@@ -398,8 +409,7 @@ private:
 
 } // namespace
 
-QByteArray QJsonDocument::toJson(JsonFormat format) const
-{
+QByteArray QJsonDocument::toJson(JsonFormat format) const {
     if (!m_isObject) {
         return QByteArray();
     }
@@ -407,8 +417,7 @@ QByteArray QJsonDocument::toJson(JsonFormat format) const
     return serializeMap(m_object.toVariantMap(), indented, 0).toUtf8();
 }
 
-QJsonDocument QJsonDocument::fromJson(const QByteArray &json)
-{
+QJsonDocument QJsonDocument::fromJson(const QByteArray& json) {
     QVariant value;
     JsonParser parser(json);
     if (!parser.parse(&value) || value.type() != QVariant::Map) {

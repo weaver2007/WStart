@@ -11,17 +11,11 @@
 #include <QSignalBlocker>
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-TrayController::TrayController(MainWindow *window, QObject *parent)
-    : TrayController(window, window, parent)
-{
-}
+TrayController::TrayController(MainWindow* window, QObject* parent) : TrayController(window, window, parent) {}
 #endif
 
-TrayController::TrayController(QMainWindow *window, LauncherWindowInterface *launcher, QObject *parent)
-    : QObject(parent)
-    , m_window(window)
-    , m_launcher(launcher)
-{
+TrayController::TrayController(QMainWindow* window, LauncherWindowInterface* launcher, QObject* parent)
+    : QObject(parent), m_window(window), m_launcher(launcher) {
     m_tray = new QSystemTrayIcon(this);
     m_tray->setIcon(AppIcon::launcherIcon());
     m_tray->setToolTip(uiText(UiText::Key::TrayTooltip));
@@ -44,8 +38,7 @@ TrayController::TrayController(QMainWindow *window, LauncherWindowInterface *lau
     m_tray->show();
 }
 
-void TrayController::retranslateUi()
-{
+void TrayController::retranslateUi() {
     if (m_tray) {
         m_tray->setToolTip(uiText(UiText::Key::TrayTooltip));
     }
@@ -60,8 +53,7 @@ void TrayController::retranslateUi()
     }
 }
 
-void TrayController::setHotkeysEnabled(bool enabled)
-{
+void TrayController::setHotkeysEnabled(bool enabled) {
     if (!m_hotkeysAction || m_hotkeysAction->isChecked() == enabled) {
         return;
     }
@@ -69,7 +61,6 @@ void TrayController::setHotkeysEnabled(bool enabled)
     m_hotkeysAction->setChecked(enabled);
 }
 
-QString TrayController::uiText(UiText::Key key) const
-{
+QString TrayController::uiText(UiText::Key key) const {
     return UiText::text(m_launcher ? m_launcher->language() : QString(), key);
 }

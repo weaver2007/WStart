@@ -8,8 +8,7 @@
 
 namespace {
 
-QPixmap paintLauncherPixmap(int size)
-{
+QPixmap paintLauncherPixmap(int size) {
     QPixmap pixmap(size, size);
     pixmap.fill(Qt::transparent);
 
@@ -42,24 +41,16 @@ QPixmap paintLauncherPixmap(int size)
     painter.drawRoundedRect(QRectF(s * 0.51, s * 0.52, s * 0.17, keyHeight), keyHeight / 2, keyHeight / 2);
 
     QPolygonF bolt;
-    bolt << QPointF(s * 0.73, s * 0.12)
-         << QPointF(s * 0.47, s * 0.49)
-         << QPointF(s * 0.63, s * 0.49)
-         << QPointF(s * 0.49, s * 0.86)
-         << QPointF(s * 0.88, s * 0.36)
-         << QPointF(s * 0.69, s * 0.36);
+    bolt << QPointF(s * 0.73, s * 0.12) << QPointF(s * 0.47, s * 0.49) << QPointF(s * 0.63, s * 0.49)
+         << QPointF(s * 0.49, s * 0.86) << QPointF(s * 0.88, s * 0.36) << QPointF(s * 0.69, s * 0.36);
 
     painter.setBrush(QColor("#ffe66d"));
     painter.setPen(QPen(ink, qMax<qreal>(1.2, s * 0.04), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter.drawPolygon(bolt);
 
     QPolygonF boltHighlight;
-    boltHighlight << QPointF(s * 0.70, s * 0.22)
-                  << QPointF(s * 0.54, s * 0.45)
-                  << QPointF(s * 0.68, s * 0.45)
-                  << QPointF(s * 0.57, s * 0.72)
-                  << QPointF(s * 0.80, s * 0.39)
-                  << QPointF(s * 0.64, s * 0.39);
+    boltHighlight << QPointF(s * 0.70, s * 0.22) << QPointF(s * 0.54, s * 0.45) << QPointF(s * 0.68, s * 0.45)
+                  << QPointF(s * 0.57, s * 0.72) << QPointF(s * 0.80, s * 0.39) << QPointF(s * 0.64, s * 0.39);
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(255, 244, 138, 190));
     painter.drawPolygon(boltHighlight);
@@ -71,8 +62,7 @@ QPixmap paintLauncherPixmap(int size)
 
 namespace AppIcon {
 
-QIcon launcherIcon()
-{
+QIcon launcherIcon() {
     QIcon icon;
     const int sizes[] = {16, 20, 24, 32, 40, 48, 64, 96, 128, 256};
     for (int i = 0; i < int(sizeof(sizes) / sizeof(sizes[0])); ++i) {

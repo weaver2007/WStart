@@ -13,7 +13,7 @@ option(HKM_REQUIRE_STATIC_QT "Fail configuration unless the selected Qt installa
 set(HKM_WINVER "0x0601" CACHE STRING "Windows target version macro, for example 0x0601 for Windows 7 or 0x0501 for Windows XP.")
 set_property(CACHE HKM_WINVER PROPERTY STRINGS 0x0501 0x0601 0x0A00)
 set(HKM_NTDDI_VERSION "" CACHE STRING "Windows NTDDI_VERSION macro. Leave empty to derive it from HKM_WINVER.")
-set(HKM_QT_MAJOR "AUTO" CACHE STRING "Qt major version to use: AUTO, 6, 5. Qt 4 is planned but not source-compatible yet.")
+set(HKM_QT_MAJOR "AUTO" CACHE STRING "Qt major version to use: AUTO, 6, 5, or 4.")
 set_property(CACHE HKM_QT_MAJOR PROPERTY STRINGS AUTO 6 5 4)
 set(HKM_CXX_STANDARD "17" CACHE STRING "C++ standard used by HotKeyManager targets.")
 set_property(CACHE HKM_CXX_STANDARD PROPERTY STRINGS 14 17)
@@ -106,6 +106,8 @@ execute_process(
     OUTPUT_VARIABLE HKM_QT_CONFIG
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+# Static Qt is reported differently by Qt 4, Qt 5, and locally built Qt 6 packages.
+# Keep these probes together so static presets can fail early and import plugins correctly.
 set(HKM_QT_IS_STATIC OFF)
 if(HKM_QT_CONFIG MATCHES "(^|[ ;])static($|[ ;])")
     set(HKM_QT_IS_STATIC ON)
@@ -289,7 +291,6 @@ target_link_libraries(HotKeyManager PRIVATE
     user32 shell32 ole32 uuid psapi advapi32
     ${HKM_QT5_STATIC_APP_COMPAT_LIBS}
     ${HKM_QT5_STATIC_PLATFORM_COMPAT_LIBS}
-    ${HKM_QT_LIBS}
     ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
     ${HKM_STATIC_SYSTEM_LIBS}
 )
@@ -438,7 +439,6 @@ if(QT_VERSION_MAJOR EQUAL 4)
 endif()
 
 target_link_libraries(HotKeyManagerTests PRIVATE
-    ${HKM_QT_TEST_LIBS}
     ${HKM_QT_TEST_LIBS}
     ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
     ${HKM_STATIC_SYSTEM_LIBS}

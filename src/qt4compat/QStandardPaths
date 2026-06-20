@@ -6,13 +6,9 @@
 
 class QStandardPaths {
 public:
-    enum StandardLocation {
-        AppConfigLocation,
-        AppLocalDataLocation
-    };
+    enum StandardLocation { AppConfigLocation, AppLocalDataLocation };
 
-    static QString writableLocation(StandardLocation location)
-    {
+    static QString writableLocation(StandardLocation location) {
         Q_UNUSED(location);
         const QString data = QDesktopServices::storageLocation(QDesktopServices::DataLocation);
         if (!data.isEmpty()) {

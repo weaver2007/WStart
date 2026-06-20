@@ -6,13 +6,13 @@
 #include <QApplication>
 #include <QDir>
 #include <QIcon>
-#include <QLockFile>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QLockFile>
 #include <QMessageBox>
-#include <QThread>
-#include <QSystemTrayIcon>
 #include <QStandardPaths>
+#include <QSystemTrayIcon>
+#include <QThread>
 #include <QtPlugin>
 
 #include <memory>
@@ -25,13 +25,11 @@ Q_IMPORT_PLUGIN(QICOPlugin)
 #endif
 
 namespace {
-QString singleInstanceServerName()
-{
+QString singleInstanceServerName() {
     return "HotKeyManager-SingleInstance";
 }
 
-bool notifyExistingInstance()
-{
+bool notifyExistingInstance() {
     QLocalSocket socket;
     for (int attempt = 0; attempt < 10; ++attempt) {
         socket.connectToServer(singleInstanceServerName());
@@ -48,10 +46,9 @@ bool notifyExistingInstance()
     }
     return false;
 }
-}
+} // namespace
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("HotKeyManager");
     QApplication::setOrganizationName("HotKeyManager");
@@ -63,7 +60,8 @@ int main(int argc, char *argv[])
         QDir().mkpath(lockDirectory);
     }
 
-    std::unique_ptr<QLockFile> lockFile(new QLockFile(QDir(lockDirectory.isEmpty() ? QDir::tempPath() : lockDirectory).filePath("HotKeyManager.lock")));
+    std::unique_ptr<QLockFile> lockFile(
+        new QLockFile(QDir(lockDirectory.isEmpty() ? QDir::tempPath() : lockDirectory).filePath("HotKeyManager.lock")));
     if (!lockFile->tryLock(0)) {
         if (notifyExistingInstance()) {
             return 0;
@@ -82,7 +80,7 @@ int main(int argc, char *argv[])
 
     QObject::connect(&server, &QLocalServer::newConnection, &app, [&]() {
         while (server.hasPendingConnections()) {
-            if (QLocalSocket *socket = server.nextPendingConnection()) {
+            if (QLocalSocket* socket = server.nextPendingConnection()) {
                 window.showSettings();
                 socket->disconnectFromServer();
                 socket->deleteLater();

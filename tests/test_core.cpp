@@ -1,5 +1,5 @@
-#include "../src/HotkeyTypes.h"
 #include "../src/HotkeyConflictDetector.h"
+#include "../src/HotkeyTypes.h"
 #include "../src/RuleStore.h"
 
 #include <QTemporaryDir>
@@ -27,8 +27,7 @@ private slots:
     void conflictWarnings();
 };
 
-void CoreTests::hotkeyDisplayText()
-{
+void CoreTests::hotkeyDisplayText() {
     HotkeyCombination hotkey;
     hotkey.modifiers = ModifierCtrl | ModifierAlt;
 #ifdef Q_OS_WIN
@@ -40,8 +39,7 @@ void CoreTests::hotkeyDisplayText()
     QVERIFY(hotkey.isValid());
 }
 
-void CoreTests::jsonRoundTrip()
-{
+void CoreTests::jsonRoundTrip() {
     HotkeyRule rule;
     rule.id = "rule-1";
     rule.enabled = true;
@@ -67,8 +65,7 @@ void CoreTests::jsonRoundTrip()
     QCOMPARE(parsed.action.target, rule.action.target);
 }
 
-void CoreTests::sectionJsonRoundTrip()
-{
+void CoreTests::sectionJsonRoundTrip() {
     LauncherSection section;
     section.id = "folder-system";
     section.category = LauncherCategory::Folder;
@@ -94,8 +91,7 @@ void CoreTests::sectionJsonRoundTrip()
     QCOMPARE(LauncherSection::fromJson(legacy).collapsed, false);
 }
 
-void CoreTests::ruleCanBeValidWithoutHotkey()
-{
+void CoreTests::ruleCanBeValidWithoutHotkey() {
     HotkeyRule rule;
     rule.id = "rule-no-hotkey";
     rule.category = LauncherCategory::Program;
@@ -107,8 +103,7 @@ void CoreTests::ruleCanBeValidWithoutHotkey()
     QVERIFY(rule.isValid());
 }
 
-void CoreTests::legacyFileRuleMigratesToProgramCategory()
-{
+void CoreTests::legacyFileRuleMigratesToProgramCategory() {
     QJsonObject action;
     action["type"] = "File";
     action["target"] = "C:/Temp/readme.txt";
@@ -124,8 +119,7 @@ void CoreTests::legacyFileRuleMigratesToProgramCategory()
     QVERIFY(parsed.sectionId.isEmpty());
 }
 
-void CoreTests::appSettingsRoundTrip()
-{
+void CoreTests::appSettingsRoundTrip() {
     AppSettings settings;
     settings.language = "en-US";
     settings.hotkeysEnabled = false;
@@ -157,8 +151,7 @@ void CoreTests::appSettingsRoundTrip()
     QCOMPARE(parsed.categoryAppearance.textColor, QString("#abcdef"));
 }
 
-void CoreTests::appSettingsDefaultsAndLanguageFallback()
-{
+void CoreTests::appSettingsDefaultsAndLanguageFallback() {
     AppSettings defaults = AppSettings::fromJson({});
     QCOMPARE(defaults.language, QString("zh-CN"));
     QCOMPARE(defaults.hotkeysEnabled, true);
@@ -182,8 +175,7 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback()
     QCOMPARE(parsed.themeMode, QString("system"));
 }
 
-void CoreTests::itemAppearanceRoundTrip()
-{
+void CoreTests::itemAppearanceRoundTrip() {
     LauncherItemAppearance appearance;
     appearance.iconWidth = 32;
     appearance.iconHeight = 28;
@@ -209,8 +201,7 @@ void CoreTests::itemAppearanceRoundTrip()
     QCOMPARE(parsed.showEllipsis, true);
 }
 
-void CoreTests::itemAppearanceDefaultsAndFallback()
-{
+void CoreTests::itemAppearanceDefaultsAndFallback() {
     const LauncherItemAppearance defaults = LauncherItemAppearance::fromJson({});
     QCOMPARE(defaults.iconWidth, 48);
     QCOMPARE(defaults.iconHeight, 48);
@@ -240,8 +231,7 @@ void CoreTests::itemAppearanceDefaultsAndFallback()
     QCOMPARE(parsed.showEllipsis, true);
 }
 
-void CoreTests::sectionAndCategoryAppearanceRoundTrip()
-{
+void CoreTests::sectionAndCategoryAppearanceRoundTrip() {
     LauncherSectionAppearance section;
     section.iconWidth = 24;
     section.iconHeight = 20;
@@ -275,8 +265,7 @@ void CoreTests::sectionAndCategoryAppearanceRoundTrip()
     QCOMPARE(parsedCategory.textColor, QString("#663399"));
 }
 
-void CoreTests::sectionAndCategoryAppearanceDefaultsAndFallback()
-{
+void CoreTests::sectionAndCategoryAppearanceDefaultsAndFallback() {
     const LauncherSectionAppearance sectionDefaults = LauncherSectionAppearance::fromJson({});
     QCOMPARE(sectionDefaults.iconWidth, 18);
     QCOMPARE(sectionDefaults.iconHeight, 18);
@@ -313,8 +302,7 @@ void CoreTests::sectionAndCategoryAppearanceDefaultsAndFallback()
     QCOMPARE(parsedCategory.textColor, QString());
 }
 
-void CoreTests::conflictWarnings()
-{
+void CoreTests::conflictWarnings() {
     RuleStore store;
     HotkeyRule first;
     first.id = "one";

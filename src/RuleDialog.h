@@ -13,11 +13,11 @@ class RuleDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit RuleDialog(QWidget *parent = nullptr);
-    explicit RuleDialog(const QString &language, QWidget *parent = nullptr);
+    explicit RuleDialog(QWidget* parent = nullptr);
+    explicit RuleDialog(const QString& language, QWidget* parent = nullptr);
 
-    void setContext(LauncherCategory category, const QString &sectionId);
-    void setRule(const HotkeyRule &rule);
+    void setContext(LauncherCategory category, const QString& sectionId);
+    void setRule(const HotkeyRule& rule);
     HotkeyRule rule() const;
 
 private slots:
@@ -33,12 +33,12 @@ private:
     QString m_language = "zh-CN";
     LauncherCategory m_category = LauncherCategory::Program;
     QString m_sectionId;
-    HotkeyEdit *m_hotkeyEdit = nullptr;
-    QLineEdit *m_targetEdit = nullptr;
-    QLineEdit *m_argumentsEdit = nullptr;
-    QLineEdit *m_workingDirectoryEdit = nullptr;
-    QLineEdit *m_descriptionEdit = nullptr;
-    QPushButton *m_browseButton = nullptr;
-    QWidget *m_argumentsRow = nullptr;
-    QWidget *m_workingDirectoryRow = nullptr;
+    HotkeyEdit* m_hotkeyEdit = nullptr;
+    QLineEdit* m_targetEdit = nullptr;
+    QLineEdit* m_argumentsEdit = nullptr;
+    QLineEdit* m_workingDirectoryEdit = nullptr;
+    QLineEdit* m_descriptionEdit = nullptr;
+    QPushButton* m_browseButton = nullptr;
+    QWidget* m_argumentsRow = nullptr;
+    QWidget* m_workingDirectoryRow = nullptr;
 };

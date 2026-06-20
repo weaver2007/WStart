@@ -7,23 +7,24 @@
 
 class QTemporaryDir {
 public:
-    QTemporaryDir()
-    {
+    QTemporaryDir() {
         m_path = QDir::temp().filePath(QString("hkm-%1").arg(QUuid::createUuid().toString()));
         QDir().mkpath(m_path);
     }
 
-    ~QTemporaryDir()
-    {
+    ~QTemporaryDir() {
         removeDirectory(QDir(m_path));
     }
 
-    bool isValid() const { return QDir(m_path).exists(); }
-    QString path() const { return m_path; }
+    bool isValid() const {
+        return QDir(m_path).exists();
+    }
+    QString path() const {
+        return m_path;
+    }
 
 private:
-    static void removeDirectory(const QDir &directory)
-    {
+    static void removeDirectory(const QDir& directory) {
         if (!directory.exists()) {
             return;
         }

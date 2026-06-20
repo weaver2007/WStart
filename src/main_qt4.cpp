@@ -4,27 +4,25 @@
 #include "UiText.h"
 
 #include <QApplication>
-#include <QDir>
 #include <QDesktopWidget>
+#include <QDir>
 #include <QFont>
 #include <QIcon>
-#include <QLockFile>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QLockFile>
 #include <QMessageBox>
-#include <QSystemTrayIcon>
 #include <QStandardPaths>
+#include <QSystemTrayIcon>
 
 #include <windows.h>
 
 namespace {
-QString singleInstanceServerName()
-{
+QString singleInstanceServerName() {
     return "HotKeyManager-SingleInstance";
 }
 
-bool notifyExistingInstance()
-{
+bool notifyExistingInstance() {
     QLocalSocket socket;
     for (int attempt = 0; attempt < 10; ++attempt) {
         socket.connectToServer(singleInstanceServerName());
@@ -41,10 +39,9 @@ bool notifyExistingInstance()
     }
     return false;
 }
-}
+} // namespace
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     const int dpi = QApplication::desktop() ? QApplication::desktop()->logicalDpiX() : 96;
     if (dpi > 96) {

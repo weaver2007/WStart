@@ -14,8 +14,7 @@
 
 namespace QtCompat {
 
-inline QString uuidWithoutBraces()
-{
+inline QString uuidWithoutBraces() {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
 #else
@@ -27,8 +26,7 @@ inline QString uuidWithoutBraces()
 #endif
 }
 
-inline int boundedInt(int value, int minimum, int maximum)
-{
+inline int boundedInt(int value, int minimum, int maximum) {
     if (value < minimum) {
         return minimum;
     }
@@ -38,11 +36,10 @@ inline int boundedInt(int value, int minimum, int maximum)
     return value;
 }
 
-inline int scaleInt(int value)
-{
+inline int scaleInt(int value) {
 #if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
     static int scalePercent = []() -> int {
-        QDesktopWidget *desktop = QApplication::desktop();
+        QDesktopWidget* desktop = QApplication::desktop();
         const int dpi = desktop ? desktop->logicalDpiX() : 96;
         if (dpi <= 96) {
             return 100;
@@ -55,8 +52,7 @@ inline int scaleInt(int value)
 #endif
 }
 
-inline QString sanitizeFileName(QString value)
-{
+inline QString sanitizeFileName(QString value) {
     static const QChar replacement('_');
     static const QString illegal = QString::fromLatin1("\\/:*?\"<>|");
     for (int i = 0; i < value.size(); ++i) {
@@ -67,17 +63,16 @@ inline QString sanitizeFileName(QString value)
     return value;
 }
 
-inline QScreen *screenAtPoint(const QPoint &point)
-{
+inline QScreen* screenAtPoint(const QPoint& point) {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
     return QGuiApplication::screenAt(point);
 #else
-    QDesktopWidget *desktop = QApplication::desktop();
+    QDesktopWidget* desktop = QApplication::desktop();
     if (!desktop) {
         return QGuiApplication::primaryScreen();
     }
     const int screenIndex = desktop->screenNumber(point);
-    const QList<QScreen *> screens = QGuiApplication::screens();
+    const QList<QScreen*> screens = QGuiApplication::screens();
     if (screenIndex >= 0 && screenIndex < screens.size()) {
         return screens.at(screenIndex);
     }
@@ -85,17 +80,16 @@ inline QScreen *screenAtPoint(const QPoint &point)
 #endif
 }
 
-inline QScreen *screenForWidget(const QWidget *widget)
-{
+inline QScreen* screenForWidget(const QWidget* widget) {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
     if (widget) {
-        if (QScreen *screen = widget->screen()) {
+        if (QScreen* screen = widget->screen()) {
             return screen;
         }
     }
 #endif
     if (widget) {
-        if (QScreen *screen = screenAtPoint(widget->frameGeometry().center())) {
+        if (QScreen* screen = screenAtPoint(widget->frameGeometry().center())) {
             return screen;
         }
     }

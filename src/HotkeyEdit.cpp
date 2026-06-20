@@ -9,41 +9,34 @@
 #endif
 
 #ifdef Q_OS_WIN
-HotkeyEdit *HotkeyEdit::s_activeEditor = nullptr;
+HotkeyEdit* HotkeyEdit::s_activeEditor = nullptr;
 HotkeyModifiers HotkeyEdit::s_capturedModifiers = ModifierNone;
 #endif
 
-HotkeyEdit::HotkeyEdit(QWidget *parent)
-    : QLineEdit(parent)
-{
+HotkeyEdit::HotkeyEdit(QWidget* parent) : QLineEdit(parent) {
     setReadOnly(true);
     setPlaceholderText("Click here or press Record");
     setFocusPolicy(Qt::StrongFocus);
 }
 
-HotkeyEdit::~HotkeyEdit()
-{
+HotkeyEdit::~HotkeyEdit() {
     stopCaptureHook();
 }
 
-HotkeyCombination HotkeyEdit::hotkey() const
-{
+HotkeyCombination HotkeyEdit::hotkey() const {
     return m_hotkey;
 }
 
-void HotkeyEdit::setHotkey(const HotkeyCombination &hotkey)
-{
+void HotkeyEdit::setHotkey(const HotkeyCombination& hotkey) {
     m_hotkey = hotkey;
     setText(m_hotkey.displayText());
 }
 
-void HotkeyEdit::focusInEvent(QFocusEvent *event)
-{
+void HotkeyEdit::focusInEvent(QFocusEvent* event) {
     QLineEdit::focusInEvent(event);
 }
 
-void HotkeyEdit::focusOutEvent(QFocusEvent *event)
-{
+void HotkeyEdit::focusOutEvent(QFocusEvent* event) {
     finishRecording(false);
 #ifdef Q_OS_WIN
     s_capturedModifiers = ModifierNone;
@@ -54,8 +47,7 @@ void HotkeyEdit::focusOutEvent(QFocusEvent *event)
     QLineEdit::focusOutEvent(event);
 }
 
-void HotkeyEdit::keyPressEvent(QKeyEvent *event)
-{
+void HotkeyEdit::keyPressEvent(QKeyEvent* event) {
     if (m_recording) {
         const int virtualKey = virtualKeyFromEvent(event);
         if (virtualKey > 0 && !HotkeyCombination::isModifierKey(virtualKey)) {
@@ -66,8 +58,7 @@ void HotkeyEdit::keyPressEvent(QKeyEvent *event)
     event->accept();
 }
 
-void HotkeyEdit::keyReleaseEvent(QKeyEvent *event)
-{
+void HotkeyEdit::keyReleaseEvent(QKeyEvent* event) {
     const Qt::KeyboardModifiers activeModifiers =
         event->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::ShiftModifier | Qt::MetaModifier);
     if (m_suppressingCurrentChord && activeModifiers == Qt::NoModifier) {
@@ -76,15 +67,13 @@ void HotkeyEdit::keyReleaseEvent(QKeyEvent *event)
     event->accept();
 }
 
-void HotkeyEdit::mousePressEvent(QMouseEvent *event)
-{
+void HotkeyEdit::mousePressEvent(QMouseEvent* event) {
     setFocus(Qt::MouseFocusReason);
     beginRecording();
     event->accept();
 }
 
-void HotkeyEdit::beginRecording()
-{
+void HotkeyEdit::beginRecording() {
     setFocus(Qt::ShortcutFocusReason);
     startCaptureHook();
 
@@ -102,8 +91,7 @@ void HotkeyEdit::beginRecording()
     selectAll();
 }
 
-void HotkeyEdit::startCaptureHook()
-{
+void HotkeyEdit::startCaptureHook() {
 #ifdef Q_OS_WIN
     if (m_captureHook) {
         return;
@@ -115,8 +103,7 @@ void HotkeyEdit::startCaptureHook()
 #endif
 }
 
-void HotkeyEdit::stopCaptureHook()
-{
+void HotkeyEdit::stopCaptureHook() {
 #ifdef Q_OS_WIN
     if (m_captureHook) {
         UnhookWindowsHookEx(m_captureHook);
@@ -129,8 +116,7 @@ void HotkeyEdit::stopCaptureHook()
 #endif
 }
 
-void HotkeyEdit::captureNativeHotkey(int virtualKey, HotkeyModifiers modifiers)
-{
+void HotkeyEdit::captureNativeHotkey(int virtualKey, HotkeyModifiers modifiers) {
     if (HotkeyCombination::isModifierKey(virtualKey)) {
         return;
     }
@@ -143,14 +129,12 @@ void HotkeyEdit::captureNativeHotkey(int virtualKey, HotkeyModifiers modifiers)
     finishRecording(true);
 }
 
-void HotkeyEdit::finishRecording(bool suppressCurrentChord)
-{
+void HotkeyEdit::finishRecording(bool suppressCurrentChord) {
     m_recording = false;
     m_suppressingCurrentChord = suppressCurrentChord;
 }
 
-int HotkeyEdit::virtualKeyFromEvent(const QKeyEvent *event) const
-{
+int HotkeyEdit::virtualKeyFromEvent(const QKeyEvent* event) const {
     if (!event) {
         return 0;
     }
@@ -171,41 +155,67 @@ int HotkeyEdit::virtualKeyFromEvent(const QKeyEvent *event) const
         return VK_F1 + key - Qt::Key_F1;
     }
     switch (key) {
-    case Qt::Key_Space: return VK_SPACE;
-    case Qt::Key_Tab: return VK_TAB;
-    case Qt::Key_Escape: return VK_ESCAPE;
+    case Qt::Key_Space:
+        return VK_SPACE;
+    case Qt::Key_Tab:
+        return VK_TAB;
+    case Qt::Key_Escape:
+        return VK_ESCAPE;
     case Qt::Key_Return:
-    case Qt::Key_Enter: return VK_RETURN;
-    case Qt::Key_Backspace: return VK_BACK;
-    case Qt::Key_Delete: return VK_DELETE;
-    case Qt::Key_Insert: return VK_INSERT;
-    case Qt::Key_Home: return VK_HOME;
-    case Qt::Key_End: return VK_END;
-    case Qt::Key_PageUp: return VK_PRIOR;
-    case Qt::Key_PageDown: return VK_NEXT;
-    case Qt::Key_Left: return VK_LEFT;
-    case Qt::Key_Right: return VK_RIGHT;
-    case Qt::Key_Up: return VK_UP;
-    case Qt::Key_Down: return VK_DOWN;
-    case Qt::Key_Minus: return VK_OEM_MINUS;
-    case Qt::Key_Equal: return VK_OEM_PLUS;
-    case Qt::Key_BracketLeft: return VK_OEM_4;
-    case Qt::Key_BracketRight: return VK_OEM_6;
-    case Qt::Key_Backslash: return VK_OEM_5;
-    case Qt::Key_Semicolon: return VK_OEM_1;
-    case Qt::Key_Apostrophe: return VK_OEM_7;
-    case Qt::Key_Comma: return VK_OEM_COMMA;
-    case Qt::Key_Period: return VK_OEM_PERIOD;
-    case Qt::Key_Slash: return VK_OEM_2;
-    case Qt::Key_QuoteLeft: return VK_OEM_3;
-    default: break;
+    case Qt::Key_Enter:
+        return VK_RETURN;
+    case Qt::Key_Backspace:
+        return VK_BACK;
+    case Qt::Key_Delete:
+        return VK_DELETE;
+    case Qt::Key_Insert:
+        return VK_INSERT;
+    case Qt::Key_Home:
+        return VK_HOME;
+    case Qt::Key_End:
+        return VK_END;
+    case Qt::Key_PageUp:
+        return VK_PRIOR;
+    case Qt::Key_PageDown:
+        return VK_NEXT;
+    case Qt::Key_Left:
+        return VK_LEFT;
+    case Qt::Key_Right:
+        return VK_RIGHT;
+    case Qt::Key_Up:
+        return VK_UP;
+    case Qt::Key_Down:
+        return VK_DOWN;
+    case Qt::Key_Minus:
+        return VK_OEM_MINUS;
+    case Qt::Key_Equal:
+        return VK_OEM_PLUS;
+    case Qt::Key_BracketLeft:
+        return VK_OEM_4;
+    case Qt::Key_BracketRight:
+        return VK_OEM_6;
+    case Qt::Key_Backslash:
+        return VK_OEM_5;
+    case Qt::Key_Semicolon:
+        return VK_OEM_1;
+    case Qt::Key_Apostrophe:
+        return VK_OEM_7;
+    case Qt::Key_Comma:
+        return VK_OEM_COMMA;
+    case Qt::Key_Period:
+        return VK_OEM_PERIOD;
+    case Qt::Key_Slash:
+        return VK_OEM_2;
+    case Qt::Key_QuoteLeft:
+        return VK_OEM_3;
+    default:
+        break;
     }
 #endif
     return 0;
 }
 
-HotkeyModifiers HotkeyEdit::modifiersFromEvent(const QKeyEvent *event) const
-{
+HotkeyModifiers HotkeyEdit::modifiersFromEvent(const QKeyEvent* event) const {
     HotkeyModifiers modifiers = ModifierNone;
     if (!event) {
         return modifiers;
@@ -229,33 +239,24 @@ HotkeyModifiers HotkeyEdit::modifiersFromEvent(const QKeyEvent *event) const
     return modifiers;
 }
 
-bool HotkeyEdit::shouldCapture() const
-{
+bool HotkeyEdit::shouldCapture() const {
     return m_recording || m_suppressingCurrentChord;
 }
 
 #ifdef Q_OS_WIN
-bool HotkeyEdit::isModifierVirtualKey(int virtualKey)
-{
+bool HotkeyEdit::isModifierVirtualKey(int virtualKey) {
     return virtualKey == VK_CONTROL || virtualKey == VK_LCONTROL || virtualKey == VK_RCONTROL ||
-           virtualKey == VK_MENU || virtualKey == VK_LMENU || virtualKey == VK_RMENU ||
-           virtualKey == VK_SHIFT || virtualKey == VK_LSHIFT || virtualKey == VK_RSHIFT ||
-           virtualKey == VK_LWIN || virtualKey == VK_RWIN;
+           virtualKey == VK_MENU || virtualKey == VK_LMENU || virtualKey == VK_RMENU || virtualKey == VK_SHIFT ||
+           virtualKey == VK_LSHIFT || virtualKey == VK_RSHIFT || virtualKey == VK_LWIN || virtualKey == VK_RWIN;
 }
 
-bool HotkeyEdit::hasAnyCapturedModifier()
-{
-    return s_capturedModifiers.testFlag(ModifierCtrl) ||
-           s_capturedModifiers.testFlag(ModifierAlt) ||
-           s_capturedModifiers.testFlag(ModifierShift) ||
-           s_capturedModifiers.testFlag(ModifierWin);
+bool HotkeyEdit::hasAnyCapturedModifier() {
+    return s_capturedModifiers.testFlag(ModifierCtrl) || s_capturedModifiers.testFlag(ModifierAlt) ||
+           s_capturedModifiers.testFlag(ModifierShift) || s_capturedModifiers.testFlag(ModifierWin);
 }
 
-HotkeyModifiers HotkeyEdit::nativeModifierSnapshot()
-{
-    auto pressed = [](int key) {
-        return (GetAsyncKeyState(key) & 0x8000) != 0;
-    };
+HotkeyModifiers HotkeyEdit::nativeModifierSnapshot() {
+    auto pressed = [](int key) { return (GetAsyncKeyState(key) & 0x8000) != 0; };
 
     HotkeyModifiers modifiers = ModifierNone;
     if (pressed(VK_CONTROL) || pressed(VK_LCONTROL) || pressed(VK_RCONTROL)) {
@@ -273,8 +274,7 @@ HotkeyModifiers HotkeyEdit::nativeModifierSnapshot()
     return modifiers;
 }
 
-void HotkeyEdit::updateCapturedModifierState(int virtualKey, bool pressed)
-{
+void HotkeyEdit::updateCapturedModifierState(int virtualKey, bool pressed) {
     HotkeyModifier modifier = ModifierNone;
     switch (virtualKey) {
     case VK_CONTROL:
@@ -307,13 +307,12 @@ void HotkeyEdit::updateCapturedModifierState(int virtualKey, bool pressed)
     }
 }
 
-LRESULT CALLBACK HotkeyEdit::captureProc(int code, WPARAM wParam, LPARAM lParam)
-{
+LRESULT CALLBACK HotkeyEdit::captureProc(int code, WPARAM wParam, LPARAM lParam) {
     if (code < 0 || !s_activeEditor || !s_activeEditor->shouldCapture()) {
         return CallNextHookEx(nullptr, code, wParam, lParam);
     }
 
-    const auto *event = reinterpret_cast<KBDLLHOOKSTRUCT *>(lParam);
+    const auto* event = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
     if (!event) {
         return CallNextHookEx(nullptr, code, wParam, lParam);
     }

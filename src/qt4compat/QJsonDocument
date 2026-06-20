@@ -6,19 +6,20 @@
 
 class QJsonDocument {
 public:
-    enum JsonFormat {
-        Compact,
-        Indented
-    };
+    enum JsonFormat { Compact, Indented };
 
     QJsonDocument() {}
-    explicit QJsonDocument(const QJsonObject &object) : m_object(object), m_isObject(true) {}
+    explicit QJsonDocument(const QJsonObject& object) : m_object(object), m_isObject(true) {}
 
-    bool isObject() const { return m_isObject; }
-    QJsonObject object() const { return m_object; }
+    bool isObject() const {
+        return m_isObject;
+    }
+    QJsonObject object() const {
+        return m_object;
+    }
     QByteArray toJson(JsonFormat format = Indented) const;
 
-    static QJsonDocument fromJson(const QByteArray &json);
+    static QJsonDocument fromJson(const QByteArray& json);
 
 private:
     QJsonObject m_object;
