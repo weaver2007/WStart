@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Installer>
+    <Name>HStart</Name>
+    <Version>@VERSION@</Version>
+    <Title>HStart Setup</Title>
+    <Publisher>HStart</Publisher>
+    <ProductUrl>https://github.com/weaver2007/HotKeyManager</ProductUrl>
+    <StartMenuDir>HStart</StartMenuDir>
+    <TargetDir>@ApplicationsDirX64@/HStart</TargetDir>
+    <InstallerApplicationIcon>app</InstallerApplicationIcon>
+    <InstallerWindowIcon>app.ico</InstallerWindowIcon>
+    <WizardStyle>Modern</WizardStyle>
+    <WizardDefaultWidth>760</WizardDefaultWidth>
+    <WizardDefaultHeight>500</WizardDefaultHeight>
+    <MaintenanceToolName>HStartMaintenance</MaintenanceToolName>
+    <RemoveTargetDir>true</RemoveTargetDir>
+</Installer>
