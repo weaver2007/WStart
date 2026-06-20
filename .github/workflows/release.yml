@@ -30,21 +30,18 @@ jobs:
             os: windows-2022
             qt-host: windows
             qt-arch: win64_msvc2022_64
-            qt-dir: msvc2022_64
             build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64
             artifact-name: WStart-qt6.8.3-windows-msvc2022-dynamic-x64
           - name: macOS / Qt 6.8.3 / clang
-            os: macos-14
+            os: macos-13
             qt-host: mac
             qt-arch: clang_64
-            qt-dir: clang_64
             build-dir: out/build/release-macos-qt6.8.3-clang
             artifact-name: WStart-qt6.8.3-macos-clang
           - name: Linux / Qt 6.8.3 / gcc / x64
             os: ubuntu-22.04
             qt-host: linux
-            qt-arch: gcc_64
-            qt-dir: gcc_64
+            qt-arch: linux_gcc_64
             build-dir: out/build/release-linux-qt6.8.3-gcc-x64
             artifact-name: WStart-qt6.8.3-linux-gcc-x64
 
@@ -55,13 +52,13 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Install Linux system packages
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
 
       - name: Install macOS system packages
         if: runner.os == 'macOS'
@@ -72,8 +69,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip aqtinstall
           python -m aqt install-qt "${{ matrix.qt-host }}" desktop "$env:QT_VERSION" "${{ matrix.qt-arch }}" --outputdir "$env:RUNNER_TEMP/Qt"
-          "QT_PREFIX=$env:RUNNER_TEMP/Qt/$env:QT_VERSION/${{ matrix.qt-dir }}" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "$env:RUNNER_TEMP/Qt/$env:QT_VERSION/${{ matrix.qt-dir }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          $qtRoot = Join-Path $env:RUNNER_TEMP "Qt/$env:QT_VERSION"
+          $qtConfig = Get-ChildItem -LiteralPath $qtRoot -Recurse -Filter Qt6Config.cmake |
+            Select-Object -First 1
+          if (-not $qtConfig) {
+            Get-ChildItem -LiteralPath $qtRoot -Recurse -Depth 3 -Force | Format-List FullName
+            throw "Qt config was not found under $qtRoot"
+          }
+          $qtPrefix = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $qtConfig.FullName)))
+          "QT_PREFIX=$qtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Append
+          (Join-Path $qtPrefix "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Configure Windows
         if: runner.os == 'Windows'

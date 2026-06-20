@@ -66,15 +66,15 @@ HotkeyCombination HotkeyCombination::fromJson(const QJsonObject& object) {
 }
 
 QString HotkeyCombination::keyName(int virtualKey) {
-#ifdef Q_OS_WIN
-    if (virtualKey >= VK_F1 && virtualKey <= VK_F24) {
-        return QString("F%1").arg(virtualKey - VK_F1 + 1);
-    }
     if (virtualKey >= 'A' && virtualKey <= 'Z') {
         return QString(QChar(static_cast<ushort>(virtualKey)));
     }
     if (virtualKey >= '0' && virtualKey <= '9') {
         return QString(QChar(static_cast<ushort>(virtualKey)));
+    }
+#ifdef Q_OS_WIN
+    if (virtualKey >= VK_F1 && virtualKey <= VK_F24) {
+        return QString("F%1").arg(virtualKey - VK_F1 + 1);
     }
     switch (virtualKey) {
     case VK_SPACE:
