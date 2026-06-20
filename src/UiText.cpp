@@ -168,6 +168,9 @@ QString text(const QString& language, Key key) {
         return en ? "%1 items" : QString::fromUtf8("%1 项");
     case Key::HotkeyHookFailed:
         return en ? "Hotkey hook failed" : QString::fromUtf8("热键钩子失败");
+    case Key::HotkeyHookUnavailable:
+        return en ? "Global hotkeys are not enabled on this platform yet."
+                  : QString::fromUtf8("当前平台暂未启用全局快捷键。");
     case Key::HookRunning:
         return en ? "Global keyboard hook is running." : QString::fromUtf8("全局键盘钩子已运行。");
     case Key::HotkeysPaused:

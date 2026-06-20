@@ -1,6 +1,7 @@
 #include "ActionRunner.h"
 
 #include <QDir>
+#include <QDesktopServices>
 #include <QFileInfo>
 #include <QThread>
 #include <QUrl>
@@ -177,9 +178,12 @@ bool ActionRunner::run(const LaunchAction& action, QString* error) const {
     }
     return true;
 #else
-    Q_UNUSED(action)
+    const QUrl url = action.type == LaunchActionType::Url ? QUrl(action.target) : QUrl::fromLocalFile(action.target);
+    if (QDesktopServices::openUrl(url)) {
+        return true;
+    }
     if (error) {
-        *error = "ActionRunner is implemented for Windows only.";
+        *error = QString("Failed to open target: %1").arg(action.target);
     }
     return false;
 #endif

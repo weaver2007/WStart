@@ -39,10 +39,10 @@ bool HotkeyHookService::start(QString* error) {
     }
     return true;
 #else
-    if (error) {
-        *error = "Global keyboard hooks are implemented for Windows only.";
-    }
-    return false;
+    Q_UNUSED(error)
+    // Non-Windows platforms keep the UI and rule management available first.
+    // Platform-specific global hotkey backends can be added without changing callers.
+    return true;
 #endif
 }
 

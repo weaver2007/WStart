@@ -6,7 +6,7 @@ endif()
 
 project(HotKeyManager VERSION 0.2.0 LANGUAGES CXX)
 
-option(HKM_DEPLOY_QT_RUNTIME "Run windeployqt and copy MSVC runtime DLLs after building HotKeyManager." ON)
+option(HKM_DEPLOY_QT_RUNTIME "Run windeployqt and copy MSVC runtime DLLs after building WStart on Windows." ON)
 option(HKM_DEPLOY_QT_RUNTIME_MANUAL "Copy a minimal Qt runtime set manually instead of running windeployqt." OFF)
 option(HKM_STATIC_RUNTIME "Link HotKeyManager targets with the static MSVC runtime (/MT or /MTd)." OFF)
 option(HKM_REQUIRE_STATIC_QT "Fail configuration unless the selected Qt installation is static." OFF)
@@ -25,21 +25,22 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-if(HKM_NTDDI_VERSION STREQUAL "")
-    if(HKM_WINVER STREQUAL "0x0501")
-        set(HKM_EFFECTIVE_NTDDI_VERSION "0x05010300")
-    elseif(HKM_WINVER STREQUAL "0x0601")
-        set(HKM_EFFECTIVE_NTDDI_VERSION "0x06010000")
-    elseif(HKM_WINVER STREQUAL "0x0A00")
-        set(HKM_EFFECTIVE_NTDDI_VERSION "0x0A000000")
+if(WIN32)
+    if(HKM_NTDDI_VERSION STREQUAL "")
+        if(HKM_WINVER STREQUAL "0x0501")
+            set(HKM_EFFECTIVE_NTDDI_VERSION "0x05010300")
+        elseif(HKM_WINVER STREQUAL "0x0601")
+            set(HKM_EFFECTIVE_NTDDI_VERSION "0x06010000")
+        elseif(HKM_WINVER STREQUAL "0x0A00")
+            set(HKM_EFFECTIVE_NTDDI_VERSION "0x0A000000")
+        else()
+            set(HKM_EFFECTIVE_NTDDI_VERSION "${HKM_WINVER}")
+        endif()
     else()
-        set(HKM_EFFECTIVE_NTDDI_VERSION "${HKM_WINVER}")
+        set(HKM_EFFECTIVE_NTDDI_VERSION "${HKM_NTDDI_VERSION}")
     endif()
-else()
-    set(HKM_EFFECTIVE_NTDDI_VERSION "${HKM_NTDDI_VERSION}")
+    add_compile_definitions(WINVER=${HKM_WINVER} _WIN32_WINNT=${HKM_WINVER} NTDDI_VERSION=${HKM_EFFECTIVE_NTDDI_VERSION})
 endif()
-
-add_compile_definitions(WINVER=${HKM_WINVER} _WIN32_WINNT=${HKM_WINVER} NTDDI_VERSION=${HKM_EFFECTIVE_NTDDI_VERSION})
 
 if(MSVC AND HKM_STATIC_RUNTIME)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -146,7 +147,7 @@ if(QT_VERSION_MAJOR EQUAL 4 AND WIN32)
     )
 endif()
 
-if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 4)
+if(WIN32 AND HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 4)
     if(MINGW)
         set(HKM_STATIC_SYSTEM_LIBS
             gdi32 comdlg32 oleaut32 imm32 winmm winspool msimg32 ole32 uuid ws2_32 advapi32 shell32 user32 kernel32 z
@@ -158,7 +159,7 @@ if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 4)
     endif()
 endif()
 
-if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
+if(WIN32 AND HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
     foreach(_hkm_qt5_static_app_lib IN ITEMS
         "${QT_PREFIX_DIR}/plugins/platforms/libqwindows.a"
         "${QT_PREFIX_DIR}/plugins/platforms/qwindows.lib"
@@ -211,7 +212,7 @@ if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
     endif()
 endif()
 
-if(HKM_QT5_STATIC_SYSTEM_LIBS)
+if(WIN32 AND HKM_QT5_STATIC_SYSTEM_LIBS)
     set(HKM_STATIC_SYSTEM_LIBS ${HKM_QT5_STATIC_SYSTEM_LIBS})
 endif()
 
@@ -221,7 +222,7 @@ endif()
 
 if(HKM_DEPLOY_QT_RUNTIME AND HKM_QT_IS_STATIC)
     message(STATUS "Static Qt detected; windeployqt is not needed.")
-elseif(HKM_DEPLOY_QT_RUNTIME AND NOT HKM_DEPLOY_QT_RUNTIME_MANUAL)
+elseif(WIN32 AND HKM_DEPLOY_QT_RUNTIME AND NOT HKM_DEPLOY_QT_RUNTIME_MANUAL)
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}" REQUIRED)
     set(HKM_DEPLOY_ENV_PATH "${QT_BIN_DIR};$ENV{PATH}")
     string(REPLACE ";" "\\;" HKM_DEPLOY_ENV_PATH "${HKM_DEPLOY_ENV_PATH}")
@@ -274,12 +275,21 @@ list(APPEND HKM_HEADERS
     src/MainWindow.h
 )
 
-add_executable(HotKeyManager WIN32
+set(HKM_EXECUTABLE_OPTIONS)
+set(HKM_PLATFORM_SOURCES)
+if(WIN32)
+    list(APPEND HKM_EXECUTABLE_OPTIONS WIN32)
+    list(APPEND HKM_PLATFORM_SOURCES resources/app.rc)
+elseif(APPLE)
+    list(APPEND HKM_EXECUTABLE_OPTIONS MACOSX_BUNDLE)
+endif()
+
+add_executable(HotKeyManager ${HKM_EXECUTABLE_OPTIONS}
     ${HKM_MAIN_SOURCE}
     ${HKM_SOURCES}
     ${HKM_HEADERS}
     ${HKM_QT4_COMPAT_SOURCES}
-    resources/app.rc
+    ${HKM_PLATFORM_SOURCES}
     resources/resources.qrc
 )
 
@@ -291,12 +301,15 @@ endif()
 target_link_libraries(HotKeyManager PRIVATE
     ${HKM_QT_LIBS}
     ${HKM_QT4_QTMAIN_LIB}
-    user32 shell32 ole32 uuid psapi advapi32
     ${HKM_QT5_STATIC_APP_COMPAT_LIBS}
     ${HKM_QT5_STATIC_PLATFORM_COMPAT_LIBS}
     ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
     ${HKM_STATIC_SYSTEM_LIBS}
 )
+
+if(WIN32)
+    target_link_libraries(HotKeyManager PRIVATE user32 shell32 ole32 uuid psapi advapi32)
+endif()
 
 target_compile_definitions(HotKeyManager PRIVATE
     HKM_APP_VERSION="${PROJECT_VERSION}"
@@ -325,25 +338,35 @@ if(MINGW AND HKM_STATIC_RUNTIME)
     target_link_options(HotKeyManager PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 
-if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 6 AND COMMAND qt_import_plugins)
+set_target_properties(HotKeyManager PROPERTIES OUTPUT_NAME WStart)
+if(APPLE)
+    set_target_properties(HotKeyManager PROPERTIES
+        MACOSX_BUNDLE_BUNDLE_NAME "WStart"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.wstart.hotkeymanager"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+    )
+endif()
+
+if(WIN32 AND HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 6 AND COMMAND qt_import_plugins)
     qt_import_plugins(HotKeyManager
         INCLUDE_BY_TYPE platforms Qt6::QWindowsIntegrationPlugin
         INCLUDE_BY_TYPE iconengines Qt6::QSvgIconPlugin
         INCLUDE_BY_TYPE imageformats Qt6::QSvgPlugin Qt6::QICOPlugin
         EXCLUDE_BY_TYPE generic networkinformation platforminputcontexts tls
     )
-elseif(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5 AND COMMAND qt5_import_plugins)
+elseif(WIN32 AND HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5 AND COMMAND qt5_import_plugins)
     qt5_import_plugins(HotKeyManager
         INCLUDE_BY_TYPE platforms Qt5::QWindowsIntegrationPlugin
         INCLUDE_BY_TYPE iconengines Qt5::QSvgIconPlugin
         INCLUDE_BY_TYPE imageformats Qt5::QSvgPlugin Qt5::QICOPlugin
         EXCLUDE_BY_TYPE generic platforminputcontexts
     )
-elseif(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
+elseif(WIN32 AND HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
     target_compile_definitions(HotKeyManager PRIVATE HKM_IMPORT_QT5_STATIC_PLUGINS)
 endif()
 
-if(HKM_DEPLOY_QT_RUNTIME AND HKM_DEPLOY_QT_RUNTIME_MANUAL AND NOT HKM_QT_IS_STATIC)
+if(WIN32 AND HKM_DEPLOY_QT_RUNTIME AND HKM_DEPLOY_QT_RUNTIME_MANUAL AND NOT HKM_QT_IS_STATIC)
     if(QT_VERSION_MAJOR EQUAL 4)
         set(HKM_MANUAL_QT_RUNTIME_DLLS
             QtCore4
@@ -396,7 +419,7 @@ if(HKM_DEPLOY_QT_RUNTIME AND HKM_DEPLOY_QT_RUNTIME_MANUAL AND NOT HKM_QT_IS_STAT
             )
         endif()
     endforeach()
-elseif(HKM_DEPLOY_QT_RUNTIME AND NOT HKM_QT_IS_STATIC)
+elseif(WIN32 AND HKM_DEPLOY_QT_RUNTIME AND NOT HKM_QT_IS_STATIC)
     add_custom_command(TARGET HotKeyManager POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E env
                 "PATH=${HKM_DEPLOY_ENV_PATH}"
@@ -405,7 +428,7 @@ elseif(HKM_DEPLOY_QT_RUNTIME AND NOT HKM_QT_IS_STATIC)
                 --no-system-d3d-compiler
                 --no-opengl-sw
                 "$<TARGET_FILE:HotKeyManager>"
-        COMMENT "Deploying Qt runtime DLLs next to HotKeyManager.exe"
+        COMMENT "Deploying Qt runtime DLLs next to WStart.exe"
     )
 endif()
 
@@ -448,9 +471,14 @@ endif()
 
 target_link_libraries(HotKeyManagerTests PRIVATE
     ${HKM_QT_TEST_LIBS}
-    ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
-    ${HKM_STATIC_SYSTEM_LIBS}
 )
+
+if(WIN32)
+    target_link_libraries(HotKeyManagerTests PRIVATE
+        ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
+        ${HKM_STATIC_SYSTEM_LIBS}
+    )
+endif()
 
 target_compile_definitions(HotKeyManagerTests PRIVATE
     HKM_APP_VERSION="${PROJECT_VERSION}"
@@ -464,7 +492,7 @@ if(NOT QT_VERSION_MAJOR EQUAL 4)
     )
 endif()
 
-if(HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
+if(WIN32 AND HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
     target_link_libraries(HotKeyManagerTests PRIVATE
         ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
         ${HKM_STATIC_SYSTEM_LIBS}
@@ -483,12 +511,27 @@ if(MINGW AND HKM_STATIC_RUNTIME)
     target_link_options(HotKeyManagerTests PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 
+install(TARGETS HotKeyManager
+    BUNDLE DESTINATION .
+    RUNTIME DESTINATION bin
+)
+
+if(UNIX AND NOT APPLE)
+    configure_file(packaging/linux/wstart.desktop.in "${CMAKE_CURRENT_BINARY_DIR}/wstart.desktop" @ONLY)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/wstart.desktop" DESTINATION share/applications)
+    install(FILES resources/app.svg DESTINATION share/icons/hicolor/scalable/apps RENAME wstart.svg)
+endif()
+
 enable_testing()
 add_test(NAME HotKeyManagerTests COMMAND HotKeyManagerTests)
-set(HKM_TEST_ENV_PATH "${QT_BIN_DIR};$ENV{PATH}")
-if(MINGW AND DEFINED HKM_MINGW_ROOT AND NOT HKM_MINGW_ROOT STREQUAL "")
-    file(TO_CMAKE_PATH "${HKM_MINGW_ROOT}" HKM_TEST_MINGW_ROOT)
-    set(HKM_TEST_ENV_PATH "${HKM_TEST_MINGW_ROOT}/bin;${HKM_TEST_ENV_PATH}")
+if(WIN32)
+    set(HKM_TEST_ENV_PATH "${QT_BIN_DIR};$ENV{PATH}")
+    if(MINGW AND DEFINED HKM_MINGW_ROOT AND NOT HKM_MINGW_ROOT STREQUAL "")
+        file(TO_CMAKE_PATH "${HKM_MINGW_ROOT}" HKM_TEST_MINGW_ROOT)
+        set(HKM_TEST_ENV_PATH "${HKM_TEST_MINGW_ROOT}/bin;${HKM_TEST_ENV_PATH}")
+    endif()
+    string(REPLACE ";" "\\;" HKM_TEST_ENV_PATH "${HKM_TEST_ENV_PATH}")
+else()
+    set(HKM_TEST_ENV_PATH "${QT_BIN_DIR}:$ENV{PATH}")
 endif()
-string(REPLACE ";" "\\;" HKM_TEST_ENV_PATH "${HKM_TEST_ENV_PATH}")
 set_tests_properties(HotKeyManagerTests PROPERTIES ENVIRONMENT "PATH=${HKM_TEST_ENV_PATH}")

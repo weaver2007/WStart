@@ -5,7 +5,7 @@ Component.prototype.createOperations = function() {
     component.createOperations();
 
     if (installer.value("os") === "win") {
-        var target = installer.value("TargetDir") + "/HotKeyManager.exe";
+        var target = installer.value("TargetDir") + "/WStart.exe";
         component.addOperation("CreateShortcut", target, "@StartMenuDir@/WStart.lnk",
                                "workingDirectory=@TargetDir@",
                                "iconPath=" + target,

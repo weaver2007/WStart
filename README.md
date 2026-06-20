@@ -1,13 +1,13 @@
-# HotKeyManager
+# WStart
 
-Windows tray utility for launching apps, files, folders, and URLs with global hotkeys.
+Qt Widgets launcher for apps, files, folders, and URLs.
 
 ## Scope
 
-- C++17 by default, C++14 for Qt 5.6.3 compatibility, Qt Widgets, CMake, Win32 API.
-- Uses `WH_KEYBOARD_LL` to intercept global keyboard events in user mode.
-- Runs as administrator through the embedded application manifest.
-- Stores rules as JSON under the user's AppData location.
+- C++17 by default, C++14 for Qt 5.6.3 compatibility, Qt Widgets, CMake.
+- Windows is the full-featured target. It uses Win32 APIs for global hotkeys, shell integration, tray behavior, drag/drop compatibility, and optional administrator execution.
+- macOS and Linux are currently UI-first targets. They build and show the launcher UI, manage rules, and open targets through Qt desktop services. Global hotkeys are intentionally disabled until native backends are added.
+- Stores rules as JSON under the user's application config location.
 
 This is a user-mode implementation. It can intercept many ordinary Windows and application shortcuts, but it cannot guarantee control over secure system sequences such as `Ctrl+Alt+Del`, `Win+L`, UAC secure desktop, sign-in screens, or other protected OS flows.
 
@@ -31,6 +31,13 @@ ctest --list-presets
 
 Build outputs are organized under `out/build/<qt>-<toolchain>-<linkage>-<arch>`.
 Dynamic Qt variants run `windeployqt` after build when the Qt version supports reliable deployment; older compatibility variants may copy runtime files manually.
+
+## Cross-Platform Status
+
+- Windows: UI, tray, global hotkey hook, launch actions, drag/drop, shell context menu, desktop shortcut, startup shortcut, installer and portable packaging.
+- macOS: Qt 6 CI build and tests are enabled. The first cross-platform stage only targets normal UI display and rule management.
+- Linux: Qt 6 CI build and tests are enabled. The first cross-platform stage installs a `.desktop` file and SVG icon through CMake install rules.
+- Non-Windows global hotkeys currently use a no-op backend and show a status message that global hotkeys are not enabled on the platform yet.
 
 ## Variant Intent
 
@@ -191,7 +198,7 @@ cmake --build --preset qt6.11.1-msvc2022-static-x64-release
 ctest --preset qt6.11.1-msvc2022-static-x64-release
 ```
 
-The static presets set `HKM_REQUIRE_STATIC_QT=ON`, disable `windeployqt`, and import the required static Qt plugins into `HotKeyManager.exe`. MSVC static variants also set `HKM_STATIC_RUNTIME=ON` for `/MT`; MinGW static variants link with `-static -static-libgcc -static-libstdc++`.
+The static presets set `HKM_REQUIRE_STATIC_QT=ON`, disable `windeployqt`, and import the required static Qt plugins into `WStart.exe`. MSVC static variants also set `HKM_STATIC_RUNTIME=ON` for `/MT`; MinGW static variants link with `-static -static-libgcc -static-libstdc++`.
 
 ## Qt 5.6.3 Legacy Builds
 
@@ -226,9 +233,9 @@ ctest --preset qt5.6.3-msvc2015-xp-static-x86-release
 Expected output locations:
 
 - Dynamic Qt: `extern/qt/5.6.3/msvc2015_xp`
-- Dynamic application: `out/build/qt5.6.3-msvc2015-xp-dynamic-x86/HotKeyManager.exe`
+- Dynamic application: `out/build/qt5.6.3-msvc2015-xp-dynamic-x86/WStart.exe`
 - Static Qt: `extern/qt-static/qt5.6.3-msvc2015-xp-static-x86`
-- Static application: `out/build/qt5.6.3-msvc2015-xp-static-x86/HotKeyManager.exe`
+- Static application: `out/build/qt5.6.3-msvc2015-xp-static-x86/WStart.exe`
 
 The XP variants are intentionally x86. They use the NMake generator in this environment because the full VS2015 MSBuild integration is not required for this target. The Qt XP builds disable PCH and qmake batch inference for this variant to avoid VS2015 compiler crashes seen during Qt 5.6.3 XP builds. The dynamic application preset deploys the minimal Qt DLL and plugin set manually because Qt 5.6.3 `windeployqt` can mis-detect XP-subsystem executables.
 

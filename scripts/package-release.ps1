@@ -32,11 +32,14 @@ function Copy-RuntimePayload([string]$Source, [string]$Destination) {
 
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 
-    $exe = Join-Path $Source "HotKeyManager.exe"
+    $exe = Join-Path $Source "WStart.exe"
+    if (-not (Test-Path -LiteralPath $exe)) {
+        $exe = Join-Path $Source "HotKeyManager.exe"
+    }
     if (-not (Test-Path -LiteralPath $exe)) {
         throw "Missing runtime executable: $exe"
     }
-    Copy-Item -LiteralPath $exe -Destination (Join-Path $Destination "HotKeyManager.exe") -Force
+    Copy-Item -LiteralPath $exe -Destination (Join-Path $Destination "WStart.exe") -Force
 
     Get-ChildItem -LiteralPath $Source -File -Filter "*.dll" |
         Copy-Item -Destination $Destination -Force
@@ -90,7 +93,14 @@ cmake --build --preset $DynamicBuildPreset
 Write-Host "Building static preset: $StaticBuildPreset"
 cmake --build --preset $StaticBuildPreset
 
-$dynamicExe = Join-Path $dynamicReleaseDir "HotKeyManager.exe"
+$dynamicExe = Join-Path $dynamicReleaseDir "WStart.exe"
+if (-not (Test-Path -LiteralPath $dynamicExe)) {
+    $dynamicExe = Join-Path $dynamicBuildDir "WStart.exe"
+    $dynamicReleaseDir = $dynamicBuildDir
+}
+if (-not (Test-Path -LiteralPath $dynamicExe)) {
+    $dynamicExe = Join-Path $dynamicReleaseDir "HotKeyManager.exe"
+}
 if (-not (Test-Path -LiteralPath $dynamicExe)) {
     $dynamicExe = Join-Path $dynamicBuildDir "HotKeyManager.exe"
     $dynamicReleaseDir = $dynamicBuildDir
@@ -99,7 +109,14 @@ if (-not (Test-Path -LiteralPath $dynamicExe)) {
     throw "Dynamic executable was not found."
 }
 
-$staticExe = Join-Path $staticReleaseDir "HotKeyManager.exe"
+$staticExe = Join-Path $staticReleaseDir "WStart.exe"
+if (-not (Test-Path -LiteralPath $staticExe)) {
+    $staticExe = Join-Path $staticBuildDir "WStart.exe"
+    $staticReleaseDir = $staticBuildDir
+}
+if (-not (Test-Path -LiteralPath $staticExe)) {
+    $staticExe = Join-Path $staticReleaseDir "HotKeyManager.exe"
+}
 if (-not (Test-Path -LiteralPath $staticExe)) {
     $staticExe = Join-Path $staticBuildDir "HotKeyManager.exe"
     $staticReleaseDir = $staticBuildDir
@@ -147,7 +164,7 @@ if (Test-Path -LiteralPath $portableRoot) {
     Remove-Item -LiteralPath $portableRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $portableRoot | Out-Null
-Copy-Item -LiteralPath $staticExe -Destination (Join-Path $portableRoot "HotKeyManager.exe") -Force
+Copy-Item -LiteralPath $staticExe -Destination (Join-Path $portableRoot "WStart.exe") -Force
 
 $portablePath = Join-Path $outputRoot $portableName
 if (Test-Path -LiteralPath $portablePath) {

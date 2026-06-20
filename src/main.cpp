@@ -26,7 +26,7 @@ Q_IMPORT_PLUGIN(QICOPlugin)
 
 namespace {
 QString singleInstanceServerName() {
-    return "HotKeyManager-SingleInstance";
+    return "WStart-SingleInstance";
 }
 
 bool notifyExistingInstance() {
@@ -50,8 +50,8 @@ bool notifyExistingInstance() {
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
-    QApplication::setApplicationName("HotKeyManager");
-    QApplication::setOrganizationName("HotKeyManager");
+    QApplication::setApplicationName("WStart");
+    QApplication::setOrganizationName("WStart");
     QApplication::setWindowIcon(AppIcon::launcherIcon());
     QApplication::setQuitOnLastWindowClosed(false);
 
@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::unique_ptr<QLockFile> lockFile(
-        new QLockFile(QDir(lockDirectory.isEmpty() ? QDir::tempPath() : lockDirectory).filePath("HotKeyManager.lock")));
+        new QLockFile(QDir(lockDirectory.isEmpty() ? QDir::tempPath() : lockDirectory).filePath("WStart.lock")));
     if (!lockFile->tryLock(0)) {
         if (notifyExistingInstance()) {
             return 0;

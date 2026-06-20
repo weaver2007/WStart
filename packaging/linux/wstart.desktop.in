@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=WStart
+Comment=Hotkey launcher and shortcut manager
+Exec=WStart
+Icon=wstart
+Terminal=false
+Categories=Utility;

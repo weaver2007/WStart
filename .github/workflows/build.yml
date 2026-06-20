@@ -1,4 +1,4 @@
-name: Build HotKeyManager
+name: Build WStart
 
 on:
   push:
@@ -9,15 +9,35 @@ on:
 
 env:
   QT_VERSION: 6.8.3
-  QT_ARCH: win64_msvc2022_64
-  BUILD_DIR: out/build/github-qt6.8.3-msvc2022-dynamic-x64
-  ARTIFACT_NAME: WStart-qt6.8.3-msvc2022-dynamic-x64
   UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/update.json
 
 jobs:
-  build-main-variant:
-    name: Qt 6.8.3 / MSVC 2022 / dynamic / x64
-    runs-on: windows-2022
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows / Qt 6.8.3 / MSVC / x64
+            os: windows-2022
+            qt-host: windows
+            qt-arch: win64_msvc2022_64
+            qt-dir: msvc2022_64
+            build-dir: out/build/github-windows-qt6.8.3-msvc2022-dynamic-x64
+          - name: macOS / Qt 6.8.3 / clang / arm64
+            os: macos-14
+            qt-host: mac
+            qt-arch: clang_64
+            qt-dir: clang_64
+            build-dir: out/build/github-macos-qt6.8.3-clang-arm64
+          - name: Linux / Qt 6.8.3 / gcc / x64
+            os: ubuntu-22.04
+            qt-host: linux
+            qt-arch: gcc_64
+            qt-dir: gcc_64
+            build-dir: out/build/github-linux-qt6.8.3-gcc-x64
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,41 +45,68 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install macOS system packages
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
       - name: Install Qt
         shell: pwsh
         run: |
           python -m pip install --upgrade pip aqtinstall
-          python -m aqt install-qt windows desktop "$env:QT_VERSION" "$env:QT_ARCH" --outputdir "$env:RUNNER_TEMP\Qt"
-          "QT_PREFIX=$env:RUNNER_TEMP\Qt\$env:QT_VERSION\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "$env:RUNNER_TEMP\Qt\$env:QT_VERSION\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          python -m aqt install-qt "${{ matrix.qt-host }}" desktop "$env:QT_VERSION" "${{ matrix.qt-arch }}" --outputdir "$env:RUNNER_TEMP/Qt"
+          "QT_PREFIX=$env:RUNNER_TEMP/Qt/$env:QT_VERSION/${{ matrix.qt-dir }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$env:RUNNER_TEMP/Qt/$env:QT_VERSION/${{ matrix.qt-dir }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-      - name: Configure
+      - name: Configure Windows
+        if: runner.os == 'Windows'
         shell: pwsh
-        run: >
-          cmake -S . -B "$env:BUILD_DIR"
-          -G "Visual Studio 17 2022" -A x64
-          -DCMAKE_PREFIX_PATH="$env:QT_PREFIX"
-          -DHKM_QT_MAJOR=6
-          -DHKM_DEPLOY_QT_RUNTIME=ON
-          -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL"
+        run: |
+          cmake -S . -B "${{ matrix.build-dir }}" `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
+            -DHKM_QT_MAJOR=6 `
+            -DHKM_DEPLOY_QT_RUNTIME=ON `
+            -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL"
+
+      - name: Configure Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cmake -S . -B "${{ matrix.build-dir }}" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
+            -DHKM_QT_MAJOR=6 \
+            -DHKM_DEPLOY_QT_RUNTIME=OFF \
+            -DHKM_UPDATE_MANIFEST_URL="$UPDATE_MANIFEST_URL"
 
       - name: Build
         shell: pwsh
-        run: cmake --build "$env:BUILD_DIR" --config Release --parallel
+        run: cmake --build "${{ matrix.build-dir }}" --config Release --parallel
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir "$env:BUILD_DIR" -C Release --output-on-failure
+        run: ctest --test-dir "${{ matrix.build-dir }}" -C Release --output-on-failure
 
-      - name: Package
+      - name: Package Windows artifact
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $packageRoot = Join-Path $env:RUNNER_TEMP $env:ARTIFACT_NAME
+          $artifactName = "WStart-qt6.8.3-msvc2022-dynamic-x64"
+          $packageRoot = Join-Path $env:RUNNER_TEMP $artifactName
           New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
-          Copy-Item -Path (Join-Path $env:BUILD_DIR "Release\*") -Destination $packageRoot -Recurse -Force
-          Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath "$env:ARTIFACT_NAME.zip" -Force
+          Copy-Item -Path (Join-Path "${{ matrix.build-dir }}" "Release\*") -Destination $packageRoot -Recurse -Force
+          Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath "$artifactName.zip" -Force
+          "ARTIFACT_NAME=$artifactName" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_NAME }}.zip

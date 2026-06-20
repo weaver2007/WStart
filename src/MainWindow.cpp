@@ -49,7 +49,9 @@
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QStyle>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
 #include <QStyleHints>
+#endif
 #include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -1050,7 +1052,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         showWarning(this, language(), uiText(UiText::Key::HotkeyHookFailed), hookError);
         setStatus(hookError);
     } else {
+#ifdef Q_OS_WIN
         setStatus(uiText(UiText::Key::HookRunning));
+#else
+        setStatus(uiText(UiText::Key::HotkeyHookUnavailable));
+#endif
     }
 
     if (m_document.settings.updatesEnabled) {
@@ -2838,11 +2844,15 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
     if (item) {
         ruleId = item->data(RuleIdRole).toString();
         runAction = menu.addAction(uiText(UiText::Key::Run));
+#ifdef Q_OS_WIN
         runAsAdminAction = menu.addAction(uiText(UiText::Key::RunAsAdmin));
         explorerMenuAction = menu.addAction(uiText(UiText::Key::ExplorerContextMenu));
+#endif
         browseAction = menu.addAction(uiText(UiText::Key::BrowseTarget));
+#ifdef Q_OS_WIN
         desktopShortcutAction = menu.addAction(uiText(UiText::Key::CreateDesktopShortcut));
         startupAction = menu.addAction(uiText(UiText::Key::SetStartup));
+#endif
         menu.addSeparator();
         editAction = menu.addAction(uiText(UiText::Key::Edit));
         deleteAction = menu.addAction(uiText(UiText::Key::Delete));
@@ -3308,6 +3318,12 @@ void MainWindow::browseRuleTarget(const QString& ruleId) {
 
 #ifdef Q_OS_WIN
     revealInExplorer(m_document.rules[index].action.target);
+#else
+    const QFileInfo info(m_document.rules[index].action.target);
+    const QString folder = info.isDir() ? info.absoluteFilePath() : info.absolutePath();
+    if (!folder.isEmpty()) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+    }
 #endif
 }
 

@@ -2,19 +2,21 @@
 
 ## Build workflows
 
-The workflow in `.github/workflows/build.yml` builds one primary GitHub-hosted variant:
+The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix:
 
-- Qt 6.8.3
-- MSVC 2022 ABI
-- dynamic Qt
-- x64
+- Windows / Qt 6.8.3 / MSVC / dynamic Qt / x64
+- macOS / Qt 6.8.3 / clang / dynamic Qt / arm64 runner
+- Linux / Qt 6.8.3 / gcc / dynamic Qt / x64
 
-The workflow uploads a zip artifact for each successful run. It does not build the legacy/static matrix by default,
-because those variants need preinstalled Qt/toolchain layouts that GitHub-hosted runners do not provide.
+The workflow uploads a Windows zip artifact for each successful run. macOS and Linux currently run configure, build,
+and tests only; packaging is intentionally deferred until their native behavior and distribution targets are defined.
 
 The full local variant matrix remains represented by `CMakePresets.json`. Running every variant in GitHub Actions would
 require a custom image or a self-hosted Windows runner with the same local Qt/toolchain layout referenced by the presets,
 including legacy Qt 4.8.7, Qt 5.6.3 XP builds, static Qt builds, MSVC toolsets, and MinGW toolchains.
+
+At this stage, macOS and Linux are UI-first targets. They are expected to display the launcher and manage rules, but
+global hotkeys remain disabled until platform-specific backends are implemented.
 
 ## Releases
 

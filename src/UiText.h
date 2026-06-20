@@ -80,6 +80,7 @@ enum class Key {
     EncryptedItemCount,
     ItemCount,
     HotkeyHookFailed,
+    HotkeyHookUnavailable,
     HookRunning,
     HotkeysPaused,
     HotkeysResumed,
