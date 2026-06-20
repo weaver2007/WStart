@@ -4,7 +4,7 @@ if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
-project(HotKeyManager VERSION 0.2.0 LANGUAGES CXX)
+project(HotKeyManager VERSION 0.3.0 LANGUAGES CXX)
 
 option(HKM_DEPLOY_QT_RUNTIME "Run windeployqt and copy MSVC runtime DLLs after building WStart on Windows." ON)
 option(HKM_DEPLOY_QT_RUNTIME_MANUAL "Copy a minimal Qt runtime set manually instead of running windeployqt." OFF)

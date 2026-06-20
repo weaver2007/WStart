@@ -23,8 +23,8 @@ global hotkeys remain disabled until platform-specific backends are implemented.
 `.github/workflows/release.yml` publishes release packages when a tag matching `v*` is pushed:
 
 ```powershell
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 It can also be started manually with `workflow_dispatch` and a tag input. Normal pushes to `main` do not create tags or
@@ -52,8 +52,8 @@ https://raw.githubusercontent.com/<owner>/<repo>/main/update.json
 
 ```json
 {
-  "version": "0.1.1",
-  "downloadUrl": "https://github.com/<owner>/<repo>/releases/download/v0.2.0/WStart-qt6.8.3-msvc2022-dynamic-x64.zip",
+  "version": "0.3.0",
+  "downloadUrl": "https://github.com/<owner>/<repo>/releases/download/v0.3.0/WStart-qt6.8.3-windows-msvc2022-dynamic-x64.zip",
   "sha256": "<optional sha256>",
   "releaseNotes": "Short release notes shown in WStart."
 }

@@ -1,5 +1,6 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "downloadUrl": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.0/WStart-qt6.8.3-windows-msvc2022-dynamic-x64.zip",
   "sha256": "",
-  "releaseNotes": "WStart 0.2.0 release."
+  "releaseNotes": "WStart 0.3.0 release."
 }
