@@ -33,7 +33,7 @@ jobs:
             build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64
             artifact-name: WStart-qt6.8.3-windows-msvc2022-dynamic-x64
           - name: macOS / Qt 6.8.3 / clang
-            os: macos-13
+            os: macos-15-intel
             qt-host: mac
             qt-arch: clang_64
             build-dir: out/build/release-macos-qt6.8.3-clang

@@ -25,7 +25,7 @@ jobs:
             qt-arch: win64_msvc2022_64
             build-dir: out/build/github-windows-qt6.8.3-msvc2022-dynamic-x64
           - name: macOS / Qt 6.8.3 / clang / x64
-            os: macos-13
+            os: macos-15-intel
             qt-host: mac
             qt-arch: clang_64
             build-dir: out/build/github-macos-qt6.8.3-clang-x64
