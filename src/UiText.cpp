@@ -34,6 +34,12 @@ QString text(const QString& language, Key key) {
         return en ? "Check for updates automatically" : QString::fromUtf8("自动检查更新");
     case Key::CheckForUpdates:
         return en ? "Check for updates" : QString::fromUtf8("检查更新");
+    case Key::About:
+        return en ? "About WStart" : QString::fromUtf8("关于 WStart");
+    case Key::AboutTitle:
+        return "WStart";
+    case Key::AboutMessage:
+        return en ? "WStart\nVersion: %1" : QString::fromUtf8("WStart\n版本：%1");
     case Key::UpdateChecking:
         return en ? "Checking for updates..." : QString::fromUtf8("正在检查更新...");
     case Key::UpdateAvailableTitle:
@@ -66,7 +72,7 @@ QString text(const QString& language, Key key) {
     case Key::HotkeyList:
         return en ? "Hotkey list" : QString::fromUtf8("快捷键列表");
     case Key::HotkeyListEmpty:
-        return en ? "No hotkeys are configured in HStart." : QString::fromUtf8("HStart 中尚未配置快捷键。");
+        return en ? "No hotkeys are configured in WStart." : QString::fromUtf8("WStart 中尚未配置快捷键。");
     case Key::HotkeyListCategory:
         return en ? "Category" : QString::fromUtf8("分类");
     case Key::HotkeyListItem:
@@ -231,9 +237,9 @@ QString text(const QString& language, Key key) {
         return en ? "RegisterHotKey probe failed. It may already be registered by another app. Windows error: %1."
                   : QString::fromUtf8("RegisterHotKey 探测失败，可能已被其它程序注册。Windows 错误码：%1。");
     case Key::HotkeyCheckBestEffort:
-        return en ? "HSTART can still try to intercept it while running, but secure or shell-reserved shortcuts cannot "
+        return en ? "WStart can still try to intercept it while running, but secure or shell-reserved shortcuts cannot "
                     "be guaranteed."
-                  : QString::fromUtf8("HSTART 运行时仍会尽量拦截，但安全或 Shell 保留快捷键无法保证完全覆盖。");
+                  : QString::fromUtf8("WStart 运行时仍会尽量拦截，但安全或 Shell 保留快捷键无法保证完全覆盖。");
     case Key::HotkeyCheckCannotForceDisable:
         return en ? "Windows does not provide a reliable public API to force-unregister another process's hotkey."
                   : QString::fromUtf8("Windows 没有可靠公开接口可强制取消其它进程注册的快捷键。");
@@ -313,7 +319,7 @@ QString text(const QString& language, Key key) {
     case Key::HotkeyPlaceholder:
         return en ? "Optional. You can leave this empty for now." : QString::fromUtf8("可选，当前阶段可不填写");
     case Key::TrayTooltip:
-        return "HotKeyManager";
+        return "WStart";
     case Key::SystemTrayUnavailable:
         return en ? "System tray is not available." : QString::fromUtf8("系统托盘不可用。");
     }

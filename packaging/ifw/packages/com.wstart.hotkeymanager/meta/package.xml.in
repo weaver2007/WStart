@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package>
-    <DisplayName>HStart</DisplayName>
+    <DisplayName>WStart</DisplayName>
     <Description>Hotkey launcher and shortcut manager.</Description>
     <Version>@VERSION@</Version>
     <ReleaseDate>@RELEASE_DATE@</ReleaseDate>

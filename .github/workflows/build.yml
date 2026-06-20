@@ -11,7 +11,7 @@ env:
   QT_VERSION: 6.8.3
   QT_ARCH: win64_msvc2022_64
   BUILD_DIR: out/build/github-qt6.8.3-msvc2022-dynamic-x64
-  ARTIFACT_NAME: HotKeyManager-qt6.8.3-msvc2022-dynamic-x64
+  ARTIFACT_NAME: WStart-qt6.8.3-msvc2022-dynamic-x64
   UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/update.json
 
 jobs:

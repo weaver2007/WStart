@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.0",
+    [string]$Version = "0.2.0",
     [string]$DynamicBuildPreset = "qt6.8.3-msvc2022-dynamic-x64-release",
     [string]$DynamicConfigurePreset = "qt6.8.3-msvc2022-dynamic-x64",
     [string]$StaticBuildPreset = "qt6.8.3-msvc2022-static-x64-release",
@@ -75,8 +75,8 @@ function Expand-Template([string]$Source, [string]$Destination, [hashtable]$Valu
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $outputRoot = Resolve-RepoPath $OutputDir
-$installerName = "HStart-$Version-setup-qt6.8.3-msvc2022-dynamic-x64.exe"
-$portableName = "HStart-$Version-portable-qt6.8.3-msvc2022-static-x64.zip"
+$installerName = "WStart-$Version-setup-qt6.8.3-msvc2022-dynamic-x64.exe"
+$portableName = "WStart-$Version-portable-qt6.8.3-msvc2022-static-x64.zip"
 $dynamicBuildDir = Join-Path $repoRoot "out\build\$DynamicConfigurePreset"
 $staticBuildDir = Join-Path $repoRoot "out\build\$StaticConfigurePreset"
 $dynamicReleaseDir = Join-Path $dynamicBuildDir "Release"
@@ -110,7 +110,7 @@ if (-not (Test-Path -LiteralPath $staticExe)) {
 
 $ifwWork = Join-Path $outputRoot "ifw-work"
 $ifwConfig = Join-Path $ifwWork "config"
-$ifwPackage = Join-Path $ifwWork "packages\com.hstart.hotkeymanager"
+$ifwPackage = Join-Path $ifwWork "packages\com.wstart.hotkeymanager"
 $ifwData = Join-Path $ifwPackage "data"
 $ifwMeta = Join-Path $ifwPackage "meta"
 if (Test-Path -LiteralPath $ifwWork) {
@@ -128,10 +128,10 @@ $templateValues = @{
 Expand-Template -Source (Join-Path $repoRoot "packaging\ifw\config\config.xml.in") `
                 -Destination (Join-Path $ifwConfig "config.xml") `
                 -Values $templateValues
-Expand-Template -Source (Join-Path $repoRoot "packaging\ifw\packages\com.hstart.hotkeymanager\meta\package.xml.in") `
+Expand-Template -Source (Join-Path $repoRoot "packaging\ifw\packages\com.wstart.hotkeymanager\meta\package.xml.in") `
                 -Destination (Join-Path $ifwMeta "package.xml") `
                 -Values $templateValues
-Copy-Item -LiteralPath (Join-Path $repoRoot "packaging\ifw\packages\com.hstart.hotkeymanager\meta\installscript.qs") `
+Copy-Item -LiteralPath (Join-Path $repoRoot "packaging\ifw\packages\com.wstart.hotkeymanager\meta\installscript.qs") `
           -Destination (Join-Path $ifwMeta "installscript.qs") -Force
 
 if (-not (Test-Path -LiteralPath $BinaryCreator)) {

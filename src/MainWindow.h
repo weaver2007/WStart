@@ -87,6 +87,7 @@ private slots:
     void setThemeDark();
     void setUpdatesEnabled(bool enabled);
     void checkForUpdates();
+    void showAboutDialog();
     void onUpdateCheckFinished(bool updateAvailable, QString latestVersion, QString downloadUrl, QString releaseNotes,
                                QString error, bool silent);
     void showSectionContextMenu(const QPoint& pos);
@@ -206,6 +207,7 @@ private:
     QAction* m_hotkeysEnabledAction = nullptr;
     QAction* m_updatesEnabledAction = nullptr;
     QAction* m_checkUpdatesAction = nullptr;
+    QAction* m_aboutAction = nullptr;
     QAction* m_chineseAction = nullptr;
     QAction* m_englishAction = nullptr;
     QAction* m_themeSystemAction = nullptr;

@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     });
 
     if (!QSystemTrayIcon::isSystemTrayAvailable()) {
-        QMessageBox::warning(nullptr, "HotKeyManager", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
+        QMessageBox::warning(nullptr, "WStart", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
     }
 
     window.show();

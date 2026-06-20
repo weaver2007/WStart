@@ -65,6 +65,10 @@
 #include <string>
 #include <utility>
 
+#ifndef HKM_APP_VERSION
+#define HKM_APP_VERSION "0.0.0"
+#endif
+
 #ifdef Q_OS_WIN
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -1014,7 +1018,7 @@ QString darkStyleSheet() {
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("HotKeyManager");
+    setWindowTitle("WStart");
     setWindowIcon(AppIcon::launcherIcon());
     setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
     setMouseTracking(true);
@@ -1073,7 +1077,7 @@ void MainWindow::buildUi() {
     auto* titleRow = new QHBoxLayout;
     titleRow->setContentsMargins(0, 0, 0, 0);
     titleRow->setSpacing(4);
-    auto* brand = new QLabel("HSTART", header);
+    auto* brand = new QLabel("WSTART", header);
     brand->setObjectName("brand");
     brand->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
     auto* brandIcon = new QLabel(header);
@@ -1262,6 +1266,8 @@ void MainWindow::buildSettingsMenu() {
     connect(m_updatesEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setUpdatesEnabled(bool)));
     m_checkUpdatesAction = m_settingsMenu->addAction(uiText(UiText::Key::CheckForUpdates));
     connect(m_checkUpdatesAction, SIGNAL(triggered()), this, SLOT(checkForUpdates()));
+    m_aboutAction = m_settingsMenu->addAction(uiText(UiText::Key::About));
+    connect(m_aboutAction, SIGNAL(triggered()), this, SLOT(showAboutDialog()));
     m_hotkeyListAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeyList));
     connect(m_hotkeyListAction, SIGNAL(triggered()), this, SLOT(showHotkeyListDialog()));
 
@@ -1330,6 +1336,9 @@ void MainWindow::retranslateUi() {
     }
     if (m_checkUpdatesAction) {
         m_checkUpdatesAction->setText(uiText(UiText::Key::CheckForUpdates));
+    }
+    if (m_aboutAction) {
+        m_aboutAction->setText(uiText(UiText::Key::About));
     }
     if (m_hotkeyListAction) {
         m_hotkeyListAction->setText(uiText(UiText::Key::HotkeyList));
@@ -1448,6 +1457,16 @@ void MainWindow::setUpdatesEnabled(bool enabled) {
 void MainWindow::checkForUpdates() {
     setStatus(uiText(UiText::Key::UpdateChecking));
     m_updateChecker.checkNow(false);
+}
+
+void MainWindow::showAboutDialog() {
+    QMessageBox box(QMessageBox::Information, uiText(UiText::Key::AboutTitle),
+                    uiText(UiText::Key::AboutMessage).arg(QString::fromLatin1(HKM_APP_VERSION)), QMessageBox::Ok,
+                    this);
+    if (QAbstractButton* button = box.button(QMessageBox::Ok)) {
+        button->setText(uiText(UiText::Key::Ok));
+    }
+    box.exec();
 }
 
 void MainWindow::onUpdateCheckFinished(bool updateAvailable, QString latestVersion, QString downloadUrl,
@@ -3319,7 +3338,7 @@ void MainWindow::setRuleStartupShortcut(const QString& ruleId) {
 
 #ifdef Q_OS_WIN
     const HotkeyRule& rule = m_document.rules[index];
-    const QString shortcutName = QtCompat::sanitizeFileName(QString("HStart-%1.lnk").arg(ruleTitle(rule)));
+    const QString shortcutName = QtCompat::sanitizeFileName(QString("WStart-%1.lnk").arg(ruleTitle(rule)));
     createShortcutFile(QDir(startupDirectoryPath()).filePath(shortcutName), rule, ruleTitle(rule));
 #endif
 }

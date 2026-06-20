@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(&server, SIGNAL(newConnection()), &window, SLOT(showSettings()));
 
     if (!QSystemTrayIcon::isSystemTrayAvailable()) {
-        QMessageBox::warning(0, "HotKeyManager", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
+        QMessageBox::warning(0, "WStart", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
     }
 
     window.show();

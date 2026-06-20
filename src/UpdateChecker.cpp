@@ -93,7 +93,7 @@ void UpdateChecker::checkNow(bool silent) {
     m_silent = silent;
     QNetworkRequest request(url);
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-    request.setHeader(QNetworkRequest::UserAgentHeader, QString("HStart/%1").arg(m_currentVersion));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QString("WStart/%1").arg(m_currentVersion));
 #endif
     m_reply = m_network.get(request);
     connect(m_reply, SIGNAL(finished()), this, SLOT(onReplyFinished()));
