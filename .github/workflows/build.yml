@@ -82,6 +82,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Link local Qt cache
+        shell: pwsh
+        run: |
+          $candidates = @(
+            $env:HKM_EXTERN_ROOT,
+            "D:\weaver\sys\document\repo\HotKeyManager\extern"
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+          if ($candidates.Count -eq 0) {
+            Write-Host "No external Qt cache found. Presets that reference ./extern will fail unless HKM_EXTERN_ROOT is set."
+            return
+          }
+          if (-not (Test-Path -LiteralPath "extern")) {
+            New-Item -ItemType Junction -Path "extern" -Target $candidates[0] | Out-Null
+          }
+          Write-Host "Using Qt cache: $($candidates[0])"
+
       - name: Configure
         shell: pwsh
         run: cmake --preset "${{ matrix.configurePreset }}" "-DHKM_UPDATE_MANIFEST_URL=$env:UPDATE_MANIFEST_URL"
