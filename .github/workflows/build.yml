@@ -36,9 +36,9 @@ jobs:
             build-dir: out/build/github-linux-qt6.8.3-gcc-x64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -110,7 +110,7 @@ jobs:
           Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath "$artifactName.zip" -Force
           "ARTIFACT_NAME=$artifactName" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: runner.os == 'Windows'
         with:
           name: ${{ env.ARTIFACT_NAME }}
