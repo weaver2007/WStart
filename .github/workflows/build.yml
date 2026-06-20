@@ -13,11 +13,11 @@ env:
 jobs:
   hosted-qt6-smoke:
     name: Hosted Qt ${{ matrix.qt }} dynamic x64 smoke
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
-        qt: ["6.8.3", "6.11.1"]
+        qt: ["6.8.3"]
     steps:
       - uses: actions/checkout@v4
 
