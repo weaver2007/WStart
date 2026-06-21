@@ -363,6 +363,23 @@ jobs:
       - name: List release assets
         run: ls -la dist
 
+      - name: Flatten release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "dist-release" | Out-Null
+          Get-ChildItem -LiteralPath "dist" -Recurse -File |
+            Where-Object { $_.Name -ne "update.json" } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $target = Join-Path "dist-release" $_.Name
+              if (Test-Path -LiteralPath $target) {
+                throw "Duplicate release asset name: $($_.Name)"
+              }
+              Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+            }
+          Get-ChildItem -LiteralPath "dist-release" -File | Sort-Object Name | Format-Table Name,Length
+
       - name: Generate update manifest
         shell: pwsh
         run: |
@@ -374,7 +391,7 @@ jobs:
           }
           $repo = "${{ github.repository }}"
           $assets = @()
-          Get-ChildItem -LiteralPath dist -File | Sort-Object Name | ForEach-Object {
+          Get-ChildItem -LiteralPath dist-release -File | Sort-Object Name | ForEach-Object {
             $name = $_.Name
             $platform = $null
             $arch = $null
@@ -411,7 +428,10 @@ jobs:
             releaseNotes = "WStart $version release."
             assets = $assets
           }
-          $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "dist/update.json" -Encoding UTF8
+          if ($assets.Count -eq 0) {
+            throw "No release package assets were found under dist-release."
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "dist-release/update.json" -Encoding UTF8
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -419,7 +439,7 @@ jobs:
           name: WStart ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           draft: false
           prerelease: false
-          files: dist/*
+          files: dist-release/*
 
       - name: Refresh update manifest with asset API URLs
         shell: pwsh
@@ -429,7 +449,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
           $release = gh api "repos/${{ github.repository }}/releases/tags/$tag" | ConvertFrom-Json
-          $manifest = Get-Content -Raw -LiteralPath "dist/update.json" | ConvertFrom-Json
+          $manifest = Get-Content -Raw -LiteralPath "dist-release/update.json" | ConvertFrom-Json
           foreach ($manifestAsset in $manifest.assets) {
             $releaseAsset = $release.assets | Where-Object { $_.name -eq $manifestAsset.fileName } | Select-Object -First 1
             if ($releaseAsset) {
