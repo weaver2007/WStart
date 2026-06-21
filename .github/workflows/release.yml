@@ -41,6 +41,7 @@ jobs:
             os: windows-11-arm
             qt-host: windows
             qt-arch: win64_msvc2022_arm64_cross_compiled
+            qt-host-arch: win64_msvc2022_64
             cmake-generator: Visual Studio 17 2022
             cmake-arch: ARM64
             build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-arm64
@@ -110,9 +111,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip aqtinstall
           python -m aqt install-qt "${{ matrix.qt-host }}" desktop "$env:QT_VERSION" "${{ matrix.qt-arch }}" --outputdir "$env:RUNNER_TEMP/Qt"
+          $hostArch = "${{ matrix.qt-host-arch }}"
+          if ($hostArch) {
+            python -m aqt install-qt "${{ matrix.qt-host }}" desktop "$env:QT_VERSION" "$hostArch" --outputdir "$env:RUNNER_TEMP/Qt"
+          }
           $qtRoot = Join-Path $env:RUNNER_TEMP "Qt/$env:QT_VERSION"
-          $qtConfig = Get-ChildItem -LiteralPath $qtRoot -Recurse -Filter Qt6Config.cmake |
+          $targetQtConfig = Get-ChildItem -LiteralPath $qtRoot -Recurse -Filter Qt6Config.cmake |
+            Where-Object { $_.FullName -match [regex]::Escape("${{ matrix.qt-arch }}") -or $_.FullName -match "msvc2022_arm64" } |
             Select-Object -First 1
+          $qtConfig = if ($targetQtConfig) {
+            $targetQtConfig
+          } else {
+            Get-ChildItem -LiteralPath $qtRoot -Recurse -Filter Qt6Config.cmake |
+              Select-Object -First 1
+          }
           if (-not $qtConfig) {
             Get-ChildItem -LiteralPath $qtRoot -Recurse -Depth 3 -Force | Format-List FullName
             throw "Qt config was not found under $qtRoot"
@@ -120,17 +132,33 @@ jobs:
           $qtPrefix = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $qtConfig.FullName)))
           "QT_PREFIX=$qtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Append
           (Join-Path $qtPrefix "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
+          if ($hostArch) {
+            $hostQtConfig = Get-ChildItem -LiteralPath $qtRoot -Recurse -Filter Qt6Config.cmake |
+              Where-Object { $_.FullName -match [regex]::Escape($hostArch) -or $_.FullName -match "msvc2022_64" } |
+              Select-Object -First 1
+            if (-not $hostQtConfig) {
+              Get-ChildItem -LiteralPath $qtRoot -Recurse -Depth 3 -Force | Format-List FullName
+              throw "Host Qt config was not found under $qtRoot"
+            }
+            $hostQtPrefix = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $hostQtConfig.FullName)))
+            "QT_HOST_PREFIX=$hostQtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
 
       - name: Configure Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $qtHostPathArg = @()
+          if ($env:QT_HOST_PREFIX) {
+            $qtHostPathArg = @("-DQT_HOST_PATH=$env:QT_HOST_PREFIX")
+          }
           cmake -S . -B "${{ matrix.build-dir }}" `
             -G "${{ matrix.cmake-generator }}" -A "${{ matrix.cmake-arch }}" `
             -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
             -DHKM_QT_MAJOR=6 `
             -DHKM_DEPLOY_QT_RUNTIME=ON `
-            -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL"
+            -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL" `
+            @qtHostPathArg
 
       - name: Configure Unix
         if: runner.os != 'Windows'
