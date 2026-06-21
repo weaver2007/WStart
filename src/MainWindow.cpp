@@ -1534,13 +1534,14 @@ void MainWindow::onUpdateInfoReady(UpdateInfo info, QString error, bool silent) 
 
     if (!info.updateAvailable) {
         if (!silent) {
+            const QString currentVersion = m_updateChecker.currentVersion();
             QMessageBox box(QMessageBox::Information, uiText(UiText::Key::CheckForUpdates),
-                            uiText(UiText::Key::UpdateNotAvailable).arg(info.latestVersion), QMessageBox::Ok, this);
+                            uiText(UiText::Key::UpdateNotAvailable).arg(currentVersion), QMessageBox::Ok, this);
             if (QAbstractButton* button = box.button(QMessageBox::Ok)) {
                 button->setText(uiText(UiText::Key::Ok));
             }
             box.exec();
-            setStatus(uiText(UiText::Key::UpdateNotAvailable).arg(info.latestVersion));
+            setStatus(uiText(UiText::Key::UpdateNotAvailable).arg(currentVersion));
         }
         return;
     }

@@ -30,6 +30,8 @@ private slots:
     void updateVersionComparison();
     void updateManifestSelectsCurrentAsset();
     void updateManifestLegacyDownloadUrl();
+    void updateManifestDecodesGithubContentsPayload();
+    void updateManifestOlderThanCurrentIsNotUpdate();
     void updateSha256Verification();
 };
 
@@ -403,6 +405,49 @@ void CoreTests::updateManifestLegacyDownloadUrl() {
     QVERIFY(info.updateAvailable);
     QCOMPARE(info.asset.url, QString("https://example.com/WStart.zip"));
     QCOMPARE(info.asset.sha256, QString("abc"));
+}
+
+void CoreTests::updateManifestDecodesGithubContentsPayload() {
+    const QString platform = UpdateChecker::currentPlatformKey();
+    const QString arch = UpdateChecker::currentArchKey();
+    const QByteArray manifest = QString(R"({
+        "version": "0.3.7",
+        "assets": [
+          {"platform": "%1", "arch": "%2", "type": "installer", "url": "https://example.com/setup.exe"}
+        ]
+    })")
+                                      .arg(platform, arch)
+                                      .toUtf8();
+    const QString encoded = QString::fromLatin1(manifest.toBase64());
+    const QByteArray payload = QString(R"({
+        "name": "update.json",
+        "encoding": "base64",
+        "content": "%1"
+    })")
+                                   .arg(encoded)
+                                   .toUtf8();
+
+    QString error;
+    const UpdateInfo info = UpdateChecker::parseManifest(
+        payload, "https://api.github.com/repos/weaver2007/HotKeyManager/contents/update.json?ref=main", "0.3.6",
+        false, &error);
+    QVERIFY(error.isEmpty());
+    QVERIFY(info.updateAvailable);
+    QCOMPARE(info.latestVersion, QString("0.3.7"));
+    QCOMPARE(info.asset.url, QString("https://example.com/setup.exe"));
+}
+
+void CoreTests::updateManifestOlderThanCurrentIsNotUpdate() {
+    const QByteArray json = R"({
+        "version": "0.3.5",
+        "downloadUrl": "https://example.com/WStart.zip"
+    })";
+
+    QString error;
+    const UpdateInfo info = UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.6", true, &error);
+    QVERIFY(error.isEmpty());
+    QVERIFY(!info.updateAvailable);
+    QCOMPARE(info.latestVersion, QString("0.3.5"));
 }
 
 void CoreTests::updateSha256Verification() {

@@ -50,7 +50,8 @@ QString text(const QString& language, Key key) {
         return en ? "Version %1 is available. Current version: %2.\n\n%3"
                   : QString::fromUtf8("发现版本 %1，当前版本：%2。\n\n%3");
     case Key::UpdateNotAvailable:
-        return en ? "You are already using the latest version: %1." : QString::fromUtf8("当前已是最新版本：%1。");
+        return en ? "You are already using the latest version. Current version: %1."
+                  : QString::fromUtf8("当前已是最新版本，当前版本：%1。");
     case Key::UpdateFailed:
         return en ? "Update check failed: %1" : QString::fromUtf8("检查更新失败：%1");
     case Key::UpdateDownloadInstall:

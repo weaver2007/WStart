@@ -1,22 +1,114 @@
 {
-  "version": "0.3.5",
-  "pageUrl": "https://github.com/weaver2007/HotKeyManager/releases/tag/v0.3.5",
-  "releaseNotes": "WStart 0.3.5 release.",
+  "version": "0.3.7",
+  "pageUrl": "https://github.com/weaver2007/HotKeyManager/releases/tag/v0.3.7",
+  "releaseNotes": "WStart 0.3.7 release.",
   "assets": [
+    {
+      "platform": "linux",
+      "arch": "arm64",
+      "type": "installer",
+      "fileName": "WStart-0.3.7-linux-arm64.deb",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-linux-arm64.deb",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "linux",
+      "arch": "arm64",
+      "type": "portable",
+      "fileName": "WStart-0.3.7-linux-arm64-portable.tar.gz",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-linux-arm64-portable.tar.gz",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "type": "installer",
+      "fileName": "WStart-0.3.7-linux-x64.deb",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-linux-x64.deb",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "type": "portable",
+      "fileName": "WStart-0.3.7-linux-x64-portable.tar.gz",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-linux-x64-portable.tar.gz",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "macos",
+      "arch": "arm64",
+      "type": "installer",
+      "fileName": "WStart-0.3.7-macos-arm64.dmg",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-macos-arm64.dmg",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "macos",
+      "arch": "arm64",
+      "type": "portable",
+      "fileName": "WStart-0.3.7-macos-arm64-portable.zip",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-macos-arm64-portable.zip",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "macos",
+      "arch": "x64",
+      "type": "installer",
+      "fileName": "WStart-0.3.7-macos-x64.dmg",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-macos-x64.dmg",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "macos",
+      "arch": "x64",
+      "type": "portable",
+      "fileName": "WStart-0.3.7-macos-x64-portable.zip",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-macos-x64-portable.zip",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "windows",
+      "arch": "arm64",
+      "type": "installer",
+      "fileName": "WStart-0.3.7-windows-arm64-setup.exe",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-windows-arm64-setup.exe",
+      "apiUrl": "",
+      "sha256": ""
+    },
+    {
+      "platform": "windows",
+      "arch": "arm64",
+      "type": "portable",
+      "fileName": "WStart-0.3.7-windows-arm64-portable.zip",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-windows-arm64-portable.zip",
+      "apiUrl": "",
+      "sha256": ""
+    },
     {
       "platform": "windows",
       "arch": "x64",
       "type": "installer",
-      "fileName": "WStart-0.3.5-windows-x64-setup.exe",
-      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.5/WStart-0.3.5-windows-x64-setup.exe",
+      "fileName": "WStart-0.3.7-windows-x64-setup.exe",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-windows-x64-setup.exe",
+      "apiUrl": "",
       "sha256": ""
     },
     {
       "platform": "windows",
       "arch": "x64",
       "type": "portable",
-      "fileName": "WStart-0.3.5-windows-x64-portable.zip",
-      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.5/WStart-0.3.5-windows-x64-portable.zip",
+      "fileName": "WStart-0.3.7-windows-x64-portable.zip",
+      "url": "https://github.com/weaver2007/HotKeyManager/releases/download/v0.3.7/WStart-0.3.7-windows-x64-portable.zip",
+      "apiUrl": "",
       "sha256": ""
     }
   ]
