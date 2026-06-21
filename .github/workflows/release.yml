@@ -16,7 +16,7 @@ permissions:
 
 env:
   QT_VERSION: 6.8.3
-  UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/contents/update.json?ref=main
+  UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/releases/latest
 
 jobs:
   build-packages:
@@ -355,11 +355,6 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build-packages
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 0
-
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -444,61 +439,16 @@ jobs:
           $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "update.json" -Encoding UTF8
           gh release upload "$tag" "update.json" --clobber --repo "${{ github.repository }}"
 
-      - name: Commit update manifest to main
-        if: github.event_name == 'push'
+      - name: Mark versioned release as GitHub latest
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
-          function Get-VersionParts([string]$value) {
-            $clean = $value.Trim()
-            if ($clean.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
-              $clean = $clean.Substring(1)
-            }
-            $parts = @()
-            foreach ($token in $clean.Split(".")) {
-              if ($token -match "^(\d+)") {
-                $parts += [int]$matches[1]
-              } else {
-                $parts += 0
-              }
-            }
-            return $parts
-          }
-          function Test-VersionGreaterThan([string]$left, [string]$right) {
-            $leftParts = @(Get-VersionParts $left)
-            $rightParts = @(Get-VersionParts $right)
-            $count = [Math]::Max($leftParts.Count, $rightParts.Count)
-            for ($i = 0; $i -lt $count; $i++) {
-              $l = if ($i -lt $leftParts.Count) { $leftParts[$i] } else { 0 }
-              $r = if ($i -lt $rightParts.Count) { $rightParts[$i] } else { 0 }
-              if ($l -ne $r) {
-                return $l -gt $r
-              }
-            }
-            return $false
-          }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          $newManifestPath = Join-Path $env:RUNNER_TEMP "update.json"
-          Copy-Item -LiteralPath "update.json" -Destination $newManifestPath -Force
-          git fetch origin main
-          git checkout -B main origin/main
-          $newVersion = (Get-Content -Raw -LiteralPath $newManifestPath | ConvertFrom-Json).version
-          $currentVersion = ""
-          if (Test-Path -LiteralPath "update.json") {
-            $currentVersion = (Get-Content -Raw -LiteralPath "update.json" | ConvertFrom-Json).version
-          }
-          if ($currentVersion -and -not (Test-VersionGreaterThan $newVersion $currentVersion)) {
-            Write-Host "Current main manifest version $currentVersion is not older than $newVersion. Skip commit."
-            exit 0
-          }
-          Copy-Item -LiteralPath $newManifestPath -Destination "update.json" -Force
-          git add update.json
-          if (git diff --cached --quiet) {
-            Write-Host "update.json has no changes."
-          } else {
-            git commit -m "Update release manifest for ${{ github.ref_name }}"
-            git push origin main
-          }
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $release = gh api "repos/${{ github.repository }}/releases/tags/$tag" | ConvertFrom-Json
+          gh api `
+            --method PATCH `
+            "repos/${{ github.repository }}/releases/$($release.id)" `
+            -f make_latest=true `
+            -f name="WStart $tag"

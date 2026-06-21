@@ -27,6 +27,9 @@
 
 namespace {
 
+const int kMaxCheckRedirects = 5;
+const int kMaxManifestIndirections = 3;
+
 #if defined(Q_OS_WIN) && !defined(CALG_SHA_256)
 #define CALG_SHA_256 (ALG_CLASS_HASH | ALG_TYPE_ANY | ALG_SID_SHA_256)
 #endif
@@ -169,6 +172,11 @@ bool isGithubUrl(const QUrl& url) {
            url.host().compare("raw.githubusercontent.com", Qt::CaseInsensitive) == 0;
 }
 
+bool isGithubReleaseAssetApiUrl(const QUrl& url) {
+    return url.host().compare("api.github.com", Qt::CaseInsensitive) == 0 &&
+           url.path().contains("/releases/assets/", Qt::CaseInsensitive);
+}
+
 QUrl redirectedUrl(QNetworkReply* reply) {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
     const QVariant value = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
@@ -267,6 +275,31 @@ bool UpdateChecker::versionGreaterThan(const QString& left, const QString& right
         }
     }
     return false;
+}
+
+QString UpdateChecker::updateManifestAssetUrlFromReleasePayload(const QByteArray& payload) {
+    const QJsonDocument document = QJsonDocument::fromJson(payload);
+    if (!document.isObject()) {
+        return QString();
+    }
+
+    const QJsonObject root = document.object();
+    if (!root.contains("assets") || !root.contains("tag_name")) {
+        return QString();
+    }
+
+    const QJsonArray assets = root.value("assets").toArray();
+    for (QJsonArray::const_iterator it = assets.constBegin(); it != assets.constEnd(); ++it) {
+        const QJsonObject asset = it->toObject();
+        if (asset.value("name").toString().compare("update.json", Qt::CaseInsensitive) == 0) {
+            const QString apiUrl = asset.value("url").toString().trimmed();
+            if (!apiUrl.isEmpty()) {
+                return apiUrl;
+            }
+            return asset.value("browser_download_url").toString().trimmed();
+        }
+    }
+    return QString();
 }
 
 UpdateInfo UpdateChecker::parseManifest(const QByteArray& payload, const QString& manifestUrl,
@@ -443,6 +476,8 @@ void UpdateChecker::checkNow(bool silent) {
     }
 
     m_silent = silent;
+    m_checkRedirectCount = 0;
+    m_manifestIndirectionCount = 0;
     m_reply = m_network.get(makeRequest(url));
     connect(m_reply, SIGNAL(finished()), this, SLOT(onCheckReplyFinished()));
 }
@@ -492,9 +527,20 @@ void UpdateChecker::onCheckReplyFinished() {
 
     const bool silent = m_silent;
     const QString manifestUrlText = reply->url().toString();
+    const QUrl redirect = redirectedUrl(reply);
     QString error;
     QByteArray payload;
-    if (reply->error() != QNetworkReply::NoError) {
+    if (redirect.isValid()) {
+        if (m_checkRedirectCount >= kMaxCheckRedirects) {
+            error = QString::fromUtf8("Too many update manifest redirects.");
+        } else {
+            ++m_checkRedirectCount;
+            reply->deleteLater();
+            m_reply = m_network.get(makeRequest(redirect));
+            connect(m_reply, SIGNAL(finished()), this, SLOT(onCheckReplyFinished()));
+            return;
+        }
+    } else if (reply->error() != QNetworkReply::NoError) {
         error = reply->errorString();
     } else {
         payload = reply->readAll();
@@ -504,6 +550,20 @@ void UpdateChecker::onCheckReplyFinished() {
     if (!error.isEmpty()) {
         emit checkFinished(false, QString(), QString(), QString(), error, silent);
         emit updateInfoReady(UpdateInfo(), error, silent);
+        return;
+    }
+
+    const QString manifestAssetUrl = updateManifestAssetUrlFromReleasePayload(payload);
+    if (!manifestAssetUrl.isEmpty()) {
+        if (m_manifestIndirectionCount >= kMaxManifestIndirections) {
+            error = QString::fromUtf8("Too many update manifest indirections.");
+            emit checkFinished(false, QString(), QString(), QString(), error, silent);
+            emit updateInfoReady(UpdateInfo(), error, silent);
+            return;
+        }
+        ++m_manifestIndirectionCount;
+        m_reply = m_network.get(makeRequest(QUrl(manifestAssetUrl)));
+        connect(m_reply, SIGNAL(finished()), this, SLOT(onCheckReplyFinished()));
         return;
     }
 
@@ -600,7 +660,11 @@ QNetworkRequest UpdateChecker::makeRequest(const QUrl& url) const {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     request.setHeader(QNetworkRequest::UserAgentHeader, QString("WStart/%1").arg(m_currentVersion));
 #endif
-    request.setRawHeader("Accept", "application/vnd.github+json, application/octet-stream, application/json");
+    if (isGithubReleaseAssetApiUrl(url)) {
+        request.setRawHeader("Accept", "application/octet-stream");
+    } else {
+        request.setRawHeader("Accept", "application/vnd.github+json, application/json");
+    }
     if (!m_githubToken.isEmpty() && isGithubUrl(url)) {
         request.setRawHeader("Authorization", QByteArray("Bearer ") + m_githubToken.toUtf8());
         request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");

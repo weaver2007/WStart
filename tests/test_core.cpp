@@ -30,6 +30,7 @@ private slots:
     void updateVersionComparison();
     void updateManifestSelectsCurrentAsset();
     void updateManifestLegacyDownloadUrl();
+    void updateManifestAssetUrlFromReleasePayload();
     void updateManifestDecodesGithubContentsPayload();
     void updateManifestOlderThanCurrentIsNotUpdate();
     void updateSha256Verification();
@@ -405,6 +406,18 @@ void CoreTests::updateManifestLegacyDownloadUrl() {
     QVERIFY(info.updateAvailable);
     QCOMPARE(info.asset.url, QString("https://example.com/WStart.zip"));
     QCOMPARE(info.asset.sha256, QString("abc"));
+}
+
+void CoreTests::updateManifestAssetUrlFromReleasePayload() {
+    const QByteArray json = R"({
+        "tag_name": "v0.3.8",
+        "assets": [
+          {"name": "WStart-0.3.8-windows-x64-setup.exe", "url": "https://api.github.com/assets/1"},
+          {"name": "update.json", "url": "https://api.github.com/assets/2"}
+        ]
+    })";
+
+    QCOMPARE(UpdateChecker::updateManifestAssetUrlFromReleasePayload(json), QString("https://api.github.com/assets/2"));
 }
 
 void CoreTests::updateManifestDecodesGithubContentsPayload() {

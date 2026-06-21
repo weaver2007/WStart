@@ -55,17 +55,23 @@ The Linux installer package is a `.deb` containing the same portable payload und
 SVG icon. The Linux portable `.tar.gz` contains the installed executable, Qt libraries/plugins copied from the
 GitHub-hosted Qt installation, the desktop file, the SVG icon, and a `wstart.sh` launcher script.
 
+After publishing the versioned release, the workflow marks that release as the repository's GitHub latest release. The
+release contains the newest distribution packages plus `update.json`; WStart uses GitHub's latest release API as its
+stable update channel.
+
 ## Update manifest
 
 Release builds receive this manifest URL from GitHub Actions:
 
 ```text
-https://api.github.com/repos/<owner>/<repo>/contents/update.json?ref=main
+https://api.github.com/repos/<owner>/<repo>/releases/latest
 ```
 
-For private repositories, WStart reads this URL with a user-provided fine-grained GitHub PAT. The token should only have
-read-only `Contents` permission for the private repository. WStart stores the token in the local credential store on
-Windows.
+For private repositories, WStart reads this URL with a user-provided fine-grained GitHub PAT. The token should have
+read-only access to repository contents/releases. WStart stores the token in the local credential store on Windows.
+
+WStart first reads the latest release JSON, finds the `update.json` release asset, then downloads and parses that asset.
+The `update.json` file is not stored in the source tree.
 
 `update.json` uses platform-specific assets:
 

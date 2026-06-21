@@ -49,6 +49,7 @@ public:
     static QString currentPlatformKey();
     static QString currentArchKey();
     static bool versionGreaterThan(const QString& left, const QString& right);
+    static QString updateManifestAssetUrlFromReleasePayload(const QByteArray& payload);
     static UpdateInfo parseManifest(const QByteArray& payload, const QString& manifestUrl, const QString& currentVersion,
                                     bool preferPortable, QString* error = nullptr);
     static UpdateAsset selectAsset(const QVector<UpdateAsset>& assets, bool preferPortable);
@@ -90,4 +91,6 @@ private:
     bool m_silent = false;
     bool m_downloadCancelled = false;
     bool m_preferPortable = false;
+    int m_checkRedirectCount = 0;
+    int m_manifestIndirectionCount = 0;
 };
