@@ -245,16 +245,40 @@ jobs:
           artifact_base="WStart-${version}-macos-${arch}"
           app_path="${{ matrix.build-dir }}/WStart.app"
           package_root="$RUNNER_TEMP/$artifact_base"
+          dmg_stage="$RUNNER_TEMP/${artifact_base}-dmg"
           test -d "$app_path"
           "$QT_PREFIX/bin/macdeployqt" "$app_path" -verbose=2
 
-          rm -rf "$package_root"
-          mkdir -p "$package_root"
-          cp -R "$app_path" "$package_root/"
-
           dmg_path="$PWD/${artifact_base}.dmg"
           portable_path="$PWD/${artifact_base}-portable.zip"
-          hdiutil create -volname WStart -srcfolder "$package_root/WStart.app" -ov -format UDZO "$dmg_path"
+          rm -rf "$package_root" "$dmg_stage" "$dmg_path" "$portable_path"
+          mkdir -p "$package_root" "$dmg_stage"
+          cp -R "$app_path" "$package_root/"
+          cp -R "$app_path" "$dmg_stage/"
+
+          cleanup_dmg_resources() {
+            hdiutil detach "/Volumes/WStart" -force >/dev/null 2>&1 || true
+            hdiutil detach "/Volumes/WStart 1" -force >/dev/null 2>&1 || true
+            pkill -x diskimages-helper >/dev/null 2>&1 || true
+            sleep 2
+          }
+
+          create_dmg() {
+            local attempt
+            for attempt in 1 2 3; do
+              rm -f "$dmg_path"
+              cleanup_dmg_resources
+              if hdiutil create -volname WStart -srcfolder "$dmg_stage" -ov -format UDZO "$dmg_path"; then
+                return 0
+              fi
+              echo "::warning::hdiutil create failed on attempt ${attempt}; retrying after cleanup."
+              hdiutil info || true
+              sleep $((attempt * 5))
+            done
+            return 1
+          }
+
+          create_dmg
           touch "$package_root/WStart.portable"
           ditto -c -k --sequesterRsrc "$package_root" "$portable_path"
           {
