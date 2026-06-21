@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, for example v0.2.0"
+        description: "Release tag, for example v0.3.4"
         required: true
         type: string
 
@@ -27,23 +27,53 @@ jobs:
       matrix:
         include:
           - name: Windows / Qt 6.8.3 / MSVC / x64
+            platform: windows
+            arch: x64
             os: windows-2022
             qt-host: windows
             qt-arch: win64_msvc2022_64
+            cmake-generator: Visual Studio 17 2022
+            cmake-arch: x64
             build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64
-            artifact-name: WStart-qt6.8.3-windows-msvc2022-dynamic-x64
-          - name: macOS / Qt 6.8.3 / clang
+          - name: Windows / Qt 6.8.3 / MSVC / arm64
+            platform: windows
+            arch: arm64
+            os: windows-11-arm
+            qt-host: windows
+            qt-arch: win64_msvc2022_arm64_cross_compiled
+            cmake-generator: Visual Studio 17 2022
+            cmake-arch: ARM64
+            build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-arm64
+          - name: macOS / Qt 6.8.3 / clang / x64
+            platform: macos
+            arch: x64
             os: macos-15-intel
             qt-host: mac
             qt-arch: clang_64
-            build-dir: out/build/release-macos-qt6.8.3-clang
-            artifact-name: WStart-qt6.8.3-macos-clang
+            build-dir: out/build/release-macos-qt6.8.3-clang-x64
+          - name: macOS / Qt 6.8.3 / clang / arm64
+            platform: macos
+            arch: arm64
+            os: macos-15
+            qt-host: mac
+            qt-arch: clang_64
+            build-dir: out/build/release-macos-qt6.8.3-clang-arm64
           - name: Linux / Qt 6.8.3 / gcc / x64
-            os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            deb-arch: amd64
+            os: ubuntu-24.04
             qt-host: linux
             qt-arch: linux_gcc_64
             build-dir: out/build/release-linux-qt6.8.3-gcc-x64
-            artifact-name: WStart-qt6.8.3-linux-gcc-x64
+          - name: Linux / Qt 6.8.3 / gcc / arm64
+            platform: linux
+            arch: arm64
+            deb-arch: arm64
+            os: ubuntu-24.04-arm
+            qt-host: linux_arm64
+            qt-arch: linux_gcc_arm64
+            build-dir: out/build/release-linux-qt6.8.3-gcc-arm64
 
     steps:
       - uses: actions/checkout@v7
@@ -54,11 +84,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $refName = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $version = $refName
+          if ($version.StartsWith("v")) {
+            $version = $version.Substring(1)
+          }
+          "RELEASE_TAG=$refName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Install Linux system packages
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 fakeroot
 
       - name: Install macOS system packages
         if: runner.os == 'macOS'
@@ -85,7 +126,7 @@ jobs:
         shell: pwsh
         run: |
           cmake -S . -B "${{ matrix.build-dir }}" `
-            -G "Visual Studio 17 2022" -A x64 `
+            -G "${{ matrix.cmake-generator }}" -A "${{ matrix.cmake-arch }}" `
             -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
             -DHKM_QT_MAJOR=6 `
             -DHKM_DEPLOY_QT_RUNTIME=ON `
@@ -111,38 +152,95 @@ jobs:
         shell: pwsh
         run: ctest --test-dir "${{ matrix.build-dir }}" -C Release --output-on-failure
 
-      - name: Package Windows zip
+      - name: Package Windows installer and portable
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $artifactName = "${{ matrix.artifact-name }}"
-          $packageRoot = Join-Path $env:RUNNER_TEMP $artifactName
-          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
-          Copy-Item -Path (Join-Path "${{ matrix.build-dir }}" "Release\*") -Destination $packageRoot -Recurse -Force
-          $packagePath = Join-Path (Get-Location) "$artifactName.zip"
-          Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $packagePath -Force
-          "PACKAGE_PATH=$packagePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $ErrorActionPreference = "Stop"
+          $version = $env:RELEASE_VERSION
+          $arch = "${{ matrix.arch }}"
+          $buildDir = "${{ matrix.build-dir }}"
+          $artifactBase = "WStart-$version-windows-$arch"
+          $packageRoot = Join-Path $env:RUNNER_TEMP $artifactBase
+          $payload = Join-Path $packageRoot "payload"
+          New-Item -ItemType Directory -Force -Path $payload | Out-Null
+          Copy-Item -Path (Join-Path $buildDir "Release\*") -Destination $payload -Recurse -Force
 
-      - name: Package macOS dmg
+          $portablePath = Join-Path (Get-Location) "$artifactBase-portable.zip"
+          Compress-Archive -Path (Join-Path $payload "*") -DestinationPath $portablePath -Force
+
+          python -m aqt install-tool windows desktop tools_ifw --outputdir "$env:RUNNER_TEMP/QtTools"
+          $binaryCreator = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/QtTools" -Recurse -Filter binarycreator.exe |
+            Select-Object -First 1
+          if (-not $binaryCreator) {
+            Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/QtTools" -Recurse -Depth 4 -Force | Format-List FullName
+            throw "binarycreator.exe was not found."
+          }
+
+          $ifwRoot = Join-Path $packageRoot "ifw"
+          $ifwConfig = Join-Path $ifwRoot "config"
+          $ifwPackage = Join-Path $ifwRoot "packages/com.wstart.hotkeymanager"
+          $ifwData = Join-Path $ifwPackage "data"
+          $ifwMeta = Join-Path $ifwPackage "meta"
+          New-Item -ItemType Directory -Force -Path $ifwConfig, $ifwData, $ifwMeta | Out-Null
+          Copy-Item -Path (Join-Path $payload "*") -Destination $ifwData -Recurse -Force
+          Copy-Item -LiteralPath "resources/app.ico" -Destination (Join-Path $ifwConfig "app.ico") -Force
+
+          $releaseDate = Get-Date -Format "yyyy-MM-dd"
+          $config = Get-Content -Raw -LiteralPath "packaging/ifw/config/config.xml.in"
+          $config = $config.Replace("@VERSION@", $version)
+          Set-Content -LiteralPath (Join-Path $ifwConfig "config.xml") -Value $config -Encoding UTF8
+          $package = Get-Content -Raw -LiteralPath "packaging/ifw/packages/com.wstart.hotkeymanager/meta/package.xml.in"
+          $package = $package.Replace("@VERSION@", $version).Replace("@RELEASE_DATE@", $releaseDate)
+          Set-Content -LiteralPath (Join-Path $ifwMeta "package.xml") -Value $package -Encoding UTF8
+          Copy-Item -LiteralPath "packaging/ifw/packages/com.wstart.hotkeymanager/meta/installscript.qs" -Destination (Join-Path $ifwMeta "installscript.qs") -Force
+
+          $installerPath = Join-Path (Get-Location) "$artifactBase-setup.exe"
+          & $binaryCreator.FullName --offline-only -c (Join-Path $ifwConfig "config.xml") -p (Join-Path $ifwRoot "packages") $installerPath
+
+          "PACKAGE_PATHS<<EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $installerPath | Out-File -FilePath $env:GITHUB_ENV -Append
+          $portablePath | Out-File -FilePath $env:GITHUB_ENV -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Package macOS dmg and portable
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-          artifact_name="${{ matrix.artifact-name }}"
+          version="$RELEASE_VERSION"
+          arch="${{ matrix.arch }}"
+          artifact_base="WStart-${version}-macos-${arch}"
           app_path="${{ matrix.build-dir }}/WStart.app"
-          package_path="$PWD/${artifact_name}.dmg"
+          package_root="$RUNNER_TEMP/$artifact_base"
           test -d "$app_path"
           "$QT_PREFIX/bin/macdeployqt" "$app_path" -verbose=2
-          hdiutil create -volname WStart -srcfolder "$app_path" -ov -format UDZO "$package_path"
-          echo "PACKAGE_PATH=$package_path" >> "$GITHUB_ENV"
 
-      - name: Package Linux tarball
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          cp -R "$app_path" "$package_root/"
+
+          dmg_path="$PWD/${artifact_base}.dmg"
+          portable_path="$PWD/${artifact_base}-portable.zip"
+          hdiutil create -volname WStart -srcfolder "$package_root/WStart.app" -ov -format UDZO "$dmg_path"
+          ditto -c -k --sequesterRsrc --keepParent "$package_root/WStart.app" "$portable_path"
+          {
+            echo "PACKAGE_PATHS<<EOF"
+            echo "$dmg_path"
+            echo "$portable_path"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Package Linux deb and portable
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          artifact_name="${{ matrix.artifact-name }}"
-          package_root="$RUNNER_TEMP/$artifact_name"
+          version="$RELEASE_VERSION"
+          arch="${{ matrix.arch }}"
+          deb_arch="${{ matrix.deb-arch }}"
+          artifact_base="WStart-${version}-linux-${arch}"
+          package_root="$RUNNER_TEMP/$artifact_base"
           install_root="$package_root/WStart"
           cmake --install "${{ matrix.build-dir }}" --prefix "$install_root"
 
@@ -182,14 +280,38 @@ jobs:
           } > "$install_root/wstart.sh"
           chmod +x "$install_root/wstart.sh"
 
-          package_path="$PWD/${artifact_name}.tar.gz"
-          tar -C "$package_root" -czf "$package_path" WStart
-          echo "PACKAGE_PATH=$package_path" >> "$GITHUB_ENV"
+          portable_path="$PWD/${artifact_base}-portable.tar.gz"
+          tar -C "$package_root" -czf "$portable_path" WStart
+
+          deb_root="$RUNNER_TEMP/${artifact_base}-deb"
+          app_dir="$deb_root/opt/WStart"
+          mkdir -p "$app_dir" "$deb_root/DEBIAN" "$deb_root/usr/share/applications" "$deb_root/usr/share/icons/hicolor/scalable/apps"
+          cp -R "$install_root/." "$app_dir/"
+          cp "$install_root/share/applications/wstart.desktop" "$deb_root/usr/share/applications/wstart.desktop"
+          cp "$install_root/share/icons/hicolor/scalable/apps/wstart.svg" "$deb_root/usr/share/icons/hicolor/scalable/apps/wstart.svg"
+          {
+            printf '%s\n' 'Package: wstart'
+            printf '%s\n' "Version: $version"
+            printf '%s\n' 'Section: utils'
+            printf '%s\n' 'Priority: optional'
+            printf '%s\n' "Architecture: $deb_arch"
+            printf '%s\n' 'Maintainer: WStart <noreply@example.com>'
+            printf '%s\n' 'Description: Hotkey launcher and shortcut manager.'
+          } > "$deb_root/DEBIAN/control"
+          find "$deb_root" -type d -exec chmod 755 {} \;
+          dpkg-deb --build --root-owner-group "$deb_root" "$PWD/${artifact_base}.deb"
+          deb_path="$PWD/${artifact_base}.deb"
+          {
+            echo "PACKAGE_PATHS<<EOF"
+            echo "$deb_path"
+            echo "$portable_path"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact-name }}
-          path: ${{ env.PACKAGE_PATH }}
+          name: WStart-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ env.PACKAGE_PATHS }}
           if-no-files-found: error
           retention-days: 14
 

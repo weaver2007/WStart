@@ -5,11 +5,11 @@
 The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix:
 
 - Windows / Qt 6.8.3 / MSVC / dynamic Qt / x64
-- macOS / Qt 6.8.3 / clang / dynamic Qt / arm64 runner
+- macOS / Qt 6.8.3 / clang / dynamic Qt / x64
 - Linux / Qt 6.8.3 / gcc / dynamic Qt / x64
 
-The workflow uploads a Windows zip artifact for each successful run. macOS and Linux currently run configure, build,
-and tests only; packaging is intentionally deferred until their native behavior and distribution targets are defined.
+The CI workflow uploads a Windows zip artifact for successful main builds. Release packaging is handled separately by
+`.github/workflows/release.yml`.
 
 The full local variant matrix remains represented by `CMakePresets.json`. Running every variant in GitHub Actions would
 require a custom image or a self-hosted Windows runner with the same local Qt/toolchain layout referenced by the presets,
@@ -32,13 +32,28 @@ releases automatically.
 
 The release workflow currently attaches these assets to the GitHub Release:
 
-- `WStart-qt6.8.3-windows-msvc2022-dynamic-x64.zip`
-- `WStart-qt6.8.3-macos-clang.dmg`
-- `WStart-qt6.8.3-linux-gcc-x64.tar.gz`
+- `WStart-<version>-windows-x64-setup.exe`
+- `WStart-<version>-windows-x64-portable.zip`
+- `WStart-<version>-windows-arm64-setup.exe`
+- `WStart-<version>-windows-arm64-portable.zip`
+- `WStart-<version>-macos-x64.dmg`
+- `WStart-<version>-macos-x64-portable.zip`
+- `WStart-<version>-macos-arm64.dmg`
+- `WStart-<version>-macos-arm64-portable.zip`
+- `WStart-<version>-linux-x64.deb`
+- `WStart-<version>-linux-x64-portable.tar.gz`
+- `WStart-<version>-linux-arm64.deb`
+- `WStart-<version>-linux-arm64-portable.tar.gz`
 
-The macOS package is an unsigned `.dmg` generated from `WStart.app` with `macdeployqt`. The Linux package is a portable
-`.tar.gz` containing the installed executable, Qt libraries/plugins copied from the GitHub-hosted Qt installation, the
-desktop file, the SVG icon, and a `wstart.sh` launcher script.
+The Windows installer is an offline Qt Installer Framework executable. The Windows portable package is a dynamic Qt zip
+containing `WStart.exe`, Qt DLLs, plugins, and required runtime DLLs.
+
+The macOS installer package is an unsigned `.dmg` generated from `WStart.app` with `macdeployqt`. The macOS portable
+package is a zipped `WStart.app`.
+
+The Linux installer package is a `.deb` containing the same portable payload under `/opt/WStart` plus a desktop file and
+SVG icon. The Linux portable `.tar.gz` contains the installed executable, Qt libraries/plugins copied from the
+GitHub-hosted Qt installation, the desktop file, the SVG icon, and a `wstart.sh` launcher script.
 
 ## Update manifest
 
@@ -53,7 +68,7 @@ https://raw.githubusercontent.com/<owner>/<repo>/main/update.json
 ```json
 {
   "version": "0.3.0",
-  "downloadUrl": "https://github.com/<owner>/<repo>/releases/download/v0.3.0/WStart-qt6.8.3-windows-msvc2022-dynamic-x64.zip",
+  "downloadUrl": "https://github.com/<owner>/<repo>/releases/download/v0.3.0/WStart-0.3.0-windows-x64-setup.exe",
   "sha256": "<optional sha256>",
   "releaseNotes": "Short release notes shown in WStart."
 }
