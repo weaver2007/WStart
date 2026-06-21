@@ -420,17 +420,17 @@ jobs:
             $platform = $null
             $arch = $null
             $type = $null
-            if ($name -match "windows-(x64|arm64)-setup\\.exe$") {
+            if ($name -match 'windows-(x64|arm64)-setup\.exe$') {
               $platform = "windows"; $arch = $matches[1]; $type = "installer"
-            } elseif ($name -match "windows-(x64|arm64)-portable\\.zip$") {
+            } elseif ($name -match 'windows-(x64|arm64)-portable\.zip$') {
               $platform = "windows"; $arch = $matches[1]; $type = "portable"
-            } elseif ($name -match "macos-(x64|arm64)\\.dmg$") {
+            } elseif ($name -match 'macos-(x64|arm64)\.dmg$') {
               $platform = "macos"; $arch = $matches[1]; $type = "installer"
-            } elseif ($name -match "macos-(x64|arm64)-portable\\.zip$") {
+            } elseif ($name -match 'macos-(x64|arm64)-portable\.zip$') {
               $platform = "macos"; $arch = $matches[1]; $type = "portable"
-            } elseif ($name -match "linux-(x64|arm64)\\.deb$") {
+            } elseif ($name -match 'linux-(x64|arm64)\.deb$') {
               $platform = "linux"; $arch = $matches[1]; $type = "installer"
-            } elseif ($name -match "linux-(x64|arm64)-portable\\.tar\\.gz$") {
+            } elseif ($name -match 'linux-(x64|arm64)-portable\.tar\.gz$') {
               $platform = "linux"; $arch = $matches[1]; $type = "portable"
             }
             if ($platform) {
