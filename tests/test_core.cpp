@@ -1,7 +1,9 @@
 #include "../src/HotkeyConflictDetector.h"
 #include "../src/HotkeyTypes.h"
 #include "../src/RuleStore.h"
+#include "../src/UpdateChecker.h"
 
+#include <QFile>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -25,6 +27,10 @@ private slots:
     void sectionAndCategoryAppearanceRoundTrip();
     void sectionAndCategoryAppearanceDefaultsAndFallback();
     void conflictWarnings();
+    void updateVersionComparison();
+    void updateManifestSelectsCurrentAsset();
+    void updateManifestLegacyDownloadUrl();
+    void updateSha256Verification();
 };
 
 void CoreTests::hotkeyDisplayText() {
@@ -345,6 +351,74 @@ void CoreTests::conflictWarnings() {
     noHotkey.id = "three";
     noHotkey.hotkey = HotkeyCombination();
     QVERIFY(store.warningsForRule(noHotkey, existingRules).isEmpty());
+}
+
+void CoreTests::updateVersionComparison() {
+    QVERIFY(UpdateChecker::versionGreaterThan("0.3.10", "0.3.9"));
+    QVERIFY(UpdateChecker::versionGreaterThan("v0.4.0", "0.3.9"));
+    QVERIFY(!UpdateChecker::versionGreaterThan("0.3.5", "0.3.5"));
+    QVERIFY(!UpdateChecker::versionGreaterThan("0.3.4", "0.3.5"));
+}
+
+void CoreTests::updateManifestSelectsCurrentAsset() {
+    const QString platform = UpdateChecker::currentPlatformKey();
+    const QString arch = UpdateChecker::currentArchKey();
+    const QByteArray json = QString(R"({
+        "version": "9.9.9",
+        "releaseNotes": "Test release",
+        "assets": [
+          {"platform": "%1", "arch": "%2", "type": "installer", "url": "https://example.com/setup.exe", "apiUrl": "https://api.example.com/assets/1"},
+          {"platform": "%1", "arch": "%2", "type": "portable", "url": "https://example.com/portable.zip"}
+        ]
+    })")
+                                  .arg(platform, arch)
+                                  .toUtf8();
+
+    QString error;
+    const UpdateInfo installed =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.1.0", false, &error);
+    QVERIFY(error.isEmpty());
+    QVERIFY(installed.updateAvailable);
+    QCOMPARE(installed.asset.type, QString("installer"));
+    QCOMPARE(installed.asset.url, QString("https://api.example.com/assets/1"));
+
+    const UpdateInfo portable =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.1.0", true, &error);
+    QVERIFY(error.isEmpty());
+    QVERIFY(portable.updateAvailable);
+    QCOMPARE(portable.asset.type, QString("portable"));
+}
+
+void CoreTests::updateManifestLegacyDownloadUrl() {
+    const QByteArray json = R"({
+        "version": "1.0.0",
+        "downloadUrl": "https://example.com/WStart.zip",
+        "sha256": "abc",
+        "releaseNotes": "Legacy"
+    })";
+
+    QString error;
+    const UpdateInfo info = UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.9.0", true, &error);
+    QVERIFY(error.isEmpty());
+    QVERIFY(info.updateAvailable);
+    QCOMPARE(info.asset.url, QString("https://example.com/WStart.zip"));
+    QCOMPARE(info.asset.sha256, QString("abc"));
+}
+
+void CoreTests::updateSha256Verification() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath("payload.txt");
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("abc");
+    file.close();
+
+    QString error;
+    QVERIFY(UpdateChecker::verifySha256(path, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+                                        &error));
+    QVERIFY(!UpdateChecker::verifySha256(path, "deadbeef", &error));
+    QVERIFY(!error.isEmpty());
 }
 
 QTEST_APPLESS_MAIN(CoreTests)

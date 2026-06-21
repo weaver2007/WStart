@@ -16,7 +16,7 @@ permissions:
 
 env:
   QT_VERSION: 6.8.3
-  UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/update.json
+  UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/contents/update.json?ref=main
 
 jobs:
   build-packages:
@@ -157,6 +157,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
             -DHKM_QT_MAJOR=6 `
             -DHKM_DEPLOY_QT_RUNTIME=ON `
+            -DHKM_APP_VERSION_OVERRIDE="$env:RELEASE_VERSION" `
             -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL" `
             @qtHostPathArg
 
@@ -170,6 +171,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
             -DHKM_QT_MAJOR=6 \
             -DHKM_DEPLOY_QT_RUNTIME=OFF \
+            -DHKM_APP_VERSION_OVERRIDE="$RELEASE_VERSION" \
             -DHKM_UPDATE_MANIFEST_URL="$UPDATE_MANIFEST_URL"
 
       - name: Build
@@ -195,7 +197,9 @@ jobs:
           Copy-Item -Path (Join-Path $buildDir "Release\*") -Destination $payload -Recurse -Force
 
           $portablePath = Join-Path (Get-Location) "$artifactBase-portable.zip"
+          New-Item -ItemType File -Force -Path (Join-Path $payload "WStart.portable") | Out-Null
           Compress-Archive -Path (Join-Path $payload "*") -DestinationPath $portablePath -Force
+          Remove-Item -LiteralPath (Join-Path $payload "WStart.portable") -Force
 
           python -m aqt install-tool windows desktop tools_ifw --outputdir "$env:RUNNER_TEMP/QtTools"
           $binaryCreator = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/QtTools" -Recurse -Filter binarycreator.exe |
@@ -251,7 +255,8 @@ jobs:
           dmg_path="$PWD/${artifact_base}.dmg"
           portable_path="$PWD/${artifact_base}-portable.zip"
           hdiutil create -volname WStart -srcfolder "$package_root/WStart.app" -ov -format UDZO "$dmg_path"
-          ditto -c -k --sequesterRsrc --keepParent "$package_root/WStart.app" "$portable_path"
+          touch "$package_root/WStart.portable"
+          ditto -c -k --sequesterRsrc "$package_root" "$portable_path"
           {
             echo "PACKAGE_PATHS<<EOF"
             echo "$dmg_path"
@@ -309,7 +314,9 @@ jobs:
           chmod +x "$install_root/wstart.sh"
 
           portable_path="$PWD/${artifact_base}-portable.tar.gz"
+          touch "$install_root/WStart.portable"
           tar -C "$package_root" -czf "$portable_path" WStart
+          rm -f "$install_root/WStart.portable"
 
           deb_root="$RUNNER_TEMP/${artifact_base}-deb"
           app_dir="$deb_root/opt/WStart"
@@ -356,6 +363,56 @@ jobs:
       - name: List release assets
         run: ls -la dist
 
+      - name: Generate update manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $version = $tag
+          if ($version.StartsWith("v")) {
+            $version = $version.Substring(1)
+          }
+          $repo = "${{ github.repository }}"
+          $assets = @()
+          Get-ChildItem -LiteralPath dist -File | Sort-Object Name | ForEach-Object {
+            $name = $_.Name
+            $platform = $null
+            $arch = $null
+            $type = $null
+            if ($name -match "windows-(x64|arm64)-setup\\.exe$") {
+              $platform = "windows"; $arch = $matches[1]; $type = "installer"
+            } elseif ($name -match "windows-(x64|arm64)-portable\\.zip$") {
+              $platform = "windows"; $arch = $matches[1]; $type = "portable"
+            } elseif ($name -match "macos-(x64|arm64)\\.dmg$") {
+              $platform = "macos"; $arch = $matches[1]; $type = "installer"
+            } elseif ($name -match "macos-(x64|arm64)-portable\\.zip$") {
+              $platform = "macos"; $arch = $matches[1]; $type = "portable"
+            } elseif ($name -match "linux-(x64|arm64)\\.deb$") {
+              $platform = "linux"; $arch = $matches[1]; $type = "installer"
+            } elseif ($name -match "linux-(x64|arm64)-portable\\.tar\\.gz$") {
+              $platform = "linux"; $arch = $matches[1]; $type = "portable"
+            }
+            if ($platform) {
+              $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+              $assets += [ordered]@{
+                platform = $platform
+                arch = $arch
+                type = $type
+                fileName = $name
+                url = "https://github.com/$repo/releases/download/$tag/$name"
+                apiUrl = ""
+                sha256 = $hash
+              }
+            }
+          }
+          $manifest = [ordered]@{
+            version = $version
+            pageUrl = "https://github.com/$repo/releases/tag/$tag"
+            releaseNotes = "WStart $version release."
+            assets = $assets
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "dist/update.json" -Encoding UTF8
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -363,3 +420,40 @@ jobs:
           draft: false
           prerelease: false
           files: dist/*
+
+      - name: Refresh update manifest with asset API URLs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $release = gh api "repos/${{ github.repository }}/releases/tags/$tag" | ConvertFrom-Json
+          $manifest = Get-Content -Raw -LiteralPath "dist/update.json" | ConvertFrom-Json
+          foreach ($manifestAsset in $manifest.assets) {
+            $releaseAsset = $release.assets | Where-Object { $_.name -eq $manifestAsset.fileName } | Select-Object -First 1
+            if ($releaseAsset) {
+              $manifestAsset.apiUrl = $releaseAsset.url
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "update.json" -Encoding UTF8
+          gh release upload "$tag" "update.json" --clobber --repo "${{ github.repository }}"
+
+      - name: Commit update manifest to main
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git add update.json
+          if (git diff --cached --quiet) {
+            Write-Host "update.json has no changes."
+          } else {
+            git commit -m "Update release manifest for ${{ github.ref_name }}"
+            git push origin main
+          }

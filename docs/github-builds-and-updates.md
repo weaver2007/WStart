@@ -60,18 +60,42 @@ GitHub-hosted Qt installation, the desktop file, the SVG icon, and a `wstart.sh`
 Release builds receive this manifest URL from GitHub Actions:
 
 ```text
-https://raw.githubusercontent.com/<owner>/<repo>/main/update.json
+https://api.github.com/repos/<owner>/<repo>/contents/update.json?ref=main
 ```
 
-`update.json` should be updated after publishing a release:
+For private repositories, WStart reads this URL with a user-provided fine-grained GitHub PAT. The token should only have
+read-only `Contents` permission for the private repository. WStart stores the token in the local credential store on
+Windows.
+
+`update.json` uses platform-specific assets:
 
 ```json
 {
-  "version": "0.3.0",
-  "downloadUrl": "https://github.com/<owner>/<repo>/releases/download/v0.3.0/WStart-0.3.0-windows-x64-setup.exe",
-  "sha256": "<optional sha256>",
-  "releaseNotes": "Short release notes shown in WStart."
+  "version": "0.3.5",
+  "pageUrl": "https://github.com/<owner>/<repo>/releases/tag/v0.3.5",
+  "releaseNotes": "Short release notes shown in WStart.",
+  "assets": [
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "type": "installer",
+      "fileName": "WStart-0.3.5-windows-x64-setup.exe",
+      "url": "https://github.com/<owner>/<repo>/releases/download/v0.3.5/WStart-0.3.5-windows-x64-setup.exe",
+      "sha256": "<sha256>"
+    },
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "type": "portable",
+      "fileName": "WStart-0.3.5-windows-x64-portable.zip",
+      "url": "https://github.com/<owner>/<repo>/releases/download/v0.3.5/WStart-0.3.5-windows-x64-portable.zip",
+      "sha256": "<sha256>"
+    }
+  ]
 }
 ```
 
-The application checks this JSON with `QNetworkAccessManager`. When a newer version is found, it prompts the user and opens the download page or URL. It does not replace the running executable silently.
+The application checks this JSON with `QNetworkAccessManager`. When a newer version is found, installed builds download
+and open the installer package. Portable Windows builds download the portable zip, start `WStartUpdater.exe`, exit, and
+let the updater replace the portable directory and restart WStart. Portable packages include a `WStart.portable` marker
+file so the runtime can distinguish portable builds from installed builds.

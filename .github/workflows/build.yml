@@ -9,7 +9,7 @@ on:
 
 env:
   QT_VERSION: 6.8.3
-  UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/update.json
+  UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/contents/update.json?ref=main
 
 jobs:
   build:

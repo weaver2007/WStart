@@ -17,7 +17,12 @@ set(HKM_QT_MAJOR "AUTO" CACHE STRING "Qt major version to use: AUTO, 6, 5, or 4.
 set_property(CACHE HKM_QT_MAJOR PROPERTY STRINGS AUTO 6 5 4)
 set(HKM_CXX_STANDARD "17" CACHE STRING "C++ standard used by HotKeyManager targets.")
 set_property(CACHE HKM_CXX_STANDARD PROPERTY STRINGS 14 17)
+set(HKM_APP_VERSION_OVERRIDE "" CACHE STRING "Override the application version embedded in binaries.")
 set(HKM_UPDATE_MANIFEST_URL "" CACHE STRING "HTTPS URL of the update manifest JSON used by the in-app update checker.")
+set(HKM_EFFECTIVE_APP_VERSION "${PROJECT_VERSION}")
+if(NOT HKM_APP_VERSION_OVERRIDE STREQUAL "")
+    set(HKM_EFFECTIVE_APP_VERSION "${HKM_APP_VERSION_OVERRIDE}")
+endif()
 
 set(CMAKE_CXX_STANDARD ${HKM_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -54,7 +59,7 @@ if(HKM_QT_MAJOR STREQUAL "4")
     set(QT_VERSION_MAJOR 4)
     set(HKM_QT_PACKAGE "Qt4")
     set(HKM_QT_LIBS ${QT_QTGUI_LIBRARY} ${QT_QTSVG_LIBRARY} ${QT_QTNETWORK_LIBRARY} ${QT_QTCORE_LIBRARY})
-    set(HKM_QT_TEST_LIBS ${QT_QTTEST_LIBRARY} ${QT_QTGUI_LIBRARY} ${QT_QTCORE_LIBRARY})
+    set(HKM_QT_TEST_LIBS ${QT_QTTEST_LIBRARY} ${QT_QTGUI_LIBRARY} ${QT_QTNETWORK_LIBRARY} ${QT_QTCORE_LIBRARY})
     set(QT_QMAKE_EXECUTABLE "${QT_QMAKE_EXECUTABLE}")
     set(HKM_QT4_COMPAT_SOURCES
         src/qt4compat/QJsonArray.cpp
@@ -72,6 +77,7 @@ elseif(HKM_QT_MAJOR STREQUAL "AUTO")
     set(HKM_QT_TEST_LIBS
         ${HKM_QT_PACKAGE}::Test
         ${HKM_QT_PACKAGE}::Widgets
+        ${HKM_QT_PACKAGE}::Network
     )
 else()
     find_package(Qt${HKM_QT_MAJOR} REQUIRED COMPONENTS Widgets Svg Network Test)
@@ -85,6 +91,7 @@ else()
     set(HKM_QT_TEST_LIBS
         ${HKM_QT_PACKAGE}::Test
         ${HKM_QT_PACKAGE}::Widgets
+        ${HKM_QT_PACKAGE}::Network
     )
 endif()
 set(HKM_QT5_STATIC_APP_COMPAT_LIBS)
@@ -236,10 +243,12 @@ endif()
 set(HKM_SOURCES
     src/AppIcon.cpp
     src/ActionRunner.cpp
+    src/CredentialStore.cpp
     src/HotkeyConflictDetector.cpp
     src/HotkeyHookService.cpp
     src/HotkeyTypes.cpp
     src/RuleStore.cpp
+    src/SelfUpdater.cpp
     src/TrayController.cpp
     src/UiText.cpp
     src/UpdateChecker.cpp
@@ -248,11 +257,13 @@ set(HKM_SOURCES
 set(HKM_HEADERS
     src/AppIcon.h
     src/ActionRunner.h
+    src/CredentialStore.h
     src/HotkeyConflictDetector.h
     src/HotkeyHookService.h
     src/LauncherWindowInterface.h
     src/HotkeyTypes.h
     src/RuleStore.h
+    src/SelfUpdater.h
     src/TrayController.h
     src/UiText.h
     src/UpdateChecker.h
@@ -312,7 +323,7 @@ if(WIN32)
 endif()
 
 target_compile_definitions(HotKeyManager PRIVATE
-    HKM_APP_VERSION="${PROJECT_VERSION}"
+    HKM_APP_VERSION="${HKM_EFFECTIVE_APP_VERSION}"
     HKM_UPDATE_MANIFEST_URL="${HKM_UPDATE_MANIFEST_URL}"
 )
 
@@ -339,12 +350,38 @@ if(MINGW AND HKM_STATIC_RUNTIME)
 endif()
 
 set_target_properties(HotKeyManager PROPERTIES OUTPUT_NAME WStart)
+
+if(WIN32)
+    add_executable(WStartUpdater WIN32 src/updater/WindowsUpdater.cpp)
+    target_link_libraries(WStartUpdater PRIVATE shell32)
+    if(MSVC)
+        target_compile_options(WStartUpdater PRIVATE /W4 /utf-8)
+        target_link_options(WStartUpdater PRIVATE /MANIFEST:NO)
+        if(HKM_WINVER STREQUAL "0x0501")
+            target_link_options(WStartUpdater PRIVATE /SUBSYSTEM:WINDOWS,5.01)
+        endif()
+    else()
+        target_compile_options(WStartUpdater PRIVATE -Wall -Wextra -pedantic)
+    endif()
+    if(MSVC AND HKM_STATIC_RUNTIME)
+        set_property(TARGET WStartUpdater PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    if(MINGW AND HKM_STATIC_RUNTIME)
+        target_link_options(WStartUpdater PRIVATE -static -static-libgcc -static-libstdc++)
+    endif()
+    add_custom_command(TARGET HotKeyManager POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:WStartUpdater>"
+                "$<TARGET_FILE_DIR:HotKeyManager>"
+        COMMENT "Copying WStartUpdater next to WStart"
+    )
+endif()
 if(APPLE)
     set_target_properties(HotKeyManager PROPERTIES
         MACOSX_BUNDLE_BUNDLE_NAME "WStart"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.wstart.hotkeymanager"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${HKM_EFFECTIVE_APP_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${HKM_EFFECTIVE_APP_VERSION}"
     )
 endif()
 
@@ -461,6 +498,7 @@ add_executable(HotKeyManagerTests
     src/HotkeyConflictDetector.cpp
     src/HotkeyTypes.cpp
     src/RuleStore.cpp
+    src/UpdateChecker.cpp
     src/UiText.cpp
 )
 
@@ -477,11 +515,12 @@ if(WIN32)
     target_link_libraries(HotKeyManagerTests PRIVATE
         ${HKM_QT5_STATIC_THIRDPARTY_COMPAT_LIBS}
         ${HKM_STATIC_SYSTEM_LIBS}
+        advapi32
     )
 endif()
 
 target_compile_definitions(HotKeyManagerTests PRIVATE
-    HKM_APP_VERSION="${PROJECT_VERSION}"
+    HKM_APP_VERSION="${HKM_EFFECTIVE_APP_VERSION}"
     HKM_UPDATE_MANIFEST_URL=""
 )
 

@@ -32,6 +32,8 @@ QString text(const QString& language, Key key) {
         return en ? "Enable global hotkeys" : QString::fromUtf8("启用全局快捷键");
     case Key::UpdatesEnabled:
         return en ? "Check for updates automatically" : QString::fromUtf8("自动检查更新");
+    case Key::GithubToken:
+        return en ? "GitHub token..." : QString::fromUtf8("GitHub Token...");
     case Key::CheckForUpdates:
         return en ? "Check for updates" : QString::fromUtf8("检查更新");
     case Key::About:
@@ -51,6 +53,27 @@ QString text(const QString& language, Key key) {
         return en ? "You are already using the latest version: %1." : QString::fromUtf8("当前已是最新版本：%1。");
     case Key::UpdateFailed:
         return en ? "Update check failed: %1" : QString::fromUtf8("检查更新失败：%1");
+    case Key::UpdateDownloadInstall:
+        return en ? "Download and install" : QString::fromUtf8("下载并安装");
+    case Key::UpdateDownloadAndUpdate:
+        return en ? "Download and update" : QString::fromUtf8("下载并更新");
+    case Key::UpdateDownloading:
+        return en ? "Downloading update..." : QString::fromUtf8("正在下载更新...");
+    case Key::UpdateDownloadFailed:
+        return en ? "Update download failed: %1" : QString::fromUtf8("更新下载失败：%1");
+    case Key::UpdateDownloaded:
+        return en ? "Update package downloaded." : QString::fromUtf8("更新包已下载。");
+    case Key::UpdateInstallLaunchFailed:
+        return en ? "Unable to open update package: %1" : QString::fromUtf8("无法打开更新包：%1");
+    case Key::GithubTokenTitle:
+        return en ? "GitHub token" : QString::fromUtf8("GitHub Token");
+    case Key::GithubTokenPrompt:
+        return en ? "Enter a fine-grained PAT with read-only Contents permission for this private repository."
+                  : QString::fromUtf8("请输入对当前私仓具备 Contents 只读权限的 fine-grained PAT。");
+    case Key::GithubTokenSaved:
+        return en ? "GitHub token saved." : QString::fromUtf8("GitHub Token 已保存。");
+    case Key::GithubTokenSaveFailed:
+        return en ? "Failed to save GitHub token: %1" : QString::fromUtf8("保存 GitHub Token 失败：%1");
     case Key::OpenDownloadPage:
         return en ? "Open download page" : QString::fromUtf8("打开下载页面");
     case Key::Language:

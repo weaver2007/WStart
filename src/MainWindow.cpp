@@ -1,8 +1,10 @@
 #include "MainWindow.h"
 
 #include "AppIcon.h"
+#include "CredentialStore.h"
 #include "QtCompat.h"
 #include "RuleDialog.h"
+#include "SelfUpdater.h"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -41,6 +43,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPointer>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScreen>
@@ -1044,8 +1047,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(&m_hookService, SIGNAL(hookError(QString)), this, SLOT(setStatus(QString)));
     connect(&m_updateChecker, SIGNAL(checkFinished(bool, QString, QString, QString, QString, bool)), this,
             SLOT(onUpdateCheckFinished(bool, QString, QString, QString, QString, bool)));
+    connect(&m_updateChecker, SIGNAL(updateInfoReady(UpdateInfo, QString, bool)), this,
+            SLOT(onUpdateInfoReady(UpdateInfo, QString, bool)));
+    connect(&m_updateChecker, SIGNAL(downloadProgress(qint64, qint64)), this,
+            SLOT(onUpdateDownloadProgress(qint64, qint64)));
+    connect(&m_updateChecker, SIGNAL(downloadFinished(QString, UpdateAsset, QString)), this,
+            SLOT(onUpdateDownloadFinished(QString, UpdateAsset, QString)));
 
     loadDocument();
+    m_updateChecker.setGithubToken(CredentialStore::githubToken());
+    m_updateChecker.setPreferPortable(SelfUpdater::isPortableMode());
 
     QString hookError;
     if (!m_hookService.start(&hookError)) {
@@ -1270,6 +1281,8 @@ void MainWindow::buildSettingsMenu() {
     m_updatesEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::UpdatesEnabled));
     m_updatesEnabledAction->setCheckable(true);
     connect(m_updatesEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setUpdatesEnabled(bool)));
+    m_githubTokenAction = m_settingsMenu->addAction(uiText(UiText::Key::GithubToken));
+    connect(m_githubTokenAction, SIGNAL(triggered()), this, SLOT(configureGithubToken()));
     m_checkUpdatesAction = m_settingsMenu->addAction(uiText(UiText::Key::CheckForUpdates));
     connect(m_checkUpdatesAction, SIGNAL(triggered()), this, SLOT(checkForUpdates()));
     m_aboutAction = m_settingsMenu->addAction(uiText(UiText::Key::About));
@@ -1339,6 +1352,9 @@ void MainWindow::retranslateUi() {
         const QSignalBlocker blocker(m_updatesEnabledAction);
         m_updatesEnabledAction->setText(uiText(UiText::Key::UpdatesEnabled));
         m_updatesEnabledAction->setChecked(m_document.settings.updatesEnabled);
+    }
+    if (m_githubTokenAction) {
+        m_githubTokenAction->setText(uiText(UiText::Key::GithubToken));
     }
     if (m_checkUpdatesAction) {
         m_checkUpdatesAction->setText(uiText(UiText::Key::CheckForUpdates));
@@ -1460,7 +1476,28 @@ void MainWindow::setUpdatesEnabled(bool enabled) {
     }
 }
 
+void MainWindow::configureGithubToken() {
+    bool ok = false;
+    const QString currentToken = CredentialStore::githubToken();
+    QString value = QInputDialog::getText(this, uiText(UiText::Key::GithubTokenTitle),
+                                          uiText(UiText::Key::GithubTokenPrompt), QLineEdit::Password, currentToken,
+                                          &ok);
+    if (!ok) {
+        return;
+    }
+    QString error;
+    if (!CredentialStore::saveGithubToken(value, &error)) {
+        showWarning(this, language(), uiText(UiText::Key::GithubTokenTitle),
+                    uiText(UiText::Key::GithubTokenSaveFailed).arg(error));
+        return;
+    }
+    m_updateChecker.setGithubToken(CredentialStore::githubToken());
+    setStatus(uiText(UiText::Key::GithubTokenSaved));
+}
+
 void MainWindow::checkForUpdates() {
+    m_updateChecker.setGithubToken(CredentialStore::githubToken());
+    m_updateChecker.setPreferPortable(SelfUpdater::isPortableMode());
     setStatus(uiText(UiText::Key::UpdateChecking));
     m_updateChecker.checkNow(false);
 }
@@ -1477,6 +1514,15 @@ void MainWindow::showAboutDialog() {
 
 void MainWindow::onUpdateCheckFinished(bool updateAvailable, QString latestVersion, QString downloadUrl,
                                        QString releaseNotes, QString error, bool silent) {
+    Q_UNUSED(updateAvailable);
+    Q_UNUSED(latestVersion);
+    Q_UNUSED(downloadUrl);
+    Q_UNUSED(releaseNotes);
+    Q_UNUSED(error);
+    Q_UNUSED(silent);
+}
+
+void MainWindow::onUpdateInfoReady(UpdateInfo info, QString error, bool silent) {
     if (!error.isEmpty()) {
         if (!silent) {
             showWarning(this, language(), uiText(UiText::Key::CheckForUpdates),
@@ -1486,32 +1532,83 @@ void MainWindow::onUpdateCheckFinished(bool updateAvailable, QString latestVersi
         return;
     }
 
-    if (!updateAvailable) {
+    if (!info.updateAvailable) {
         if (!silent) {
             QMessageBox box(QMessageBox::Information, uiText(UiText::Key::CheckForUpdates),
-                            uiText(UiText::Key::UpdateNotAvailable).arg(latestVersion), QMessageBox::Ok, this);
+                            uiText(UiText::Key::UpdateNotAvailable).arg(info.latestVersion), QMessageBox::Ok, this);
             if (QAbstractButton* button = box.button(QMessageBox::Ok)) {
                 button->setText(uiText(UiText::Key::Ok));
             }
             box.exec();
-            setStatus(uiText(UiText::Key::UpdateNotAvailable).arg(latestVersion));
+            setStatus(uiText(UiText::Key::UpdateNotAvailable).arg(info.latestVersion));
         }
         return;
     }
 
-    const QString notes = releaseNotes.isEmpty() ? downloadUrl : releaseNotes;
+    m_pendingUpdateInfo = info;
+    const QString notes = info.releaseNotes.isEmpty() ? info.asset.url : info.releaseNotes;
     QMessageBox box(
         QMessageBox::Information, uiText(UiText::Key::UpdateAvailableTitle),
-        uiText(UiText::Key::UpdateAvailableMessage).arg(latestVersion, m_updateChecker.currentVersion(), notes),
+        uiText(UiText::Key::UpdateAvailableMessage).arg(info.latestVersion, m_updateChecker.currentVersion(), notes),
         QMessageBox::NoButton, this);
-    QPushButton* openButton = box.addButton(uiText(UiText::Key::OpenDownloadPage), QMessageBox::AcceptRole);
+    QPushButton* openButton =
+        box.addButton(SelfUpdater::isPortableMode() ? uiText(UiText::Key::UpdateDownloadAndUpdate)
+                                                    : uiText(UiText::Key::UpdateDownloadInstall),
+                      QMessageBox::AcceptRole);
     QPushButton* cancelButton = box.addButton(uiText(UiText::Key::Cancel), QMessageBox::RejectRole);
     box.exec();
-    if (box.clickedButton() == openButton && !downloadUrl.isEmpty()) {
-        QDesktopServices::openUrl(QUrl(downloadUrl));
+    if (box.clickedButton() == openButton && info.asset.isValid()) {
+        m_updateProgressDialog = new QProgressDialog(uiText(UiText::Key::UpdateDownloading), uiText(UiText::Key::Cancel),
+                                                     0, 0, this);
+        m_updateProgressDialog->setWindowTitle(uiText(UiText::Key::UpdateAvailableTitle));
+        m_updateProgressDialog->setWindowModality(Qt::WindowModal);
+        connect(m_updateProgressDialog.data(), SIGNAL(canceled()), &m_updateChecker, SLOT(cancelDownload()));
+        m_updateProgressDialog->show();
+        m_updateChecker.downloadSelectedUpdate();
     }
     Q_UNUSED(cancelButton);
-    setStatus(QString("%1: %2").arg(uiText(UiText::Key::UpdateAvailableTitle), latestVersion));
+    setStatus(QString("%1: %2").arg(uiText(UiText::Key::UpdateAvailableTitle), info.latestVersion));
+}
+
+void MainWindow::onUpdateDownloadProgress(qint64 received, qint64 total) {
+    if (!m_updateProgressDialog) {
+        return;
+    }
+    if (total > 0) {
+        m_updateProgressDialog->setMaximum(static_cast<int>(qMin<qint64>(total / 1024, 2147483647)));
+        m_updateProgressDialog->setValue(static_cast<int>(qMin<qint64>(received / 1024, 2147483647)));
+    } else {
+        m_updateProgressDialog->setMaximum(0);
+        m_updateProgressDialog->setValue(0);
+    }
+}
+
+void MainWindow::onUpdateDownloadFinished(QString filePath, UpdateAsset asset, QString error) {
+    Q_UNUSED(asset);
+    if (m_updateProgressDialog) {
+        m_updateProgressDialog->close();
+        m_updateProgressDialog->deleteLater();
+        m_updateProgressDialog = nullptr;
+    }
+    if (!error.isEmpty()) {
+        showWarning(this, language(), uiText(UiText::Key::UpdateAvailableTitle),
+                    uiText(UiText::Key::UpdateDownloadFailed).arg(error));
+        setStatus(uiText(UiText::Key::UpdateDownloadFailed).arg(error));
+        return;
+    }
+    setStatus(uiText(UiText::Key::UpdateDownloaded));
+    if (SelfUpdater::isPortableMode() && asset.type == "portable") {
+        QString updateError;
+        if (!SelfUpdater::startPortableUpdate(filePath, &updateError)) {
+            showWarning(this, language(), uiText(UiText::Key::UpdateAvailableTitle),
+                        uiText(UiText::Key::UpdateInstallLaunchFailed).arg(updateError));
+        }
+        return;
+    }
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(filePath))) {
+        showWarning(this, language(), uiText(UiText::Key::UpdateAvailableTitle),
+                    uiText(UiText::Key::UpdateInstallLaunchFailed).arg(filePath));
+    }
 }
 
 void MainWindow::setHotkeysPaused(bool paused) {

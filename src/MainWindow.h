@@ -29,6 +29,8 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+class QProgressDialog;
+
 #if defined(Q_OS_WIN) && QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -86,10 +88,14 @@ private slots:
     void setThemeLight();
     void setThemeDark();
     void setUpdatesEnabled(bool enabled);
+    void configureGithubToken();
     void checkForUpdates();
     void showAboutDialog();
     void onUpdateCheckFinished(bool updateAvailable, QString latestVersion, QString downloadUrl, QString releaseNotes,
                                QString error, bool silent);
+    void onUpdateInfoReady(UpdateInfo info, QString error, bool silent);
+    void onUpdateDownloadProgress(qint64 received, qint64 total);
+    void onUpdateDownloadFinished(QString filePath, UpdateAsset asset, QString error);
     void showSectionContextMenu(const QPoint& pos);
     void showListContextMenu(const QPoint& pos);
     void runClickedRule(QListWidgetItem* item);
@@ -206,6 +212,7 @@ private:
     QMenu* m_themeMenu = nullptr;
     QAction* m_hotkeysEnabledAction = nullptr;
     QAction* m_updatesEnabledAction = nullptr;
+    QAction* m_githubTokenAction = nullptr;
     QAction* m_checkUpdatesAction = nullptr;
     QAction* m_aboutAction = nullptr;
     QAction* m_chineseAction = nullptr;
@@ -253,4 +260,6 @@ private:
     QTimer m_autoHideTimer;
     QRect m_autoHideShownGeometry;
     bool m_topAutoHidden = false;
+    QPointer<QProgressDialog> m_updateProgressDialog;
+    UpdateInfo m_pendingUpdateInfo;
 };
