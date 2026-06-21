@@ -33,6 +33,7 @@ private slots:
     void updateManifestAssetUrlFromReleasePayload();
     void updateManifestDecodesGithubContentsPayload();
     void updateManifestOlderThanCurrentIsNotUpdate();
+    void updateManifestWithoutMatchingAssetReturnsError();
     void updateSha256Verification();
 };
 
@@ -461,6 +462,21 @@ void CoreTests::updateManifestOlderThanCurrentIsNotUpdate() {
     QVERIFY(error.isEmpty());
     QVERIFY(!info.updateAvailable);
     QCOMPARE(info.latestVersion, QString("0.3.5"));
+}
+
+void CoreTests::updateManifestWithoutMatchingAssetReturnsError() {
+    const QByteArray json = R"({
+        "version": "9.9.9",
+        "pageUrl": "https://github.com/weaver2007/HotKeyManager/releases/tag/v9.9.9",
+        "assets": []
+    })";
+
+    QString error;
+    const UpdateInfo info = UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.8", false, &error);
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!info.updateAvailable);
+    QVERIFY(!info.asset.isValid());
+    QVERIFY(!info.asset.url.contains("/releases/tag/"));
 }
 
 void CoreTests::updateSha256Verification() {

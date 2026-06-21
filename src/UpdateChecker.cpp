@@ -340,9 +340,6 @@ UpdateInfo UpdateChecker::parseManifest(const QByteArray& payload, const QString
     info.asset = selectAsset(assets, preferPortable);
     if (!info.asset.isValid()) {
         QString downloadUrl = root.value("downloadUrl").toString().trimmed();
-        if (downloadUrl.isEmpty()) {
-            downloadUrl = info.pageUrl;
-        }
         if (!downloadUrl.isEmpty()) {
             info.asset.url = downloadUrl;
             info.asset.sha256 = root.value("sha256").toString().trimmed();
@@ -354,6 +351,12 @@ UpdateInfo UpdateChecker::parseManifest(const QByteArray& payload, const QString
     }
 
     info.updateAvailable = versionGreaterThan(info.latestVersion, currentVersion);
+    if (info.updateAvailable && !info.asset.isValid()) {
+        if (error) {
+            *error = QString::fromUtf8("Update manifest does not contain a downloadable asset for this platform.");
+        }
+        info.updateAvailable = false;
+    }
     return info;
 }
 
