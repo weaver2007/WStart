@@ -445,7 +445,46 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
+          function Get-VersionParts([string]$value) {
+            $clean = $value.Trim()
+            if ($clean.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
+              $clean = $clean.Substring(1)
+            }
+            $parts = @()
+            foreach ($token in $clean.Split(".")) {
+              if ($token -match "^(\d+)") {
+                $parts += [int]$matches[1]
+              } else {
+                $parts += 0
+              }
+            }
+            return $parts
+          }
+          function Test-VersionGreaterThanOrEqual([string]$left, [string]$right) {
+            $leftParts = @(Get-VersionParts $left)
+            $rightParts = @(Get-VersionParts $right)
+            $count = [Math]::Max($leftParts.Count, $rightParts.Count)
+            for ($i = 0; $i -lt $count; $i++) {
+              $l = if ($i -lt $leftParts.Count) { $leftParts[$i] } else { 0 }
+              $r = if ($i -lt $rightParts.Count) { $rightParts[$i] } else { 0 }
+              if ($l -ne $r) {
+                return $l -gt $r
+              }
+            }
+            return $true
+          }
           $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $currentLatest = $null
+          $PSNativeCommandUseErrorActionPreference = $false
+          $latestJson = gh api "repos/${{ github.repository }}/releases/latest"
+          if ($LASTEXITCODE -eq 0 -and $latestJson) {
+            $currentLatest = ($latestJson | ConvertFrom-Json).tag_name
+          }
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($currentLatest -and -not (Test-VersionGreaterThanOrEqual $tag $currentLatest)) {
+            Write-Host "Current GitHub latest release $currentLatest is newer than $tag. Skip latest update."
+            exit 0
+          }
           $release = gh api "repos/${{ github.repository }}/releases/tags/$tag" | ConvertFrom-Json
           gh api `
             --method PATCH `
