@@ -1,0 +1,201 @@
+name: Quick Release WStart
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.3.16"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: 6.8.3
+  UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/releases/latest
+
+jobs:
+  quick-release:
+    name: Windows x64 portable release
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $refName = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $version = $refName
+          if ($version.StartsWith("v")) {
+            $version = $version.Substring(1)
+          }
+          "RELEASE_TAG=$refName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install Qt
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip aqtinstall
+          python -m aqt install-qt windows desktop "$env:QT_VERSION" win64_msvc2022_64 --outputdir "$env:RUNNER_TEMP/Qt"
+          $qtRoot = Join-Path $env:RUNNER_TEMP "Qt/$env:QT_VERSION"
+          $qtConfig = Get-ChildItem -LiteralPath $qtRoot -Recurse -Filter Qt6Config.cmake |
+            Select-Object -First 1
+          if (-not $qtConfig) {
+            Get-ChildItem -LiteralPath $qtRoot -Recurse -Depth 3 -Force | Format-List FullName
+            throw "Qt config was not found under $qtRoot"
+          }
+          $qtPrefix = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $qtConfig.FullName)))
+          "QT_PREFIX=$qtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Append
+          (Join-Path $qtPrefix "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64 `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
+            -DHKM_QT_MAJOR=6 `
+            -DHKM_DEPLOY_QT_RUNTIME=ON `
+            -DHKM_APP_VERSION_OVERRIDE="$env:RELEASE_VERSION" `
+            -DHKM_UPDATE_MANIFEST_URL="$env:UPDATE_MANIFEST_URL"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64 --config Release --parallel
+
+      - name: Test
+        shell: pwsh
+        run: ctest --test-dir out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64 -C Release --output-on-failure
+
+      - name: Package portable and update manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = $env:RELEASE_VERSION
+          $tag = $env:RELEASE_TAG
+          $repo = "${{ github.repository }}"
+          $artifactBase = "WStart-$version-windows-x64"
+          $packageRoot = Join-Path $env:RUNNER_TEMP $artifactBase
+          $payload = Join-Path $packageRoot "payload"
+          New-Item -ItemType Directory -Force -Path $payload | Out-Null
+          Copy-Item -Path "out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64/Release/*" -Destination $payload -Recurse -Force
+
+          $portablePath = Join-Path (Get-Location) "$artifactBase-portable.zip"
+          New-Item -ItemType File -Force -Path (Join-Path $payload "WStart.portable") | Out-Null
+          Compress-Archive -Path (Join-Path $payload "*") -DestinationPath $portablePath -Force
+
+          $portableName = Split-Path -Leaf $portablePath
+          $portableHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $portablePath).Hash.ToLowerInvariant()
+          $manifest = [ordered]@{
+            version = $version
+            pageUrl = "https://github.com/$repo/releases/tag/$tag"
+            releaseNotes = "WStart $version release."
+            assets = @(
+              [ordered]@{
+                platform = "windows"
+                arch = "x64"
+                type = "portable"
+                fileName = $portableName
+                url = "https://github.com/$repo/releases/download/$tag/$portableName"
+                apiUrl = ""
+                sha256 = $portableHash
+              }
+            )
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "update.json" -Encoding UTF8
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: WStart ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          draft: false
+          prerelease: false
+          overwrite_files: true
+          files: |
+            WStart-*-windows-x64-portable.zip
+            update.json
+
+      - name: Refresh update manifest with asset API URL
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = $env:RELEASE_TAG
+          $release = gh api "repos/${{ github.repository }}/releases/tags/$tag" | ConvertFrom-Json
+          $manifest = Get-Content -Raw -LiteralPath "update.json" | ConvertFrom-Json
+          foreach ($manifestAsset in $manifest.assets) {
+            $releaseAsset = $release.assets | Where-Object { $_.name -eq $manifestAsset.fileName } | Select-Object -First 1
+            if ($releaseAsset) {
+              $manifestAsset.apiUrl = $releaseAsset.url
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "update.json" -Encoding UTF8
+          gh release upload "$tag" "update.json" --clobber --repo "${{ github.repository }}"
+
+      - name: Mark versioned release as GitHub latest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          function Get-VersionParts([string]$value) {
+            $clean = $value.Trim()
+            if ($clean.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
+              $clean = $clean.Substring(1)
+            }
+            $parts = @()
+            foreach ($token in $clean.Split(".")) {
+              if ($token -match "^(\d+)") {
+                $parts += [int]$matches[1]
+              } else {
+                $parts += 0
+              }
+            }
+            return $parts
+          }
+          function Test-VersionGreaterThanOrEqual([string]$left, [string]$right) {
+            $leftParts = @(Get-VersionParts $left)
+            $rightParts = @(Get-VersionParts $right)
+            $count = [Math]::Max($leftParts.Count, $rightParts.Count)
+            for ($i = 0; $i -lt $count; $i++) {
+              $l = if ($i -lt $leftParts.Count) { $leftParts[$i] } else { 0 }
+              $r = if ($i -lt $rightParts.Count) { $rightParts[$i] } else { 0 }
+              if ($l -ne $r) {
+                return $l -gt $r
+              }
+            }
+            return $true
+          }
+          $tag = $env:RELEASE_TAG
+          $currentLatest = $null
+          $PSNativeCommandUseErrorActionPreference = $false
+          $latestJson = gh api "repos/${{ github.repository }}/releases/latest"
+          if ($LASTEXITCODE -eq 0 -and $latestJson) {
+            $currentLatest = ($latestJson | ConvertFrom-Json).tag_name
+          }
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($currentLatest -and -not (Test-VersionGreaterThanOrEqual $tag $currentLatest)) {
+            Write-Host "Current GitHub latest release $currentLatest is newer than $tag. Skip latest update."
+            exit 0
+          }
+          $release = gh api "repos/${{ github.repository }}/releases/tags/$tag" | ConvertFrom-Json
+          gh api `
+            --method PATCH `
+            "repos/${{ github.repository }}/releases/$($release.id)" `
+            -f make_latest=true `
+            -f name="WStart $tag"

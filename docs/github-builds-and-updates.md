@@ -9,7 +9,7 @@ The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix
 - Linux / Qt 6.8.3 / gcc / dynamic Qt / x64
 
 The CI workflow uploads a Windows zip artifact for successful main builds. Release packaging is handled separately by
-`.github/workflows/release.yml`.
+`.github/workflows/release-quick.yml` and `.github/workflows/release.yml`.
 
 The full local variant matrix remains represented by `CMakePresets.json`. Running every variant in GitHub Actions would
 require a custom image or a self-hosted Windows runner with the same local Qt/toolchain layout referenced by the presets,
@@ -20,17 +20,29 @@ global hotkeys remain disabled until platform-specific backends are implemented.
 
 ## Releases
 
-`.github/workflows/release.yml` publishes release packages when a tag matching `v*` is pushed:
+`.github/workflows/release-quick.yml` publishes the default low-cost release when a tag matching `v*` is pushed:
 
 ```powershell
 git tag v0.3.0
 git push origin v0.3.0
 ```
 
-It can also be started manually with `workflow_dispatch` and a tag input. Normal pushes to `main` do not create tags or
-releases automatically.
+The quick release builds and publishes only:
 
-The release workflow currently attaches these assets to the GitHub Release:
+- `WStart-<version>-windows-x64-portable.zip`
+- `update.json`
+
+This quick channel is intended for low-cost portable distribution. Installed builds need the full release workflow to
+publish installer assets.
+
+`.github/workflows/release.yml` is the full release workflow. It is started manually with `workflow_dispatch` and a tag
+input when all platform packages are needed. Normal pushes to `main` do not create tags or releases automatically.
+
+To run the full release for an existing tag, open GitHub Actions, choose `Full Release WStart`, click `Run workflow`, and
+enter the tag, for example `v0.3.0`. The full workflow can update the same GitHub Release created by the quick workflow
+and replace `update.json` with the complete asset list.
+
+The full release workflow currently attaches these assets to the GitHub Release:
 
 - `WStart-<version>-windows-x64-setup.exe`
 - `WStart-<version>-windows-x64-portable.zip`

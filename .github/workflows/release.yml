@@ -1,15 +1,16 @@
-name: Release WStart
+name: Full Release WStart
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, for example v0.3.4"
+        description: "Release tag, for example v0.3.16"
         required: true
         type: string
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -463,6 +464,7 @@ jobs:
           name: WStart ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           draft: false
           prerelease: false
+          overwrite_files: true
           files: dist-release/*
 
       - name: Refresh update manifest with asset API URLs
