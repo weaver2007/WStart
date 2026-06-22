@@ -135,6 +135,7 @@ struct AppSettings {
     QString language = "zh-CN";
     bool hotkeysEnabled = true;
     bool updatesEnabled = true;
+    bool startupEnabled = false;
     QString themeMode = "system";
     LauncherItemAppearance itemAppearance;
     LauncherSectionAppearance sectionAppearance;

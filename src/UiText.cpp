@@ -32,6 +32,13 @@ QString text(const QString& language, Key key) {
         return en ? "Enable global hotkeys" : QString::fromUtf8("启用全局快捷键");
     case Key::UpdatesEnabled:
         return en ? "Check for updates automatically" : QString::fromUtf8("自动检查更新");
+    case Key::StartupEnabled:
+        return en ? "Start WStart with system (minimized)" : QString::fromUtf8("开机启动 WStart（最小化）");
+    case Key::StartupSettingFailed:
+        return en ? "Failed to update startup setting: %1" : QString::fromUtf8("更新开机启动设置失败：%1");
+    case Key::StartupUnsupported:
+        return en ? "This platform does not support WStart startup registration."
+                  : QString::fromUtf8("当前平台不支持注册 WStart 开机启动。");
     case Key::GithubToken:
         return en ? "GitHub token..." : QString::fromUtf8("GitHub Token...");
     case Key::CheckForUpdates:

@@ -61,6 +61,7 @@ int main(int argc, char* argv[]) {
     QApplication::setOrganizationName("WStart");
     QApplication::setWindowIcon(AppIcon::launcherIcon());
     QApplication::setQuitOnLastWindowClosed(false);
+    const bool startupMinimized = app.arguments().contains(QString::fromLatin1("--startup-minimized"));
 
     const QString lockDirectory = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     if (!lockDirectory.isEmpty()) {
@@ -69,7 +70,7 @@ int main(int argc, char* argv[]) {
 
     QLockFile lockFile(QDir(lockDirectory.isEmpty() ? QDir::tempPath() : lockDirectory).filePath("WStart.lock"));
     if (!lockFile.tryLock(0)) {
-        if (notifyExistingInstance()) {
+        if (!startupMinimized && notifyExistingInstance()) {
             return 0;
         }
         return 0;
@@ -86,11 +87,14 @@ int main(int argc, char* argv[]) {
 
     QObject::connect(&server, SIGNAL(newConnection()), &window, SLOT(showSettings()));
 
-    if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+    const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable();
+    if (!trayAvailable) {
         QMessageBox::warning(0, "WStart", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
     }
 
-    window.show();
+    if (!startupMinimized || !trayAvailable) {
+        window.show();
+    }
 
     return app.exec();
 }

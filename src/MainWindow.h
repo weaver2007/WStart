@@ -88,6 +88,7 @@ private slots:
     void setThemeLight();
     void setThemeDark();
     void setUpdatesEnabled(bool enabled);
+    void setStartupEnabled(bool enabled);
     void configureGithubToken();
     void checkForUpdates();
     void showAboutDialog();
@@ -212,6 +213,7 @@ private:
     QMenu* m_themeMenu = nullptr;
     QAction* m_hotkeysEnabledAction = nullptr;
     QAction* m_updatesEnabledAction = nullptr;
+    QAction* m_startupEnabledAction = nullptr;
     QAction* m_githubTokenAction = nullptr;
     QAction* m_checkUpdatesAction = nullptr;
     QAction* m_aboutAction = nullptr;

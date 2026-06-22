@@ -47,6 +47,7 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScreen>
+#include <QSettings>
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -105,10 +106,53 @@ constexpr int AutoHideSnapDistance = 36;
 constexpr int AutoHideTriggerHeight = 4;
 constexpr int AutoHideRevealDistance = 4;
 constexpr int AutoHidePollIntervalMs = 80;
+constexpr const char* StartupMinimizedArgument = "--startup-minimized";
 
 #if defined(Q_OS_WIN) && !defined(CALG_SHA_256)
 #define CALG_SHA_256 (ALG_CLASS_HASH | ALG_TYPE_ANY | ALG_SID_SHA_256)
 #endif
+
+bool wstartStartupRegistrationSupported() {
+#ifdef Q_OS_WIN
+    return true;
+#else
+    return false;
+#endif
+}
+
+QString wstartStartupCommandLine() {
+    const QString exePath = QDir::toNativeSeparators(QApplication::applicationFilePath());
+    return QString("\"%1\" %2").arg(exePath).arg(QString::fromLatin1(StartupMinimizedArgument));
+}
+
+bool setWstartStartupRegistration(bool enabled, QString* error) {
+#ifdef Q_OS_WIN
+    QSettings runSettings(QString::fromLatin1("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+                          QSettings::NativeFormat);
+    const QString valueName = QString::fromLatin1("WStart");
+    if (enabled) {
+        runSettings.setValue(valueName, wstartStartupCommandLine());
+    } else {
+        runSettings.remove(valueName);
+    }
+    runSettings.sync();
+    if (runSettings.status() != QSettings::NoError) {
+        if (error) {
+            *error = QString::fromLatin1("QSettings status %1").arg(static_cast<int>(runSettings.status()));
+        }
+        return false;
+    }
+    return true;
+#else
+    if (enabled) {
+        if (error) {
+            *error = UiText::text(QString(), UiText::Key::StartupUnsupported);
+        }
+        return false;
+    }
+    return true;
+#endif
+}
 
 class IconGridDelegate final : public QStyledItemDelegate {
 public:
@@ -1281,6 +1325,9 @@ void MainWindow::buildSettingsMenu() {
     m_updatesEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::UpdatesEnabled));
     m_updatesEnabledAction->setCheckable(true);
     connect(m_updatesEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setUpdatesEnabled(bool)));
+    m_startupEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::StartupEnabled));
+    m_startupEnabledAction->setCheckable(true);
+    connect(m_startupEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setStartupEnabled(bool)));
     m_githubTokenAction = m_settingsMenu->addAction(uiText(UiText::Key::GithubToken));
     connect(m_githubTokenAction, SIGNAL(triggered()), this, SLOT(configureGithubToken()));
     m_checkUpdatesAction = m_settingsMenu->addAction(uiText(UiText::Key::CheckForUpdates));
@@ -1352,6 +1399,12 @@ void MainWindow::retranslateUi() {
         const QSignalBlocker blocker(m_updatesEnabledAction);
         m_updatesEnabledAction->setText(uiText(UiText::Key::UpdatesEnabled));
         m_updatesEnabledAction->setChecked(m_document.settings.updatesEnabled);
+    }
+    if (m_startupEnabledAction) {
+        const QSignalBlocker blocker(m_startupEnabledAction);
+        m_startupEnabledAction->setText(uiText(UiText::Key::StartupEnabled));
+        m_startupEnabledAction->setChecked(m_document.settings.startupEnabled);
+        m_startupEnabledAction->setEnabled(wstartStartupRegistrationSupported());
     }
     if (m_githubTokenAction) {
         m_githubTokenAction->setText(uiText(UiText::Key::GithubToken));
@@ -1473,6 +1526,28 @@ void MainWindow::setUpdatesEnabled(bool enabled) {
     if (m_updatesEnabledAction && m_updatesEnabledAction->isChecked() != enabled) {
         const QSignalBlocker blocker(m_updatesEnabledAction);
         m_updatesEnabledAction->setChecked(enabled);
+    }
+}
+
+void MainWindow::setStartupEnabled(bool enabled) {
+    QString error;
+    if (!setWstartStartupRegistration(enabled, &error)) {
+        if (m_startupEnabledAction) {
+            const QSignalBlocker blocker(m_startupEnabledAction);
+            m_startupEnabledAction->setChecked(m_document.settings.startupEnabled);
+        }
+        showWarning(this, language(), uiText(UiText::Key::Settings),
+                    uiText(UiText::Key::StartupSettingFailed).arg(error));
+        return;
+    }
+
+    if (m_document.settings.startupEnabled != enabled) {
+        m_document.settings.startupEnabled = enabled;
+        saveDocumentSilently();
+    }
+    if (m_startupEnabledAction && m_startupEnabledAction->isChecked() != enabled) {
+        const QSignalBlocker blocker(m_startupEnabledAction);
+        m_startupEnabledAction->setChecked(enabled);
     }
 }
 
@@ -2106,6 +2181,10 @@ void MainWindow::loadDocument() {
     applyFixedLauncherWidth();
     if (!error.isEmpty()) {
         setStatus(error);
+    }
+    QString startupError;
+    if (!setWstartStartupRegistration(m_document.settings.startupEnabled, &startupError) && !startupError.isEmpty()) {
+        setStatus(uiText(UiText::Key::StartupSettingFailed).arg(startupError));
     }
     refreshHooks();
     m_hookService.setPaused(!m_document.settings.hotkeysEnabled);
