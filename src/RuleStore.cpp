@@ -52,6 +52,63 @@ HotkeyRule makeWebsiteRule(const QString& sectionId, const QString& name, const 
 
 } // namespace
 
+QVector<HotkeyRule> RuleStore::defaultSystemProgramRules() {
+    const QString systemSection = "program-system";
+    struct DefaultProgramRule {
+        const char* name;
+        const char* target;
+        const char* arguments;
+    };
+
+    const DefaultProgramRule specs[] = {
+        {"我的文档", "explorer.exe", "shell:Personal"},
+        {"我的电脑", "explorer.exe", "shell:MyComputerFolder"},
+        {"网络连接", "control.exe", "ncpa.cpl"},
+        {"控制面板", "control.exe", ""},
+        {"回收站", "explorer.exe", "shell:RecycleBinFolder"},
+        {"打印机", "control.exe", "printers"},
+        {"显示", "control.exe", "desk.cpl"},
+        {"截图", "ms-screenclip:", ""},
+        {"日期时间", "control.exe", "timedate.cpl"},
+        {"Internet", "control.exe", "inetcpl.cpl"},
+        {"系统属性", "control.exe", "sysdm.cpl"},
+        {"系统信息", "msinfo32.exe", ""},
+        {"系统配置", "msconfig.exe", ""},
+        {"文件夹选项", "control.exe", "folders"},
+        {"设备管理器", "devmgmt.msc", ""},
+        {"添加删除程序", "control.exe", "appwiz.cpl"},
+        {"记事本", "notepad.exe", ""},
+        {"磁盘清理", "cleanmgr.exe", ""},
+        {"磁盘管理", "diskmgmt.msc", ""},
+        {"计算机管理", "compmgmt.msc", ""},
+        {"服务", "services.msc", ""},
+        {"组策略", "gpedit.msc", ""},
+        {"计算器", "calc.exe", ""},
+        {"注册表", "regedit.exe", ""},
+        {"命令提示符", "cmd.exe", ""},
+        {"远程桌面", "mstsc.exe", ""},
+        {"任务管理器", "taskmgr.exe", ""},
+        {"鼠标", "control.exe", "mouse"},
+        {"键盘", "control.exe", "keyboard"},
+        {"屏幕键盘", "osk.exe", ""},
+        {"声音", "control.exe", "mmsys.cpl"},
+        {"音量", "sndvol.exe", ""},
+        {"电源选项", "control.exe", "powercfg.cpl"},
+        {"防火墙", "control.exe", "firewall.cpl"},
+        {"UAC", "UserAccountControlSettings.exe", ""},
+        {"关闭计算机", "shutdown.exe", "/s /t 0"},
+        {"重启计算机", "shutdown.exe", "/r /t 0"},
+        {"关闭显示器", "powershell.exe", R"wstart(-NoProfile -ExecutionPolicy Bypass -Command "(Add-Type '[DllImport(\"user32.dll\")] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);' -Name Native -Namespace WStart -PassThru)::SendMessage(-1, 0x0112, 0xF170, 2)")wstart"},
+    };
+
+    QVector<HotkeyRule> rules;
+    for (const DefaultProgramRule& spec : specs) {
+        rules.push_back(makeProgramRule(systemSection, QString::fromUtf8(spec.name), QString::fromLatin1(spec.target),
+                                        QString::fromLatin1(spec.arguments)));
+    }
+    return rules;
+}
+
 RuleStore::RuleStore(QObject* parent) : QObject(parent) {}
 
 LauncherDocument RuleStore::loadDocument(QString* error) const {
@@ -231,15 +288,26 @@ void RuleStore::ensureDefaultRules(LauncherDocument* document) const {
     };
 
     const QString systemSection = defaultSectionId(LauncherCategory::Program, 0);
-    if (!sectionHasRules(systemSection)) {
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("控制面板"), "control.exe"));
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("任务管理器"), "taskmgr.exe"));
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("命令提示符"), "cmd.exe"));
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("注册表"), "regedit.exe"));
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("服务"), "services.msc"));
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("设备管理器"), "devmgmt.msc"));
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("计算器"), "calc.exe"));
-        document->rules.push_back(makeProgramRule(systemSection, QString::fromUtf8("系统信息"), "msinfo32.exe"));
+    const QVector<HotkeyRule> systemRules = defaultSystemProgramRules();
+
+    auto hasSystemRule = [document, &systemSection](const HotkeyRule& expected) {
+        return std::any_of(document->rules.begin(), document->rules.end(), [&](const HotkeyRule& rule) {
+            if (rule.sectionId != systemSection || !rule.isValid()) {
+                return false;
+            }
+            if (rule.description == expected.description) {
+                return true;
+            }
+            return rule.action.target.compare(expected.action.target, Qt::CaseInsensitive) == 0 &&
+                   rule.action.arguments.trimmed().compare(expected.action.arguments.trimmed(), Qt::CaseInsensitive) == 0;
+        });
+    };
+
+    for (HotkeyRule rule : systemRules) {
+        rule.sectionId = systemSection;
+        if (!hasSystemRule(rule)) {
+            document->rules.push_back(rule);
+        }
     }
 
     const QString folderSection = defaultSectionId(LauncherCategory::Folder, 0);

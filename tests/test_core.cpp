@@ -26,6 +26,7 @@ private slots:
     void itemAppearanceDefaultsAndFallback();
     void sectionAndCategoryAppearanceRoundTrip();
     void sectionAndCategoryAppearanceDefaultsAndFallback();
+    void defaultSystemToolsAreSeededWithoutHotkeys();
     void conflictWarnings();
     void updateVersionComparison();
     void updateManifestSelectsCurrentAsset();
@@ -320,6 +321,41 @@ void CoreTests::sectionAndCategoryAppearanceDefaultsAndFallback() {
     QVERIFY(parsedCategory.buttonHeight <= 96);
     QVERIFY(parsedCategory.fontPointSize <= 18);
     QCOMPARE(parsedCategory.textColor, QString());
+}
+
+void CoreTests::defaultSystemToolsAreSeededWithoutHotkeys() {
+    const QVector<HotkeyRule> rules = RuleStore::defaultSystemProgramRules();
+    QStringList actualNames;
+    QHash<QString, HotkeyRule> rulesByName;
+    for (const HotkeyRule& rule : rules) {
+        actualNames << rule.description;
+        rulesByName.insert(rule.description, rule);
+        QVERIFY(!rule.hotkey.isValid());
+        QCOMPARE(rule.sectionId, QString("program-system"));
+        QCOMPARE(static_cast<int>(rule.category), static_cast<int>(LauncherCategory::Program));
+        QCOMPARE(static_cast<int>(rule.action.type), static_cast<int>(LaunchActionType::Application));
+        QVERIFY(!rule.action.target.trimmed().isEmpty());
+    }
+
+    QStringList expectedNames;
+    expectedNames << QString::fromUtf8("我的文档") << QString::fromUtf8("我的电脑") << QString::fromUtf8("网络连接")
+                  << QString::fromUtf8("控制面板") << QString::fromUtf8("回收站") << QString::fromUtf8("打印机")
+                  << QString::fromUtf8("显示") << QString::fromUtf8("截图") << QString::fromUtf8("日期时间")
+                  << QString::fromUtf8("Internet") << QString::fromUtf8("系统属性") << QString::fromUtf8("系统信息")
+                  << QString::fromUtf8("系统配置") << QString::fromUtf8("文件夹选项") << QString::fromUtf8("设备管理器")
+                  << QString::fromUtf8("添加删除程序") << QString::fromUtf8("记事本") << QString::fromUtf8("磁盘清理")
+                  << QString::fromUtf8("磁盘管理") << QString::fromUtf8("计算机管理") << QString::fromUtf8("服务")
+                  << QString::fromUtf8("组策略") << QString::fromUtf8("计算器") << QString::fromUtf8("注册表")
+                  << QString::fromUtf8("命令提示符") << QString::fromUtf8("远程桌面") << QString::fromUtf8("任务管理器")
+                  << QString::fromUtf8("鼠标") << QString::fromUtf8("键盘") << QString::fromUtf8("屏幕键盘")
+                  << QString::fromUtf8("声音") << QString::fromUtf8("音量") << QString::fromUtf8("电源选项")
+                  << QString::fromUtf8("防火墙") << QString::fromUtf8("UAC") << QString::fromUtf8("关闭计算机")
+                  << QString::fromUtf8("重启计算机") << QString::fromUtf8("关闭显示器");
+
+    for (const QString& name : expectedNames) {
+        QVERIFY2(actualNames.contains(name), qPrintable(QString("Missing default system tool: %1").arg(name)));
+    }
+    QCOMPARE(rulesByName.value(QString::fromUtf8("截图")).action.target, QString("ms-screenclip:"));
 }
 
 void CoreTests::conflictWarnings() {

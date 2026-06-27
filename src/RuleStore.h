@@ -18,6 +18,7 @@ public:
     QString configPath() const;
     QStringList warningsForRule(const HotkeyRule& rule, const QVector<HotkeyRule>& rules,
                                 const QString& language = QString()) const;
+    static QVector<HotkeyRule> defaultSystemProgramRules();
 
 private:
     LauncherDocument createDefaultDocument() const;
