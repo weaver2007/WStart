@@ -115,5 +115,5 @@ The `update.json` file is not stored in the source tree.
 
 The application checks this JSON with `QNetworkAccessManager`. When a newer version is found, installed builds download
 and open the installer package. Portable Windows builds download the portable zip, start `WStartUpdater.exe`, exit, and
-let the updater replace the portable directory and restart WStart. Portable packages include a `WStart.portable` marker
+let the updater overwrite files inside the existing portable directory and restart WStart. Portable packages include a `WStart.portable` marker
 file so the runtime can distinguish portable builds from installed builds.

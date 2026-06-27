@@ -40,6 +40,12 @@ bool pathExists(const std::wstring& path) {
     return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
+void restartApplication(const std::wstring& restartPath) {
+    if (!restartPath.empty()) {
+        ShellExecuteW(nullptr, L"open", restartPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    }
+}
+
 bool removeTree(const std::wstring& path) {
     if (!pathExists(path)) {
         return true;
@@ -53,20 +59,8 @@ bool removeTree(const std::wstring& path) {
     return SHFileOperationW(&op) == 0;
 }
 
-bool moveTree(const std::wstring& fromPath, const std::wstring& toPath) {
-    std::wstring from = fromPath;
-    std::wstring to = toPath;
-    from.push_back(L'\0');
-    to.push_back(L'\0');
-    SHFILEOPSTRUCTW op = {};
-    op.wFunc = FO_MOVE;
-    op.pFrom = from.c_str();
-    op.pTo = to.c_str();
-    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
-    return SHFileOperationW(&op) == 0;
-}
-
 bool copyTree(const std::wstring& fromPath, const std::wstring& toPath) {
+    CreateDirectoryW(toPath.c_str(), nullptr);
     std::wstring from = fromPath + L"\\*";
     std::wstring to = toPath;
     from.push_back(L'\0');
@@ -75,7 +69,7 @@ bool copyTree(const std::wstring& fromPath, const std::wstring& toPath) {
     op.wFunc = FO_COPY;
     op.pFrom = from.c_str();
     op.pTo = to.c_str();
-    op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    op.fFlags = FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR | FOF_NOERRORUI | FOF_SILENT;
     return SHFileOperationW(&op) == 0;
 }
 
@@ -149,6 +143,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     removeTree(backupDir);
 
     if (!runPowerShellExpand(packagePath, extractDir)) {
+        restartApplication(restartPath);
         return 3;
     }
 
@@ -157,18 +152,22 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         payloadDir = extractDir + L"\\WStart";
     }
 
-    if (!moveTree(targetDir, backupDir)) {
+    // Keep the portable directory in place. The backup is only used to restore overwritten files if copying fails.
+    if (!copyTree(targetDir, backupDir)) {
+        removeTree(extractDir);
+        restartApplication(restartPath);
         return 4;
     }
-    CreateDirectoryW(targetDir.c_str(), nullptr);
     if (!copyTree(payloadDir, targetDir)) {
-        removeTree(targetDir);
-        moveTree(backupDir, targetDir);
+        copyTree(backupDir, targetDir);
+        removeTree(backupDir);
+        removeTree(extractDir);
+        restartApplication(restartPath);
         return 5;
     }
 
     removeTree(backupDir);
     removeTree(extractDir);
-    ShellExecuteW(nullptr, L"open", restartPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    restartApplication(restartPath);
     return 0;
 }
