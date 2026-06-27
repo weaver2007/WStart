@@ -7,7 +7,6 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include <algorithm>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -27,17 +26,35 @@ bool waitForProcess(DWORD pid) {
     if (pid == 0) {
         return true;
     }
-    HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, pid);
+    HANDLE process = OpenProcess(SYNCHRONIZE | PROCESS_TERMINATE, FALSE, pid);
     if (!process) {
         return true;
     }
-    WaitForSingleObject(process, 30000);
+
+    DWORD waitResult = WaitForSingleObject(process, 60000);
+    if (waitResult == WAIT_TIMEOUT) {
+        TerminateProcess(process, 0);
+        waitResult = WaitForSingleObject(process, 10000);
+    }
+
     CloseHandle(process);
-    return true;
+    return waitResult == WAIT_OBJECT_0;
 }
 
 bool pathExists(const std::wstring& path) {
     return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+bool isDirectory(const std::wstring& path) {
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+std::wstring joinPath(const std::wstring& left, const std::wstring& right) {
+    if (left.empty() || left[left.size() - 1] == L'\\' || left[left.size() - 1] == L'/') {
+        return left + right;
+    }
+    return left + L"\\" + right;
 }
 
 void restartApplication(const std::wstring& restartPath) {
@@ -59,18 +76,64 @@ bool removeTree(const std::wstring& path) {
     return SHFileOperationW(&op) == 0;
 }
 
+bool ensureDirectory(const std::wstring& path) {
+    if (isDirectory(path)) {
+        return true;
+    }
+    if (CreateDirectoryW(path.c_str(), nullptr)) {
+        return true;
+    }
+    return GetLastError() == ERROR_ALREADY_EXISTS && isDirectory(path);
+}
+
+bool copyFileReplacing(const std::wstring& fromPath, const std::wstring& toPath) {
+    for (int attempt = 0; attempt < 120; ++attempt) {
+        if (pathExists(toPath)) {
+            SetFileAttributesW(toPath.c_str(), FILE_ATTRIBUTE_NORMAL);
+        }
+        if (CopyFileW(fromPath.c_str(), toPath.c_str(), FALSE)) {
+            return true;
+        }
+        const DWORD error = GetLastError();
+        if (error != ERROR_SHARING_VIOLATION && error != ERROR_LOCK_VIOLATION && error != ERROR_ACCESS_DENIED) {
+            return false;
+        }
+        Sleep(500);
+    }
+    return false;
+}
+
 bool copyTree(const std::wstring& fromPath, const std::wstring& toPath) {
-    CreateDirectoryW(toPath.c_str(), nullptr);
-    std::wstring from = fromPath + L"\\*";
-    std::wstring to = toPath;
-    from.push_back(L'\0');
-    to.push_back(L'\0');
-    SHFILEOPSTRUCTW op = {};
-    op.wFunc = FO_COPY;
-    op.pFrom = from.c_str();
-    op.pTo = to.c_str();
-    op.fFlags = FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR | FOF_NOERRORUI | FOF_SILENT;
-    return SHFileOperationW(&op) == 0;
+    if (!ensureDirectory(toPath)) {
+        return false;
+    }
+
+    WIN32_FIND_DATAW findData = {};
+    const std::wstring searchPath = joinPath(fromPath, L"*");
+    HANDLE findHandle = FindFirstFileW(searchPath.c_str(), &findData);
+    if (findHandle == INVALID_HANDLE_VALUE) {
+        return GetLastError() == ERROR_FILE_NOT_FOUND;
+    }
+
+    bool ok = true;
+    do {
+        const std::wstring name = findData.cFileName;
+        if (name == L"." || name == L"..") {
+            continue;
+        }
+
+        const std::wstring source = joinPath(fromPath, name);
+        const std::wstring target = joinPath(toPath, name);
+        if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            ok = copyTree(source, target);
+        } else {
+            ok = copyFileReplacing(source, target);
+        }
+    } while (ok && FindNextFileW(findHandle, &findData));
+
+    const DWORD lastError = GetLastError();
+    FindClose(findHandle);
+    return ok && lastError == ERROR_NO_MORE_FILES;
 }
 
 std::wstring quotePowerShellString(std::wstring value) {
@@ -134,8 +197,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         return 2;
     }
 
-    waitForProcess(pid);
-    Sleep(500);
+    if (!waitForProcess(pid)) {
+        restartApplication(restartPath);
+        return 6;
+    }
 
     const std::wstring extractDir = tempPathFor(L"extract");
     const std::wstring backupDir = tempPathFor(L"backup");
