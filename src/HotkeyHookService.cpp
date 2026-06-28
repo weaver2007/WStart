@@ -6,6 +6,30 @@
 
 #ifdef Q_OS_WIN
 HotkeyHookService* HotkeyHookService::s_instance = nullptr;
+
+namespace {
+const ULONG_PTR kCancelStartMenuExtraInfo = static_cast<ULONG_PTR>(0x57535457u);
+
+bool isCancelStartMenuInput(const KBDLLHOOKSTRUCT* event) {
+    return event && (event->flags & LLKHF_INJECTED) && event->dwExtraInfo == kCancelStartMenuExtraInfo;
+}
+
+void sendCancelStartMenuInput() {
+    INPUT inputs[2];
+    ZeroMemory(inputs, sizeof(inputs));
+
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wVk = VK_F24;
+    inputs[0].ki.dwExtraInfo = kCancelStartMenuExtraInfo;
+
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wVk = VK_F24;
+    inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    inputs[1].ki.dwExtraInfo = kCancelStartMenuExtraInfo;
+
+    SendInput(2, inputs, sizeof(INPUT));
+}
+} // namespace
 #endif
 
 HotkeyHookService::HotkeyHookService(QObject* parent) : QObject(parent) {
@@ -103,6 +127,10 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
         return 0;
     }
 
+    if (isCancelStartMenuInput(event)) {
+        return 0;
+    }
+
     const bool isKeyDown = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
     const bool isKeyUp = wParam == WM_KEYUP || wParam == WM_SYSKEYUP;
     if (!isKeyDown && !isKeyUp) {
@@ -120,8 +148,8 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
     }
 
     // Once a chord is claimed, swallow the key-up events that belong to it too.
-    // For Win-based chords the Win release is critical: Windows uses that release
-    // to decide whether a standalone Win press should open the Start menu.
+    // Modifier releases must continue to the system; swallowing Win-up leaves
+    // Windows thinking the Win key is still pressed for subsequent keystrokes.
     if (isTrackedSuppressedKey(virtualKey)) {
         if (isKeyUp) {
             const QString triggerId = m_suppressedTriggerIds.take(virtualKey);
@@ -158,6 +186,12 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
         // non-modifier key so repeated key-down messages do not re-launch the action.
         trackSuppressedChord(rule->hotkey);
         m_suppressedTriggerIds.insert(rule->hotkey.key, triggerId);
+        if (rule->hotkey.modifiers.testFlag(ModifierWin)) {
+            // The real trigger key is swallowed, so the shell would otherwise
+            // see a lone Win press. Send a no-op key while Win is still down so
+            // Start-menu activation is cancelled without hiding the Win release.
+            sendCancelStartMenuInput();
+        }
         const HotkeyRule ruleCopy = *rule;
         emit queuedHotkeyTriggered(ruleCopy);
     }
@@ -249,31 +283,10 @@ void HotkeyHookService::trackSuppressedChord(const HotkeyCombination& hotkey) {
         return;
     }
     m_suppressedKeys.insert(hotkey.key);
-    if (!hotkey.modifiers.testFlag(ModifierWin)) {
-        return;
-    }
-
-    const bool leftWinPressed = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0;
-    const bool rightWinPressed = (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
-    if (leftWinPressed) {
-        m_suppressedKeys.insert(VK_LWIN);
-    }
-    if (rightWinPressed) {
-        m_suppressedKeys.insert(VK_RWIN);
-    }
-    if (!leftWinPressed && !rightWinPressed) {
-        m_suppressedKeys.insert(VK_LWIN);
-        m_suppressedKeys.insert(VK_RWIN);
-    }
 }
 
 void HotkeyHookService::clearSuppressedKey(int virtualKey) {
     m_suppressedTriggerIds.remove(virtualKey);
-    if (virtualKey == VK_LWIN || virtualKey == VK_RWIN) {
-        m_suppressedKeys.remove(VK_LWIN);
-        m_suppressedKeys.remove(VK_RWIN);
-        return;
-    }
     m_suppressedKeys.remove(virtualKey);
 }
 #endif
