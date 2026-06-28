@@ -29,6 +29,7 @@ namespace {
 
 const int kMaxCheckRedirects = 5;
 const int kMaxManifestIndirections = 3;
+const char kDefaultUpdateManifestUrl[] = "https://api.github.com/repos/weaver2007/WStart/releases/latest";
 
 #if defined(Q_OS_WIN) && !defined(CALG_SHA_256)
 #define CALG_SHA_256 (ALG_CLASS_HASH | ALG_TYPE_ANY | ALG_SID_SHA_256)
@@ -201,6 +202,9 @@ UpdateChecker::UpdateChecker(QObject* parent) : QObject(parent) {
 #ifdef HKM_UPDATE_MANIFEST_URL
     m_manifestUrl = QString::fromLatin1(HKM_UPDATE_MANIFEST_URL);
 #endif
+    if (m_manifestUrl.trimmed().isEmpty()) {
+        m_manifestUrl = QString::fromLatin1(kDefaultUpdateManifestUrl);
+    }
 }
 
 QString UpdateChecker::currentVersion() const {

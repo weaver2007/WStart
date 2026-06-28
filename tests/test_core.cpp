@@ -29,6 +29,7 @@ private slots:
     void defaultSystemToolsAreSeededWithoutHotkeys();
     void conflictWarnings();
     void updateVersionComparison();
+    void updateCheckerUsesDefaultManifestUrl();
     void updateManifestSelectsCurrentAsset();
     void updateManifestLegacyDownloadUrl();
     void updateManifestAssetUrlFromReleasePayload();
@@ -403,6 +404,11 @@ void CoreTests::updateVersionComparison() {
     QVERIFY(UpdateChecker::versionGreaterThan("v0.4.0", "0.3.9"));
     QVERIFY(!UpdateChecker::versionGreaterThan("0.3.5", "0.3.5"));
     QVERIFY(!UpdateChecker::versionGreaterThan("0.3.4", "0.3.5"));
+}
+
+void CoreTests::updateCheckerUsesDefaultManifestUrl() {
+    UpdateChecker checker;
+    QCOMPARE(checker.manifestUrl(), QString("https://api.github.com/repos/weaver2007/WStart/releases/latest"));
 }
 
 void CoreTests::updateManifestSelectsCurrentAsset() {
