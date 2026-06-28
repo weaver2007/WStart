@@ -119,8 +119,9 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
         updatePressedModifierState(virtualKey, false);
     }
 
-    // Once a chord is claimed, swallow the matching key-up events too. Letting
-    // the release through is enough for Windows to complete some Win-key system shortcuts.
+    // Once a chord is claimed, swallow the key-up events that belong to it too.
+    // For Win-based chords the Win release is critical: Windows uses that release
+    // to decide whether a standalone Win press should open the Start menu.
     if (isTrackedSuppressedKey(virtualKey)) {
         if (isKeyUp) {
             const QString triggerId = m_suppressedTriggerIds.take(virtualKey);
@@ -248,10 +249,31 @@ void HotkeyHookService::trackSuppressedChord(const HotkeyCombination& hotkey) {
         return;
     }
     m_suppressedKeys.insert(hotkey.key);
+    if (!hotkey.modifiers.testFlag(ModifierWin)) {
+        return;
+    }
+
+    const bool leftWinPressed = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0;
+    const bool rightWinPressed = (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
+    if (leftWinPressed) {
+        m_suppressedKeys.insert(VK_LWIN);
+    }
+    if (rightWinPressed) {
+        m_suppressedKeys.insert(VK_RWIN);
+    }
+    if (!leftWinPressed && !rightWinPressed) {
+        m_suppressedKeys.insert(VK_LWIN);
+        m_suppressedKeys.insert(VK_RWIN);
+    }
 }
 
 void HotkeyHookService::clearSuppressedKey(int virtualKey) {
     m_suppressedTriggerIds.remove(virtualKey);
+    if (virtualKey == VK_LWIN || virtualKey == VK_RWIN) {
+        m_suppressedKeys.remove(VK_LWIN);
+        m_suppressedKeys.remove(VK_RWIN);
+        return;
+    }
     m_suppressedKeys.remove(virtualKey);
 }
 #endif
