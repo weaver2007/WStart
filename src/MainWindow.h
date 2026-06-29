@@ -185,6 +185,7 @@ private:
     void setTopAutoHidden(bool hidden);
     void revealFromTopAutoHide();
     void setAlwaysOnTop(bool enabled);
+    void setTaskbarButtonVisible(bool visible);
     QScreen* currentScreen() const;
     QRect currentScreenAvailableGeometry() const;
 

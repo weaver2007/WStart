@@ -512,6 +512,31 @@ void forceWindowForeground(QWidget* widget) {
     }
 }
 
+void setTaskbarTabVisible(HWND hwnd, bool visible) {
+    if (!hwnd) {
+        return;
+    }
+
+    ComInitializer com;
+    Q_UNUSED(com);
+
+    ITaskbarList* taskbar = nullptr;
+    const HRESULT hr = CoCreateInstance(CLSID_TaskbarList, nullptr, CLSCTX_INPROC_SERVER, IID_ITaskbarList,
+                                        reinterpret_cast<void**>(&taskbar));
+    if (FAILED(hr) || !taskbar) {
+        return;
+    }
+
+    if (SUCCEEDED(taskbar->HrInit())) {
+        if (visible) {
+            taskbar->AddTab(hwnd);
+        } else {
+            taskbar->DeleteTab(hwnd);
+        }
+    }
+    taskbar->Release();
+}
+
 void allowElevatedDragDrop(HWND hwnd) {
     if (!hwnd) {
         return;
@@ -2138,6 +2163,7 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
 void MainWindow::hideEvent(QHideEvent* event) {
     if (m_topAutoHidden) {
         m_topAutoHidden = false;
+        setTaskbarButtonVisible(true);
         setMinimumHeight(QtCompat::scaleInt(WindowMinimumHeight));
         setMaximumHeight(QWIDGETSIZE_MAX);
         if (m_autoHideShownGeometry.isValid()) {
@@ -2151,6 +2177,9 @@ void MainWindow::hideEvent(QHideEvent* event) {
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
     setAlwaysOnTop(true);
+    if (!m_topAutoHidden) {
+        setTaskbarButtonVisible(true);
+    }
 }
 
 void MainWindow::leaveEvent(QEvent* event) {
@@ -3937,6 +3966,7 @@ void MainWindow::setTopAutoHidden(bool hidden) {
         }
         m_topAutoHidden = true;
         setAlwaysOnTop(true);
+        setTaskbarButtonVisible(false);
         setMinimumHeight(AutoHideTriggerHeight);
         setMaximumHeight(AutoHideTriggerHeight);
         setGeometry(hiddenGeometry);
@@ -3946,6 +3976,7 @@ void MainWindow::setTopAutoHidden(bool hidden) {
     }
 
     m_topAutoHidden = false;
+    setTaskbarButtonVisible(true);
     setAlwaysOnTop(true);
     setMinimumHeight(QtCompat::scaleInt(WindowMinimumHeight));
     setMaximumHeight(QWIDGETSIZE_MAX);
@@ -4007,6 +4038,14 @@ void MainWindow::setAlwaysOnTop(bool enabled) {
     SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 #else
     Q_UNUSED(enabled);
+#endif
+}
+
+void MainWindow::setTaskbarButtonVisible(bool visible) {
+#ifdef Q_OS_WIN
+    setTaskbarTabVisible(reinterpret_cast<HWND>(winId()), visible);
+#else
+    Q_UNUSED(visible);
 #endif
 }
 
