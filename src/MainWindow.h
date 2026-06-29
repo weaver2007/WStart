@@ -51,6 +51,7 @@ public:
 
 public slots:
     void showSettings();
+    void showStartupMinimized();
     void setHotkeysPaused(bool paused);
     void applyHotkeysEnabled(bool enabled);
 

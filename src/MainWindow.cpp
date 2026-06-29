@@ -1499,6 +1499,22 @@ void MainWindow::showSettings() {
 #endif
 }
 
+void MainWindow::showStartupMinimized() {
+    show();
+    setAlwaysOnTop(true);
+
+    const QRect screenGeometry = currentScreenAvailableGeometry();
+    if (!screenGeometry.isNull()) {
+        QRect shownGeometry = geometry();
+        shownGeometry.moveTop(screenGeometry.top());
+        shownGeometry.moveLeft(qBound(screenGeometry.left(), shownGeometry.left(),
+                                      screenGeometry.right() - shownGeometry.width() + 1));
+        setGeometry(shownGeometry);
+    }
+
+    setTopAutoHidden(true);
+}
+
 QString MainWindow::language() const {
     return UiText::normalizeLanguage(m_document.settings.language);
 }

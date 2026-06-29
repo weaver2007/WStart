@@ -92,7 +92,9 @@ int main(int argc, char* argv[]) {
         QMessageBox::warning(0, "WStart", UiText::text("zh-CN", UiText::Key::SystemTrayUnavailable));
     }
 
-    if (!startupMinimized || !trayAvailable) {
+    if (startupMinimized && trayAvailable) {
+        window.showStartupMinimized();
+    } else {
         window.show();
     }
 
