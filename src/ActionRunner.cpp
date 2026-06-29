@@ -114,6 +114,18 @@ bool forceForegroundWindow(HWND window) {
     return GetForegroundWindow() == window;
 }
 
+int showCommandForWindowState(LaunchWindowState windowState) {
+    switch (windowState) {
+    case LaunchWindowState::Minimized:
+        return SW_SHOWMINIMIZED;
+    case LaunchWindowState::Maximized:
+        return SW_SHOWMAXIMIZED;
+    case LaunchWindowState::Normal:
+        return SW_SHOWNORMAL;
+    }
+    return SW_SHOWNORMAL;
+}
+
 bool activateExistingApplicationWindow(const QString& target) {
     const QFileInfo fileInfo(target);
     if (!fileInfo.exists() || fileInfo.suffix().compare("exe", Qt::CaseInsensitive) != 0) {
@@ -150,10 +162,16 @@ bool ActionRunner::run(const LaunchAction& action, QString* error) const {
     }
 
 #ifdef Q_OS_WIN
+    if (action.singleInstance && action.type == LaunchActionType::Application &&
+        activateExistingApplicationWindow(action.target)) {
+        return true;
+    }
+
     const std::wstring verb = L"open";
     const std::wstring target = toWideString(action.target);
     const std::wstring arguments = toWideString(action.arguments);
     const std::wstring workingDirectory = toWideString(QDir::toNativeSeparators(action.workingDirectory));
+    const int showCommand = showCommandForWindowState(action.windowState);
 
     SHELLEXECUTEINFOW info = {};
     info.cbSize = sizeof(info);
@@ -162,7 +180,7 @@ bool ActionRunner::run(const LaunchAction& action, QString* error) const {
     info.lpFile = target.c_str();
     info.lpParameters = arguments.empty() ? nullptr : arguments.c_str();
     info.lpDirectory = workingDirectory.empty() ? nullptr : workingDirectory.c_str();
-    info.nShow = SW_SHOWNORMAL;
+    info.nShow = showCommand;
 
     if (!ShellExecuteExW(&info)) {
         if (error) {
@@ -173,7 +191,7 @@ bool ActionRunner::run(const LaunchAction& action, QString* error) const {
     if (info.hProcess) {
         CloseHandle(info.hProcess);
     }
-    if (action.type == LaunchActionType::Application) {
+    if (action.type == LaunchActionType::Application && action.windowState == LaunchWindowState::Normal) {
         activateExistingApplicationWindow(action.target);
     }
     return true;

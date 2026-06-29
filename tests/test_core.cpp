@@ -16,6 +16,8 @@ class CoreTests : public QObject {
 
 private slots:
     void hotkeyDisplayText();
+    void launchActionWindowOptionsRoundTrip();
+    void launchActionWindowOptionsDefaultsAndFallback();
     void jsonRoundTrip();
     void sectionJsonRoundTrip();
     void ruleCanBeValidWithoutHotkey();
@@ -51,6 +53,45 @@ void CoreTests::hotkeyDisplayText() {
     QVERIFY(hotkey.isValid());
 }
 
+void CoreTests::launchActionWindowOptionsRoundTrip() {
+    LaunchAction action;
+    action.type = LaunchActionType::Application;
+    action.target = "notepad.exe";
+    action.arguments = "/A";
+    action.workingDirectory = "C:/Windows";
+    action.windowState = LaunchWindowState::Maximized;
+    action.singleInstance = true;
+
+    const QJsonObject json = action.toJson();
+    QCOMPARE(json.value("windowState").toString(), QString("Maximized"));
+    QCOMPARE(json.value("singleInstance").toBool(), true);
+
+    const LaunchAction parsed = LaunchAction::fromJson(json);
+    QCOMPARE(static_cast<int>(parsed.type), static_cast<int>(LaunchActionType::Application));
+    QCOMPARE(parsed.target, action.target);
+    QCOMPARE(parsed.arguments, action.arguments);
+    QCOMPARE(parsed.workingDirectory, action.workingDirectory);
+    QCOMPARE(static_cast<int>(parsed.windowState), static_cast<int>(LaunchWindowState::Maximized));
+    QCOMPARE(parsed.singleInstance, true);
+}
+
+void CoreTests::launchActionWindowOptionsDefaultsAndFallback() {
+    QJsonObject legacy;
+    legacy["type"] = "Application";
+    legacy["target"] = "notepad.exe";
+
+    const LaunchAction defaults = LaunchAction::fromJson(legacy);
+    QCOMPARE(static_cast<int>(defaults.windowState), static_cast<int>(LaunchWindowState::Normal));
+    QCOMPARE(defaults.singleInstance, false);
+
+    QJsonObject invalid = legacy;
+    invalid["windowState"] = "Fullscreen";
+    invalid["singleInstance"] = true;
+    const LaunchAction parsed = LaunchAction::fromJson(invalid);
+    QCOMPARE(static_cast<int>(parsed.windowState), static_cast<int>(LaunchWindowState::Normal));
+    QCOMPARE(parsed.singleInstance, true);
+}
+
 void CoreTests::jsonRoundTrip() {
     HotkeyRule rule;
     rule.id = "rule-1";
@@ -65,6 +106,8 @@ void CoreTests::jsonRoundTrip() {
 #endif
     rule.action.type = LaunchActionType::Url;
     rule.action.target = "https://example.com";
+    rule.action.windowState = LaunchWindowState::Minimized;
+    rule.action.singleInstance = true;
     rule.description = "Example";
 
     const HotkeyRule parsed = HotkeyRule::fromJson(rule.toJson());
@@ -75,6 +118,8 @@ void CoreTests::jsonRoundTrip() {
     QCOMPARE(parsed.hotkey.displayText(), rule.hotkey.displayText());
     QCOMPARE(parsed.action.typeName(), QString("Url"));
     QCOMPARE(parsed.action.target, rule.action.target);
+    QCOMPARE(static_cast<int>(parsed.action.windowState), static_cast<int>(LaunchWindowState::Minimized));
+    QCOMPARE(parsed.action.singleInstance, true);
 }
 
 void CoreTests::sectionJsonRoundTrip() {

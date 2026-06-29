@@ -1,7 +1,6 @@
 #include "RuleStore.h"
 
 #include "HotkeyConflictDetector.h"
-#include "QtCompat.h"
 #include "UiText.h"
 
 #include <QDir>
@@ -15,10 +14,10 @@
 
 namespace {
 
-HotkeyRule makeProgramRule(const QString& sectionId, const QString& name, const QString& target,
+HotkeyRule makeProgramRule(const QString& sectionId, const QString& id, const QString& name, const QString& target,
                            const QString& arguments = QString()) {
     HotkeyRule rule;
-    rule.id = QtCompat::uuidWithoutBraces();
+    rule.id = id;
     rule.category = LauncherCategory::Program;
     rule.sectionId = sectionId;
     rule.action.type = LaunchActionType::Application;
@@ -28,9 +27,9 @@ HotkeyRule makeProgramRule(const QString& sectionId, const QString& name, const 
     return rule;
 }
 
-HotkeyRule makeFolderRule(const QString& sectionId, const QString& name, const QString& target) {
+HotkeyRule makeFolderRule(const QString& sectionId, const QString& id, const QString& name, const QString& target) {
     HotkeyRule rule;
-    rule.id = QtCompat::uuidWithoutBraces();
+    rule.id = id;
     rule.category = LauncherCategory::Folder;
     rule.sectionId = sectionId;
     rule.action.type = LaunchActionType::Folder;
@@ -39,9 +38,9 @@ HotkeyRule makeFolderRule(const QString& sectionId, const QString& name, const Q
     return rule;
 }
 
-HotkeyRule makeWebsiteRule(const QString& sectionId, const QString& name, const QString& target) {
+HotkeyRule makeWebsiteRule(const QString& sectionId, const QString& id, const QString& name, const QString& target) {
     HotkeyRule rule;
-    rule.id = QtCompat::uuidWithoutBraces();
+    rule.id = id;
     rule.category = LauncherCategory::Website;
     rule.sectionId = sectionId;
     rule.action.type = LaunchActionType::Url;
@@ -102,8 +101,11 @@ QVector<HotkeyRule> RuleStore::defaultSystemProgramRules() {
     };
 
     QVector<HotkeyRule> rules;
-    for (const DefaultProgramRule& spec : specs) {
-        rules.push_back(makeProgramRule(systemSection, QString::fromUtf8(spec.name), QString::fromLatin1(spec.target),
+    const int specCount = static_cast<int>(sizeof(specs) / sizeof(specs[0]));
+    for (int index = 0; index < specCount; ++index) {
+        const DefaultProgramRule& spec = specs[index];
+        rules.push_back(makeProgramRule(systemSection, QString("default-program-system-%1").arg(index + 1),
+                                        QString::fromUtf8(spec.name), QString::fromLatin1(spec.target),
                                         QString::fromLatin1(spec.arguments)));
     }
     return rules;
@@ -313,17 +315,22 @@ void RuleStore::ensureDefaultRules(LauncherDocument* document) const {
     const QString folderSection = defaultSectionId(LauncherCategory::Folder, 0);
     if (!sectionHasRules(folderSection)) {
         document->rules.push_back(
-            makeFolderRule(folderSection, QString::fromUtf8("我的文档"), QDir::home().filePath("Documents")));
+            makeFolderRule(folderSection, "default-folder-documents", QString::fromUtf8("我的文档"),
+                           QDir::home().filePath("Documents")));
         document->rules.push_back(
-            makeFolderRule(folderSection, QString::fromUtf8("桌面"), QDir::home().filePath("Desktop")));
+            makeFolderRule(folderSection, "default-folder-desktop", QString::fromUtf8("桌面"),
+                           QDir::home().filePath("Desktop")));
         document->rules.push_back(
-            makeFolderRule(folderSection, QString::fromUtf8("下载"), QDir::home().filePath("Downloads")));
+            makeFolderRule(folderSection, "default-folder-downloads", QString::fromUtf8("下载"),
+                           QDir::home().filePath("Downloads")));
     }
 
     const QString websiteSection = defaultSectionId(LauncherCategory::Website, 0);
     if (!sectionHasRules(websiteSection)) {
-        document->rules.push_back(makeWebsiteRule(websiteSection, QString::fromUtf8("百度"), "https://www.baidu.com"));
-        document->rules.push_back(makeWebsiteRule(websiteSection, QString::fromUtf8("必应"), "https://www.bing.com"));
+        document->rules.push_back(
+            makeWebsiteRule(websiteSection, "default-website-baidu", QString::fromUtf8("百度"), "https://www.baidu.com"));
+        document->rules.push_back(
+            makeWebsiteRule(websiteSection, "default-website-bing", QString::fromUtf8("必应"), "https://www.bing.com"));
     }
 }
 

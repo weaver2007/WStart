@@ -4,6 +4,8 @@
 #include "HotkeyTypes.h"
 #include "UiText.h"
 
+#include <QCheckBox>
+#include <QComboBox>
 #include <QDialog>
 #include <QLineEdit>
 #include <QPushButton>
@@ -23,11 +25,14 @@ public:
 private slots:
     void browseTarget();
     void checkHotkeyOccupancy();
+    void updateSingleInstanceAvailability();
 
 private:
     QString uiText(UiText::Key key) const;
     void updateUiForCategory();
     LaunchActionType actionTypeForCategory() const;
+    LaunchWindowState selectedWindowState() const;
+    void setSelectedWindowState(LaunchWindowState windowState);
 
     HotkeyRule m_rule;
     QString m_language = "zh-CN";
@@ -38,7 +43,10 @@ private:
     QLineEdit* m_argumentsEdit = nullptr;
     QLineEdit* m_workingDirectoryEdit = nullptr;
     QLineEdit* m_descriptionEdit = nullptr;
+    QComboBox* m_windowStateCombo = nullptr;
+    QCheckBox* m_singleInstanceCheck = nullptr;
     QPushButton* m_browseButton = nullptr;
     QWidget* m_argumentsRow = nullptr;
     QWidget* m_workingDirectoryRow = nullptr;
+    QWidget* m_singleInstanceRow = nullptr;
 };

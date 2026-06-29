@@ -17,6 +17,8 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(HotkeyModifiers)
 
 enum class LaunchActionType { Application, File, Folder, Url };
 
+enum class LaunchWindowState { Normal, Minimized, Maximized };
+
 enum class LauncherCategory { Program, Folder, Website };
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -67,13 +69,17 @@ struct LaunchAction {
     QString target;
     QString arguments;
     QString workingDirectory;
+    LaunchWindowState windowState = LaunchWindowState::Normal;
+    bool singleInstance = false;
 
     bool isValid() const;
     QString typeName() const;
+    QString windowStateName() const;
     QJsonObject toJson() const;
 
     static LaunchAction fromJson(const QJsonObject& object);
     static LaunchActionType typeFromName(const QString& name);
+    static LaunchWindowState windowStateFromName(const QString& name);
 };
 
 struct HotkeyRule {

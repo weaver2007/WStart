@@ -14,17 +14,29 @@
 #include <QUuid>
 #include <QVBoxLayout>
 
+namespace {
+bool targetLooksLikeExe(const QString& target) {
+    return QFileInfo(target.trimmed()).suffix().compare("exe", Qt::CaseInsensitive) == 0;
+}
+} // namespace
+
 RuleDialog::RuleDialog(QWidget* parent) : RuleDialog("zh-CN", parent) {}
 
 RuleDialog::RuleDialog(const QString& language, QWidget* parent)
     : QDialog(parent), m_language(UiText::normalizeLanguage(language)) {
-    resize(520, 300);
+    resize(520, 340);
 
     m_hotkeyEdit = new HotkeyEdit(this);
     m_targetEdit = new QLineEdit(this);
     m_argumentsEdit = new QLineEdit(this);
     m_workingDirectoryEdit = new QLineEdit(this);
     m_descriptionEdit = new QLineEdit(this);
+    m_windowStateCombo = new QComboBox(this);
+    m_windowStateCombo->addItem(uiText(UiText::Key::WindowStateNormal), QString::fromLatin1("Normal"));
+    m_windowStateCombo->addItem(uiText(UiText::Key::WindowStateMinimized), QString::fromLatin1("Minimized"));
+    m_windowStateCombo->addItem(uiText(UiText::Key::WindowStateMaximized), QString::fromLatin1("Maximized"));
+    m_singleInstanceCheck = new QCheckBox(uiText(UiText::Key::SingleInstance), this);
+    connect(m_targetEdit, SIGNAL(textChanged(QString)), this, SLOT(updateSingleInstanceAvailability()));
 
     auto* recordButton = new QPushButton(uiText(UiText::Key::Record), this);
     connect(recordButton, SIGNAL(clicked()), m_hotkeyEdit, SLOT(beginRecording()));
@@ -53,9 +65,17 @@ RuleDialog::RuleDialog(const QString& language, QWidget* parent)
     workingDirectoryLayout->setContentsMargins(0, 0, 0, 0);
     workingDirectoryLayout->addWidget(m_workingDirectoryEdit);
 
+    m_singleInstanceRow = new QWidget(this);
+    auto* singleInstanceLayout = new QHBoxLayout(m_singleInstanceRow);
+    singleInstanceLayout->setContentsMargins(0, 0, 0, 0);
+    singleInstanceLayout->addWidget(m_singleInstanceCheck);
+    singleInstanceLayout->addStretch();
+
     auto* form = new QFormLayout;
     form->addRow(uiText(UiText::Key::Description), m_descriptionEdit);
     form->addRow(uiText(UiText::Key::Target), targetLayout);
+    form->addRow(uiText(UiText::Key::WindowState), m_windowStateCombo);
+    form->addRow(QString(), m_singleInstanceRow);
     form->addRow(uiText(UiText::Key::Arguments), m_argumentsRow);
     form->addRow(uiText(UiText::Key::WorkingDirectory), m_workingDirectoryRow);
     form->addRow(uiText(UiText::Key::Hotkey), hotkeyLayout);
@@ -87,6 +107,8 @@ void RuleDialog::setRule(const HotkeyRule& rule) {
     m_targetEdit->setText(rule.action.target);
     m_argumentsEdit->setText(rule.action.arguments);
     m_workingDirectoryEdit->setText(rule.action.workingDirectory);
+    setSelectedWindowState(rule.action.windowState);
+    m_singleInstanceCheck->setChecked(rule.action.singleInstance);
     m_descriptionEdit->setText(rule.description);
     updateUiForCategory();
 }
@@ -105,6 +127,10 @@ HotkeyRule RuleDialog::rule() const {
     result.action.arguments = m_category == LauncherCategory::Program ? m_argumentsEdit->text().trimmed() : QString();
     result.action.workingDirectory =
         m_category == LauncherCategory::Program ? m_workingDirectoryEdit->text().trimmed() : QString();
+    result.action.windowState = selectedWindowState();
+    result.action.singleInstance =
+        m_category == LauncherCategory::Program && targetLooksLikeExe(result.action.target) &&
+        m_singleInstanceCheck->isChecked();
     if (m_category == LauncherCategory::Program && result.action.workingDirectory.isEmpty()) {
         const QFileInfo targetInfo(result.action.target);
         if (targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && !targetInfo.absolutePath().isEmpty()) {
@@ -152,6 +178,14 @@ void RuleDialog::checkHotkeyOccupancy() {
     box.exec();
 }
 
+void RuleDialog::updateSingleInstanceAvailability() {
+    const bool available = m_category == LauncherCategory::Program && targetLooksLikeExe(m_targetEdit->text());
+    m_singleInstanceCheck->setEnabled(available);
+    if (!available) {
+        m_singleInstanceCheck->setChecked(false);
+    }
+}
+
 QString RuleDialog::uiText(UiText::Key key) const {
     return UiText::text(m_language, key);
 }
@@ -166,6 +200,7 @@ void RuleDialog::updateUiForCategory() {
         m_browseButton->setVisible(true);
         m_argumentsRow->setVisible(true);
         m_workingDirectoryRow->setVisible(true);
+        m_singleInstanceRow->setVisible(true);
         break;
     case LauncherCategory::Folder:
         title = uiText(UiText::Key::RuleDialogFolderTitle);
@@ -173,6 +208,7 @@ void RuleDialog::updateUiForCategory() {
         m_browseButton->setVisible(true);
         m_argumentsRow->setVisible(false);
         m_workingDirectoryRow->setVisible(false);
+        m_singleInstanceRow->setVisible(false);
         break;
     case LauncherCategory::Website:
         title = uiText(UiText::Key::RuleDialogWebsiteTitle);
@@ -180,6 +216,7 @@ void RuleDialog::updateUiForCategory() {
         m_browseButton->setVisible(false);
         m_argumentsRow->setVisible(false);
         m_workingDirectoryRow->setVisible(false);
+        m_singleInstanceRow->setVisible(false);
         break;
     }
     setWindowTitle(title);
@@ -188,6 +225,7 @@ void RuleDialog::updateUiForCategory() {
     m_argumentsEdit->setPlaceholderText(uiText(UiText::Key::ArgumentsPlaceholder));
     m_workingDirectoryEdit->setPlaceholderText(uiText(UiText::Key::WorkingDirectoryPlaceholder));
     m_hotkeyEdit->setPlaceholderText(uiText(UiText::Key::HotkeyPlaceholder));
+    updateSingleInstanceAvailability();
 }
 
 LaunchActionType RuleDialog::actionTypeForCategory() const {
@@ -200,4 +238,27 @@ LaunchActionType RuleDialog::actionTypeForCategory() const {
         return LaunchActionType::Url;
     }
     return LaunchActionType::Application;
+}
+
+LaunchWindowState RuleDialog::selectedWindowState() const {
+    if (!m_windowStateCombo) {
+        return LaunchWindowState::Normal;
+    }
+    return LaunchAction::windowStateFromName(m_windowStateCombo->itemData(m_windowStateCombo->currentIndex()).toString());
+}
+
+void RuleDialog::setSelectedWindowState(LaunchWindowState windowState) {
+    if (!m_windowStateCombo) {
+        return;
+    }
+    LaunchAction action;
+    action.windowState = windowState;
+    const QString stateName = action.windowStateName();
+    for (int index = 0; index < m_windowStateCombo->count(); ++index) {
+        if (m_windowStateCombo->itemData(index).toString().compare(stateName, Qt::CaseInsensitive) == 0) {
+            m_windowStateCombo->setCurrentIndex(index);
+            return;
+        }
+    }
+    m_windowStateCombo->setCurrentIndex(0);
 }

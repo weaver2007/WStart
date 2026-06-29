@@ -178,8 +178,25 @@ QString LaunchAction::typeName() const {
     return "Application";
 }
 
+QString LaunchAction::windowStateName() const {
+    switch (windowState) {
+    case LaunchWindowState::Minimized:
+        return "Minimized";
+    case LaunchWindowState::Maximized:
+        return "Maximized";
+    case LaunchWindowState::Normal:
+        return "Normal";
+    }
+    return "Normal";
+}
+
 QJsonObject LaunchAction::toJson() const {
-    return {{"type", typeName()}, {"target", target}, {"arguments", arguments}, {"workingDirectory", workingDirectory}};
+    return {{"type", typeName()},
+            {"target", target},
+            {"arguments", arguments},
+            {"workingDirectory", workingDirectory},
+            {"windowState", windowStateName()},
+            {"singleInstance", singleInstance}};
 }
 
 LaunchAction LaunchAction::fromJson(const QJsonObject& object) {
@@ -188,6 +205,8 @@ LaunchAction LaunchAction::fromJson(const QJsonObject& object) {
     action.target = object.value("target").toString();
     action.arguments = object.value("arguments").toString();
     action.workingDirectory = object.value("workingDirectory").toString();
+    action.windowState = windowStateFromName(object.value("windowState").toString());
+    action.singleInstance = object.value("singleInstance").toBool(false);
     return action;
 }
 
@@ -202,6 +221,16 @@ LaunchActionType LaunchAction::typeFromName(const QString& name) {
         return LaunchActionType::Url;
     }
     return LaunchActionType::Application;
+}
+
+LaunchWindowState LaunchAction::windowStateFromName(const QString& name) {
+    if (name.compare("Minimized", Qt::CaseInsensitive) == 0) {
+        return LaunchWindowState::Minimized;
+    }
+    if (name.compare("Maximized", Qt::CaseInsensitive) == 0) {
+        return LaunchWindowState::Maximized;
+    }
+    return LaunchWindowState::Normal;
 }
 
 bool LauncherSection::isValid() const {

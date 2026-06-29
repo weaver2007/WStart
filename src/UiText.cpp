@@ -326,6 +326,16 @@ QString text(const QString& language, Key key) {
         return en ? "Arguments" : QString::fromUtf8("参数");
     case Key::WorkingDirectory:
         return en ? "Working directory" : QString::fromUtf8("工作目录");
+    case Key::WindowState:
+        return en ? "Window size" : QString::fromUtf8("窗口大小");
+    case Key::WindowStateNormal:
+        return en ? "Normal" : QString::fromUtf8("正常");
+    case Key::WindowStateMinimized:
+        return en ? "Minimized" : QString::fromUtf8("最小化");
+    case Key::WindowStateMaximized:
+        return en ? "Maximized" : QString::fromUtf8("最大化");
+    case Key::SingleInstance:
+        return en ? "Single instance" : QString::fromUtf8("单一实例");
     case Key::Hotkey:
         return en ? "Hotkey" : QString::fromUtf8("快捷键");
     case Key::Record:
