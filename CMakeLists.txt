@@ -242,6 +242,7 @@ endif()
 
 set(HKM_SOURCES
     src/AppIcon.cpp
+    src/AppLogger.cpp
     src/ActionRunner.cpp
     src/CredentialStore.cpp
     src/HotkeyConflictDetector.cpp
@@ -256,6 +257,7 @@ set(HKM_SOURCES
 
 set(HKM_HEADERS
     src/AppIcon.h
+    src/AppLogger.h
     src/ActionRunner.h
     src/CredentialStore.h
     src/HotkeyConflictDetector.h

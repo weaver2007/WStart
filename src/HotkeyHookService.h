@@ -34,11 +34,12 @@ private:
 #ifdef Q_OS_WIN
     static LRESULT CALLBACK keyboardProc(int code, WPARAM wParam, LPARAM lParam);
     LRESULT handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTRUCT* event);
-    HotkeyModifiers currentModifiers(int eventKey, bool isKeyDown);
+    HotkeyModifiers currentModifiers(int eventKey, bool isKeyDown, bool isKeyUp);
     const HotkeyRule* matchingRule(int virtualKey, HotkeyModifiers modifiers) const;
     bool isTrackedSuppressedKey(int virtualKey) const;
     bool isModifierKey(int virtualKey) const;
     void updatePressedModifierState(int virtualKey, bool pressed);
+    bool syncPendingWinRelease(const KBDLLHOOKSTRUCT* event, bool isKeyDown, bool isKeyUp, bool replayCurrentEvent);
     void trackSuppressedChord(const HotkeyCombination& hotkey);
     void clearSuppressedKey(int virtualKey);
 
@@ -51,6 +52,9 @@ private:
     QSet<int> m_suppressedKeys;
     QHash<int, QString> m_suppressedTriggerIds;
     HotkeyModifiers m_pressedModifiers = ModifierNone;
+    bool m_pendingWinReleaseSync = false;
+    bool m_leftWinPhysicallyDown = false;
+    bool m_rightWinPhysicallyDown = false;
 #endif
     bool m_paused = false;
 };

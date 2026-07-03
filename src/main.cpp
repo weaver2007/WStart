@@ -1,4 +1,5 @@
 #include "AppIcon.h"
+#include "AppLogger.h"
 #include "MainWindow.h"
 #include "TrayController.h"
 #include "UiText.h"
@@ -54,6 +55,8 @@ int main(int argc, char* argv[]) {
     QApplication::setOrganizationName("WStart");
     QApplication::setWindowIcon(AppIcon::launcherIcon());
     QApplication::setQuitOnLastWindowClosed(false);
+    AppLogger::install();
+    AppLogger::writeLine(QString::fromLatin1("INFO"), QString::fromLatin1("WStart starting version=%1").arg(QString::fromLatin1(HKM_APP_VERSION)));
     const bool startupMinimized = app.arguments().contains(QString::fromLatin1("--startup-minimized"));
 
     const QString lockDirectory = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
