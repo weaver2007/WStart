@@ -53,30 +53,20 @@ void logCaptureState(const QString& message) {
     AppLogger::writeLine(QString::fromLatin1("HOTKEY_EDIT"), message);
 }
 
-void sendSyntheticKeyUp(WORD virtualKey) {
-    INPUT input;
-    ZeroMemory(&input, sizeof(input));
-    input.type = INPUT_KEYBOARD;
-    input.ki.wVk = virtualKey;
-    input.ki.dwFlags = KEYEVENTF_KEYUP;
-    if (isWinVirtualKey(virtualKey)) {
-        input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
-    }
-    input.ki.dwExtraInfo = kHotkeyEditSyntheticInputExtraInfo;
-    SendInput(1, &input, sizeof(INPUT));
-}
+void sendCancelStartMenuInput() {
+    INPUT inputs[2];
+    ZeroMemory(inputs, sizeof(inputs));
 
-bool isPhysicalKeyDown(int virtualKey) {
-    return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
-}
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wVk = VK_F24;
+    inputs[0].ki.dwExtraInfo = kHotkeyEditSyntheticInputExtraInfo;
 
-void sendSyntheticWinKeyUpsIfReleased() {
-    if (!isPhysicalKeyDown(VK_LWIN)) {
-        sendSyntheticKeyUp(VK_LWIN);
-    }
-    if (!isPhysicalKeyDown(VK_RWIN)) {
-        sendSyntheticKeyUp(VK_RWIN);
-    }
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wVk = VK_F24;
+    inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    inputs[1].ki.dwExtraInfo = kHotkeyEditSyntheticInputExtraInfo;
+
+    SendInput(2, inputs, sizeof(INPUT));
 }
 
 } // namespace
@@ -107,9 +97,7 @@ void HotkeyEdit::focusInEvent(QFocusEvent* event) {
 void HotkeyEdit::focusOutEvent(QFocusEvent* event) {
     finishRecording(false);
 #ifdef Q_OS_WIN
-    sendSyntheticWinKeyUpsIfReleased();
-    logCaptureState(QString::fromLatin1("focus-out conditional-win-up reset capturedMods=%1")
-                        .arg(static_cast<int>(s_capturedModifiers)));
+    logCaptureState(QString::fromLatin1("focus-out reset capturedMods=%1").arg(static_cast<int>(s_capturedModifiers)));
     s_capturedModifiers = ModifierNone;
     if (s_activeEditor == this) {
         s_activeEditor = nullptr;
@@ -146,7 +134,6 @@ void HotkeyEdit::mousePressEvent(QMouseEvent* event) {
 
 void HotkeyEdit::beginRecording() {
     setFocus(Qt::ShortcutFocusReason);
-    startCaptureHook();
 
     m_recording = true;
     m_suppressingCurrentChord = false;
@@ -156,8 +143,9 @@ void HotkeyEdit::beginRecording() {
         s_activeEditor->m_suppressingCurrentChord = false;
     }
     s_activeEditor = this;
-    s_capturedModifiers = ModifierNone;
+    s_capturedModifiers = nativeModifierSnapshot();
 #endif
+    startCaptureHook();
     setText("Press shortcut...");
     selectAll();
 }
@@ -165,7 +153,9 @@ void HotkeyEdit::beginRecording() {
 void HotkeyEdit::startCaptureHook() {
 #ifdef Q_OS_WIN
     if (m_captureHook) {
-        return;
+        UnhookWindowsHookEx(m_captureHook);
+        m_captureHook = nullptr;
+        logCaptureState(QString::fromLatin1("capture-hook-restart"));
     }
     m_captureHook = SetWindowsHookExW(WH_KEYBOARD_LL, &HotkeyEdit::captureProc, GetModuleHandleW(nullptr), 0);
     if (!m_captureHook) {
@@ -180,8 +170,7 @@ void HotkeyEdit::startCaptureHook() {
 
 void HotkeyEdit::stopCaptureHook() {
 #ifdef Q_OS_WIN
-    sendSyntheticWinKeyUpsIfReleased();
-    logCaptureState(QString::fromLatin1("capture-hook-stop conditional-win-up capturedMods=%1 hookActive=%2")
+    logCaptureState(QString::fromLatin1("capture-hook-stop capturedMods=%1 hookActive=%2")
                         .arg(static_cast<int>(s_capturedModifiers))
                         .arg(captureBoolText(m_captureHook != nullptr)));
     if (m_captureHook) {
@@ -204,6 +193,9 @@ void HotkeyEdit::captureNativeHotkey(int virtualKey, HotkeyModifiers modifiers) 
     captured.modifiers = modifiers;
     captured.key = virtualKey;
 #ifdef Q_OS_WIN
+    if (modifiers.testFlag(ModifierWin)) {
+        sendCancelStartMenuInput();
+    }
     logCaptureState(QString::fromLatin1("capture-hotkey key=%1 modifiers=%2")
                         .arg(captureKeyName(virtualKey))
                         .arg(static_cast<int>(modifiers)));
@@ -414,22 +406,19 @@ LRESULT CALLBACK HotkeyEdit::captureProc(int code, WPARAM wParam, LPARAM lParam)
     const int virtualKey = static_cast<int>(event->vkCode);
     if (isModifierVirtualKey(virtualKey)) {
         updateCapturedModifierState(virtualKey, isKeyDown);
+        if (isWinVirtualKey(virtualKey) && isKeyDown) {
+            sendCancelStartMenuInput();
+        }
         if (isWinVirtualKey(virtualKey)) {
             logCaptureState(QString::fromLatin1("capture-win-modifier event=%1 key=%2 flags=0x%3 capturedMods=%4")
                                 .arg(captureEventName(isKeyDown, isKeyUp), captureKeyName(virtualKey),
                                      QString::number(static_cast<qulonglong>(event->flags), 16).toUpper())
                                 .arg(static_cast<int>(s_capturedModifiers)));
         }
-        if (isKeyUp && isWinVirtualKey(virtualKey)) {
-            sendSyntheticKeyUp(static_cast<WORD>(virtualKey));
-            logCaptureState(QString::fromLatin1("capture-win-keyup-synthetic key=%1 capturedMods=%2")
-                                .arg(captureKeyName(virtualKey))
-                                .arg(static_cast<int>(s_capturedModifiers)));
-        }
         if (isKeyUp && !hasAnyCapturedModifier() && s_activeEditor->m_suppressingCurrentChord) {
             s_activeEditor->m_suppressingCurrentChord = false;
         }
-        return 1;
+        return CallNextHookEx(nullptr, code, wParam, lParam);
     }
 
     if (isKeyDown && s_activeEditor->m_recording) {
