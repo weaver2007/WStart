@@ -93,9 +93,17 @@ void sendSyntheticKeyboardEvent(const KBDLLHOOKSTRUCT* event, bool isKeyUp) {
     SendInput(1, &input, sizeof(INPUT));
 }
 
-void sendSyntheticWinKeyUps() {
-    sendSyntheticKeyUp(VK_LWIN);
-    sendSyntheticKeyUp(VK_RWIN);
+bool isPhysicalKeyDown(int virtualKey) {
+    return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+}
+
+void sendSyntheticWinKeyUpsIfReleased() {
+    if (!isPhysicalKeyDown(VK_LWIN)) {
+        sendSyntheticKeyUp(VK_LWIN);
+    }
+    if (!isPhysicalKeyDown(VK_RWIN)) {
+        sendSyntheticKeyUp(VK_RWIN);
+    }
 }
 
 void sendCancelStartMenuInput() {
@@ -138,7 +146,7 @@ bool HotkeyHookService::start(QString* error) {
     }
     s_instance = this;
     m_hook = SetWindowsHookExW(WH_KEYBOARD_LL, &HotkeyHookService::keyboardProc, GetModuleHandleW(nullptr), 0);
-    sendSyntheticWinKeyUps();
+    sendSyntheticWinKeyUpsIfReleased();
     m_pendingWinReleaseSync = false;
     m_leftWinPhysicallyDown = false;
     m_rightWinPhysicallyDown = false;
@@ -172,7 +180,7 @@ void HotkeyHookService::stop() {
         m_hook = nullptr;
     }
     if (s_instance == this) {
-        sendSyntheticWinKeyUps();
+        sendSyntheticWinKeyUpsIfReleased();
         m_pendingWinReleaseSync = false;
         m_leftWinPhysicallyDown = false;
         m_rightWinPhysicallyDown = false;
@@ -203,7 +211,7 @@ void HotkeyHookService::setPaused(bool paused) {
         m_activeTriggers.clear();
 #ifdef Q_OS_WIN
         m_suppressedKeys.clear();
-        sendSyntheticWinKeyUps();
+        sendSyntheticWinKeyUpsIfReleased();
         m_pendingWinReleaseSync = false;
         m_leftWinPhysicallyDown = false;
         m_rightWinPhysicallyDown = false;
@@ -268,12 +276,8 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
                                 hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown,
                                               m_pendingWinReleaseSync, m_pressedModifiers)));
     } else {
-        if ((GetAsyncKeyState(VK_LWIN) & 0x8000) == 0) {
-            m_leftWinPhysicallyDown = false;
-        }
-        if ((GetAsyncKeyState(VK_RWIN) & 0x8000) == 0) {
-            m_rightWinPhysicallyDown = false;
-        }
+        m_leftWinPhysicallyDown = isPhysicalKeyDown(VK_LWIN);
+        m_rightWinPhysicallyDown = isPhysicalKeyDown(VK_RWIN);
         if (leftWinBefore != m_leftWinPhysicallyDown || rightWinBefore != m_rightWinPhysicallyDown) {
             logHotkeyState(QString::fromLatin1("async-win-state-cleared currentKey=%1 event=%2 beforeLeft=%3 beforeRight=%4 %5")
                                .arg(keyName(virtualKey), eventName(isKeyDown, isKeyUp), boolText(leftWinBefore),
@@ -471,7 +475,7 @@ bool HotkeyHookService::syncPendingWinRelease(const KBDLLHOOKSTRUCT* event, bool
                        .arg(eventName(isKeyDown, isKeyUp), keyName(eventKey), boolText(replayCurrentEvent),
                             hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown,
                                           m_pendingWinReleaseSync, m_pressedModifiers)));
-    sendSyntheticWinKeyUps();
+    sendSyntheticWinKeyUpsIfReleased();
     m_pendingWinReleaseSync = false;
     m_pressedModifiers &= ~ModifierWin;
 

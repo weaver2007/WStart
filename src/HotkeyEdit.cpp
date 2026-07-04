@@ -66,9 +66,17 @@ void sendSyntheticKeyUp(WORD virtualKey) {
     SendInput(1, &input, sizeof(INPUT));
 }
 
-void sendSyntheticWinKeyUps() {
-    sendSyntheticKeyUp(VK_LWIN);
-    sendSyntheticKeyUp(VK_RWIN);
+bool isPhysicalKeyDown(int virtualKey) {
+    return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+}
+
+void sendSyntheticWinKeyUpsIfReleased() {
+    if (!isPhysicalKeyDown(VK_LWIN)) {
+        sendSyntheticKeyUp(VK_LWIN);
+    }
+    if (!isPhysicalKeyDown(VK_RWIN)) {
+        sendSyntheticKeyUp(VK_RWIN);
+    }
 }
 
 } // namespace
@@ -99,8 +107,8 @@ void HotkeyEdit::focusInEvent(QFocusEvent* event) {
 void HotkeyEdit::focusOutEvent(QFocusEvent* event) {
     finishRecording(false);
 #ifdef Q_OS_WIN
-    sendSyntheticWinKeyUps();
-    logCaptureState(QString::fromLatin1("focus-out synthetic-win-up reset capturedMods=%1")
+    sendSyntheticWinKeyUpsIfReleased();
+    logCaptureState(QString::fromLatin1("focus-out conditional-win-up reset capturedMods=%1")
                         .arg(static_cast<int>(s_capturedModifiers)));
     s_capturedModifiers = ModifierNone;
     if (s_activeEditor == this) {
@@ -172,8 +180,8 @@ void HotkeyEdit::startCaptureHook() {
 
 void HotkeyEdit::stopCaptureHook() {
 #ifdef Q_OS_WIN
-    sendSyntheticWinKeyUps();
-    logCaptureState(QString::fromLatin1("capture-hook-stop synthetic-win-up capturedMods=%1 hookActive=%2")
+    sendSyntheticWinKeyUpsIfReleased();
+    logCaptureState(QString::fromLatin1("capture-hook-stop conditional-win-up capturedMods=%1 hookActive=%2")
                         .arg(static_cast<int>(s_capturedModifiers))
                         .arg(captureBoolText(m_captureHook != nullptr)));
     if (m_captureHook) {

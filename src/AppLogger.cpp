@@ -1,14 +1,16 @@
 #include "AppLogger.h"
 
-#include <QByteArray>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QQueue>
 #include <QStandardPaths>
 #include <QString>
+#include <QThread>
+#include <QWaitCondition>
 #include <QtGlobal>
 
 #include <cstdlib>
@@ -16,15 +18,11 @@
 namespace {
 const qint64 kMaxLogFileSize = 2 * 1024 * 1024;
 const int kMaxBackupCount = 3;
+const int kMaxQueuedLines = 4096;
 
 bool* installedFlag() {
     static bool installed = false;
     return &installed;
-}
-
-QMutex* loggerMutex() {
-    static QMutex* mutex = new QMutex;
-    return mutex;
 }
 
 QString levelName(QtMsgType type) {
@@ -53,6 +51,10 @@ QString logDirectory() {
     return QDir(base).filePath(QString::fromLatin1("logs"));
 }
 
+QString currentLogFilePath() {
+    return QDir(logDirectory()).filePath(QString::fromLatin1("WStart.log"));
+}
+
 void rotateLogIfNeeded(const QString& path) {
     const QFileInfo info(path);
     if (!info.exists() || info.size() <= kMaxLogFileSize) {
@@ -71,12 +73,14 @@ void rotateLogIfNeeded(const QString& path) {
     QFile::rename(path, QString::fromLatin1("%1.1").arg(path));
 }
 
-void appendLine(const QString& level, const QString& message) {
-    QMutexLocker locker(loggerMutex());
+void appendLines(const QStringList& lines) {
+    if (lines.isEmpty()) {
+        return;
+    }
 
     const QString directory = logDirectory();
     QDir().mkpath(directory);
-    const QString path = QDir(directory).filePath(QString::fromLatin1("WStart.log"));
+    const QString path = currentLogFilePath();
     rotateLogIfNeeded(path);
 
     QFile file(path);
@@ -84,15 +88,68 @@ void appendLine(const QString& level, const QString& message) {
         return;
     }
 
+    for (const QString& line : lines) {
+        file.write(line.toUtf8());
+    }
+    file.flush();
+}
+
+class LogWriterThread : public QThread {
+public:
+    void enqueue(const QString& line) {
+        {
+            QMutexLocker locker(&m_mutex);
+            if (m_queue.size() >= kMaxQueuedLines) {
+                m_queue.dequeue();
+            }
+            m_queue.enqueue(line);
+        }
+        m_wait.wakeOne();
+        if (!isRunning()) {
+            start();
+        }
+    }
+
+protected:
+    void run() override {
+        for (;;) {
+            QStringList batch;
+            {
+                QMutexLocker locker(&m_mutex);
+                if (m_queue.isEmpty()) {
+                    m_wait.wait(&m_mutex, 1000);
+                }
+                while (!m_queue.isEmpty()) {
+                    batch.append(m_queue.dequeue());
+                    if (batch.size() >= 256) {
+                        break;
+                    }
+                }
+            }
+            appendLines(batch);
+        }
+    }
+
+private:
+    QMutex m_mutex;
+    QWaitCondition m_wait;
+    QQueue<QString> m_queue;
+};
+
+LogWriterThread* writerThread() {
+    static LogWriterThread* thread = new LogWriterThread;
+    return thread;
+}
+
+void enqueueLine(const QString& level, const QString& message) {
     const QString timestamp = QDateTime::currentDateTime().toString(QString::fromLatin1("yyyy-MM-dd HH:mm:ss.zzz"));
     const QString line = QString::fromLatin1("%1 [%2] %3\n").arg(timestamp, level, message);
-    file.write(line.toUtf8());
-    file.flush();
+    writerThread()->enqueue(line);
 }
 
 #if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
 void messageHandler(QtMsgType type, const char* message) {
-    appendLine(levelName(type), QString::fromLocal8Bit(message ? message : ""));
+    enqueueLine(levelName(type), QString::fromLocal8Bit(message ? message : ""));
     if (type == QtFatalMsg) {
         std::abort();
     }
@@ -100,7 +157,7 @@ void messageHandler(QtMsgType type, const char* message) {
 #else
 void messageHandler(QtMsgType type, const QMessageLogContext& context, const QString& message) {
     Q_UNUSED(context)
-    appendLine(levelName(type), message);
+    enqueueLine(levelName(type), message);
     if (type == QtFatalMsg) {
         std::abort();
     }
@@ -126,9 +183,9 @@ bool AppLogger::isInstalled() {
 }
 
 QString AppLogger::logFilePath() {
-    return QDir(logDirectory()).filePath(QString::fromLatin1("WStart.log"));
+    return currentLogFilePath();
 }
 
 void AppLogger::writeLine(const QString& level, const QString& message) {
-    appendLine(level, message);
+    enqueueLine(level, message);
 }
