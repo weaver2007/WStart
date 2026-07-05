@@ -1,6 +1,5 @@
 #pragma once
 
-#include "HotkeyEdit.h"
 #include "HotkeyTypes.h"
 #include "UiText.h"
 
@@ -26,6 +25,8 @@ private slots:
     void browseTarget();
     void checkHotkeyOccupancy();
     void updateSingleInstanceAvailability();
+    void applyManualHotkey();
+    void updateManualHotkeyPreview();
 
 private:
     QString uiText(UiText::Key key) const;
@@ -33,12 +34,18 @@ private:
     LaunchActionType actionTypeForCategory() const;
     LaunchWindowState selectedWindowState() const;
     void setSelectedWindowState(LaunchWindowState windowState);
+    HotkeyCombination manualHotkey() const;
+    void setManualHotkey(const HotkeyCombination& hotkey);
 
     HotkeyRule m_rule;
     QString m_language = "zh-CN";
     LauncherCategory m_category = LauncherCategory::Program;
     QString m_sectionId;
-    HotkeyEdit* m_hotkeyEdit = nullptr;
+    QCheckBox* m_ctrlCheck = nullptr;
+    QCheckBox* m_altCheck = nullptr;
+    QCheckBox* m_shiftCheck = nullptr;
+    QCheckBox* m_winCheck = nullptr;
+    QLineEdit* m_hotkeyKeyEdit = nullptr;
     QLineEdit* m_targetEdit = nullptr;
     QLineEdit* m_argumentsEdit = nullptr;
     QLineEdit* m_workingDirectoryEdit = nullptr;

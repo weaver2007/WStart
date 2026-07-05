@@ -260,7 +260,7 @@ QString text(const QString& language, Key key) {
     case Key::HotkeyCheck:
         return en ? "Check occupancy" : QString::fromUtf8("检测占用");
     case Key::HotkeyCheckInvalid:
-        return en ? "No valid hotkey has been recorded." : QString::fromUtf8("尚未录入有效快捷键。");
+        return en ? "No valid hotkey has been set." : QString::fromUtf8("尚未设置有效快捷键。");
     case Key::HotkeyCheckAvailable:
         return en ? "This hotkey is not registered by another app through RegisterHotKey."
                   : QString::fromUtf8("未检测到其它程序通过 RegisterHotKey 注册该快捷键。");
@@ -340,6 +340,8 @@ QString text(const QString& language, Key key) {
         return en ? "Hotkey" : QString::fromUtf8("快捷键");
     case Key::Record:
         return en ? "Record" : QString::fromUtf8("录制");
+    case Key::Apply:
+        return en ? "Apply" : QString::fromUtf8("应用");
     case Key::Browse:
         return en ? "Browse" : QString::fromUtf8("浏览");
     case Key::SelectFolder:
@@ -362,6 +364,11 @@ QString text(const QString& language, Key key) {
         return en ? "Optional working directory" : QString::fromUtf8("可选工作目录");
     case Key::HotkeyPlaceholder:
         return en ? "Optional. You can leave this empty for now." : QString::fromUtf8("可选，当前阶段可不填写");
+    case Key::HotkeyKeyPlaceholder:
+        return en ? "Key" : QString::fromUtf8("主键");
+    case Key::HotkeyManualInvalid:
+        return en ? "Enter a valid main key, such as S, F1, Enter, or Space."
+                  : QString::fromUtf8("请输入有效主键，例如 S、F1、Enter 或 Space。");
     case Key::TrayTooltip:
         return "WStart";
     case Key::SystemTrayUnavailable:

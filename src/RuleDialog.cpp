@@ -9,14 +9,212 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QUuid>
 #include <QVBoxLayout>
 
 namespace {
+constexpr int kVkBack = 0x08;
+constexpr int kVkTab = 0x09;
+constexpr int kVkReturn = 0x0D;
+constexpr int kVkEscape = 0x1B;
+constexpr int kVkSpace = 0x20;
+constexpr int kVkPrior = 0x21;
+constexpr int kVkNext = 0x22;
+constexpr int kVkEnd = 0x23;
+constexpr int kVkHome = 0x24;
+constexpr int kVkLeft = 0x25;
+constexpr int kVkUp = 0x26;
+constexpr int kVkRight = 0x27;
+constexpr int kVkDown = 0x28;
+constexpr int kVkInsert = 0x2D;
+constexpr int kVkDelete = 0x2E;
+constexpr int kVkF1 = 0x70;
+constexpr int kVkOem1 = 0xBA;
+constexpr int kVkOemPlus = 0xBB;
+constexpr int kVkOemComma = 0xBC;
+constexpr int kVkOemMinus = 0xBD;
+constexpr int kVkOemPeriod = 0xBE;
+constexpr int kVkOem2 = 0xBF;
+constexpr int kVkOem3 = 0xC0;
+constexpr int kVkOem4 = 0xDB;
+constexpr int kVkOem5 = 0xDC;
+constexpr int kVkOem6 = 0xDD;
+constexpr int kVkOem7 = 0xDE;
+
 bool targetLooksLikeExe(const QString& target) {
     return QFileInfo(target.trimmed()).suffix().compare("exe", Qt::CaseInsensitive) == 0;
+}
+
+int manualKeyFromText(const QString& rawText) {
+    const QString text = rawText.trimmed();
+    if (text.isEmpty()) {
+        return 0;
+    }
+
+    const QString upper = text.toUpper();
+    if (upper.size() == 1) {
+        const ushort ch = upper.at(0).unicode();
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+            return static_cast<int>(ch);
+        }
+        switch (ch) {
+        case ' ':
+            return kVkSpace;
+        case '-':
+            return kVkOemMinus;
+        case '=':
+            return kVkOemPlus;
+        case '[':
+            return kVkOem4;
+        case ']':
+            return kVkOem6;
+        case '\\':
+            return kVkOem5;
+        case ';':
+            return kVkOem1;
+        case '\'':
+            return kVkOem7;
+        case ',':
+            return kVkOemComma;
+        case '.':
+            return kVkOemPeriod;
+        case '/':
+            return kVkOem2;
+        case '`':
+            return kVkOem3;
+        default:
+            break;
+        }
+    }
+
+    if (upper.startsWith(QString::fromLatin1("F"))) {
+        bool ok = false;
+        const int number = upper.mid(1).toInt(&ok);
+        if (ok && number >= 1 && number <= 24) {
+            return kVkF1 + number - 1;
+        }
+    }
+    if (upper.startsWith(QString::fromLatin1("VK_"))) {
+        bool ok = false;
+        const int key = upper.mid(3).toInt(&ok, 0);
+        return ok ? key : 0;
+    }
+
+    if (upper == QString::fromLatin1("SPACE") || text == QString::fromUtf8("空格")) {
+        return kVkSpace;
+    }
+    if (upper == QString::fromLatin1("TAB")) {
+        return kVkTab;
+    }
+    if (upper == QString::fromLatin1("ESC") || upper == QString::fromLatin1("ESCAPE")) {
+        return kVkEscape;
+    }
+    if (upper == QString::fromLatin1("ENTER") || upper == QString::fromLatin1("RETURN")) {
+        return kVkReturn;
+    }
+    if (upper == QString::fromLatin1("BACKSPACE") || upper == QString::fromLatin1("BACK")) {
+        return kVkBack;
+    }
+    if (upper == QString::fromLatin1("DELETE") || upper == QString::fromLatin1("DEL")) {
+        return kVkDelete;
+    }
+    if (upper == QString::fromLatin1("INSERT") || upper == QString::fromLatin1("INS")) {
+        return kVkInsert;
+    }
+    if (upper == QString::fromLatin1("HOME")) {
+        return kVkHome;
+    }
+    if (upper == QString::fromLatin1("END")) {
+        return kVkEnd;
+    }
+    if (upper == QString::fromLatin1("PAGEUP") || upper == QString::fromLatin1("PGUP")) {
+        return kVkPrior;
+    }
+    if (upper == QString::fromLatin1("PAGEDOWN") || upper == QString::fromLatin1("PGDN")) {
+        return kVkNext;
+    }
+    if (upper == QString::fromLatin1("LEFT")) {
+        return kVkLeft;
+    }
+    if (upper == QString::fromLatin1("RIGHT")) {
+        return kVkRight;
+    }
+    if (upper == QString::fromLatin1("UP")) {
+        return kVkUp;
+    }
+    if (upper == QString::fromLatin1("DOWN")) {
+        return kVkDown;
+    }
+    return 0;
+}
+
+QString manualKeyText(int virtualKey) {
+    if ((virtualKey >= 'A' && virtualKey <= 'Z') || (virtualKey >= '0' && virtualKey <= '9')) {
+        return QString(QChar(static_cast<ushort>(virtualKey)));
+    }
+    if (virtualKey >= kVkF1 && virtualKey <= kVkF1 + 23) {
+        return QString::fromLatin1("F%1").arg(virtualKey - kVkF1 + 1);
+    }
+    switch (virtualKey) {
+    case kVkSpace:
+        return QString::fromLatin1("Space");
+    case kVkTab:
+        return QString::fromLatin1("Tab");
+    case kVkEscape:
+        return QString::fromLatin1("Esc");
+    case kVkReturn:
+        return QString::fromLatin1("Enter");
+    case kVkBack:
+        return QString::fromLatin1("Backspace");
+    case kVkDelete:
+        return QString::fromLatin1("Delete");
+    case kVkInsert:
+        return QString::fromLatin1("Insert");
+    case kVkHome:
+        return QString::fromLatin1("Home");
+    case kVkEnd:
+        return QString::fromLatin1("End");
+    case kVkPrior:
+        return QString::fromLatin1("PageUp");
+    case kVkNext:
+        return QString::fromLatin1("PageDown");
+    case kVkLeft:
+        return QString::fromLatin1("Left");
+    case kVkRight:
+        return QString::fromLatin1("Right");
+    case kVkUp:
+        return QString::fromLatin1("Up");
+    case kVkDown:
+        return QString::fromLatin1("Down");
+    case kVkOemMinus:
+        return QString::fromLatin1("-");
+    case kVkOemPlus:
+        return QString::fromLatin1("=");
+    case kVkOem4:
+        return QString::fromLatin1("[");
+    case kVkOem6:
+        return QString::fromLatin1("]");
+    case kVkOem5:
+        return QString::fromLatin1("\\");
+    case kVkOem1:
+        return QString::fromLatin1(";");
+    case kVkOem7:
+        return QString::fromLatin1("'");
+    case kVkOemComma:
+        return QString::fromLatin1(",");
+    case kVkOemPeriod:
+        return QString::fromLatin1(".");
+    case kVkOem2:
+        return QString::fromLatin1("/");
+    case kVkOem3:
+        return QString::fromLatin1("`");
+    default:
+        break;
+    }
+    return virtualKey > 0 ? QString::fromLatin1("VK_%1").arg(virtualKey) : QString();
 }
 } // namespace
 
@@ -26,7 +224,14 @@ RuleDialog::RuleDialog(const QString& language, QWidget* parent)
     : QDialog(parent), m_language(UiText::normalizeLanguage(language)) {
     resize(520, 340);
 
-    m_hotkeyEdit = new HotkeyEdit(this);
+    m_ctrlCheck = new QCheckBox(QString::fromLatin1("Ctrl"), this);
+    m_altCheck = new QCheckBox(QString::fromLatin1("Alt"), this);
+    m_shiftCheck = new QCheckBox(QString::fromLatin1("Shift"), this);
+    m_winCheck = new QCheckBox(QString::fromLatin1("Win"), this);
+    m_hotkeyKeyEdit = new QLineEdit(this);
+    m_hotkeyKeyEdit->setFixedWidth(72);
+    m_hotkeyKeyEdit->setMaxLength(16);
+
     m_targetEdit = new QLineEdit(this);
     m_argumentsEdit = new QLineEdit(this);
     m_workingDirectoryEdit = new QLineEdit(this);
@@ -38,8 +243,15 @@ RuleDialog::RuleDialog(const QString& language, QWidget* parent)
     m_singleInstanceCheck = new QCheckBox(uiText(UiText::Key::SingleInstance), this);
     connect(m_targetEdit, SIGNAL(textChanged(QString)), this, SLOT(updateSingleInstanceAvailability()));
 
-    auto* recordButton = new QPushButton(uiText(UiText::Key::Record), this);
-    connect(recordButton, SIGNAL(clicked()), m_hotkeyEdit, SLOT(beginRecording()));
+    connect(m_ctrlCheck, SIGNAL(toggled(bool)), this, SLOT(updateManualHotkeyPreview()));
+    connect(m_altCheck, SIGNAL(toggled(bool)), this, SLOT(updateManualHotkeyPreview()));
+    connect(m_shiftCheck, SIGNAL(toggled(bool)), this, SLOT(updateManualHotkeyPreview()));
+    connect(m_winCheck, SIGNAL(toggled(bool)), this, SLOT(updateManualHotkeyPreview()));
+    connect(m_hotkeyKeyEdit, SIGNAL(textChanged(QString)), this, SLOT(updateManualHotkeyPreview()));
+    connect(m_hotkeyKeyEdit, SIGNAL(editingFinished()), this, SLOT(applyManualHotkey()));
+
+    auto* applyHotkeyButton = new QPushButton(uiText(UiText::Key::Apply), this);
+    connect(applyHotkeyButton, SIGNAL(clicked()), this, SLOT(applyManualHotkey()));
     auto* checkHotkeyButton = new QPushButton(uiText(UiText::Key::HotkeyCheck), this);
     connect(checkHotkeyButton, SIGNAL(clicked()), this, SLOT(checkHotkeyOccupancy()));
 
@@ -47,9 +259,15 @@ RuleDialog::RuleDialog(const QString& language, QWidget* parent)
     connect(m_browseButton, SIGNAL(clicked()), this, SLOT(browseTarget()));
 
     auto* hotkeyLayout = new QHBoxLayout;
-    hotkeyLayout->addWidget(m_hotkeyEdit, 1);
-    hotkeyLayout->addWidget(recordButton);
+    hotkeyLayout->addWidget(m_ctrlCheck);
+    hotkeyLayout->addWidget(m_altCheck);
+    hotkeyLayout->addWidget(m_shiftCheck);
+    hotkeyLayout->addWidget(m_winCheck);
+    hotkeyLayout->addWidget(new QLabel(QString::fromLatin1("+"), this));
+    hotkeyLayout->addWidget(m_hotkeyKeyEdit);
+    hotkeyLayout->addWidget(applyHotkeyButton);
     hotkeyLayout->addWidget(checkHotkeyButton);
+    hotkeyLayout->addStretch();
 
     auto* targetLayout = new QHBoxLayout;
     targetLayout->addWidget(m_targetEdit);
@@ -103,7 +321,7 @@ void RuleDialog::setRule(const HotkeyRule& rule) {
     m_rule = rule;
     m_category = rule.category;
     m_sectionId = rule.sectionId;
-    m_hotkeyEdit->setHotkey(rule.hotkey);
+    setManualHotkey(rule.hotkey);
     m_targetEdit->setText(rule.action.target);
     m_argumentsEdit->setText(rule.action.arguments);
     m_workingDirectoryEdit->setText(rule.action.workingDirectory);
@@ -121,7 +339,7 @@ HotkeyRule RuleDialog::rule() const {
     result.enabled = true;
     result.category = m_category;
     result.sectionId = m_sectionId;
-    result.hotkey = m_hotkeyEdit->hotkey();
+    result.hotkey = manualHotkey();
     result.action.type = actionTypeForCategory();
     result.action.target = m_targetEdit->text().trimmed();
     result.action.arguments = m_category == LauncherCategory::Program ? m_argumentsEdit->text().trimmed() : QString();
@@ -167,7 +385,7 @@ void RuleDialog::browseTarget() {
 }
 
 void RuleDialog::checkHotkeyOccupancy() {
-    const HotkeyConflictDetector::Result result = HotkeyConflictDetector::check(m_hotkeyEdit->hotkey(), m_language);
+    const HotkeyConflictDetector::Result result = HotkeyConflictDetector::check(manualHotkey(), m_language);
     const QMessageBox::Icon icon = result.availability == HotkeyConflictDetector::Availability::Available
                                        ? QMessageBox::Information
                                        : QMessageBox::Warning;
@@ -184,6 +402,79 @@ void RuleDialog::updateSingleInstanceAvailability() {
     if (!available) {
         m_singleInstanceCheck->setChecked(false);
     }
+}
+void RuleDialog::applyManualHotkey() {
+    if (!m_hotkeyKeyEdit) {
+        return;
+    }
+
+    const QString typedKey = m_hotkeyKeyEdit->text().trimmed();
+    if (typedKey.isEmpty()) {
+        setManualHotkey(HotkeyCombination());
+        return;
+    }
+
+    const HotkeyCombination hotkey = manualHotkey();
+    if (!hotkey.isValid()) {
+        QMessageBox::warning(this, uiText(UiText::Key::HotkeyWarning), uiText(UiText::Key::HotkeyManualInvalid));
+        m_hotkeyKeyEdit->setFocus();
+        m_hotkeyKeyEdit->selectAll();
+        return;
+    }
+    setManualHotkey(hotkey);
+}
+
+void RuleDialog::updateManualHotkeyPreview() {
+    if (!m_hotkeyKeyEdit) {
+        return;
+    }
+
+    const HotkeyCombination hotkey = manualHotkey();
+    m_hotkeyKeyEdit->setToolTip(hotkey.isValid() ? hotkey.displayText() : uiText(UiText::Key::HotkeyPlaceholder));
+}
+
+HotkeyCombination RuleDialog::manualHotkey() const {
+    HotkeyCombination hotkey;
+    const int key = m_hotkeyKeyEdit ? manualKeyFromText(m_hotkeyKeyEdit->text()) : 0;
+    if (key <= 0) {
+        return hotkey;
+    }
+
+    HotkeyModifiers modifiers = ModifierNone;
+    if (m_ctrlCheck && m_ctrlCheck->isChecked()) {
+        modifiers |= ModifierCtrl;
+    }
+    if (m_altCheck && m_altCheck->isChecked()) {
+        modifiers |= ModifierAlt;
+    }
+    if (m_shiftCheck && m_shiftCheck->isChecked()) {
+        modifiers |= ModifierShift;
+    }
+    if (m_winCheck && m_winCheck->isChecked()) {
+        modifiers |= ModifierWin;
+    }
+    hotkey.modifiers = modifiers;
+    hotkey.key = key;
+    return hotkey;
+}
+
+void RuleDialog::setManualHotkey(const HotkeyCombination& hotkey) {
+    if (m_ctrlCheck) {
+        m_ctrlCheck->setChecked(hotkey.modifiers.testFlag(ModifierCtrl));
+    }
+    if (m_altCheck) {
+        m_altCheck->setChecked(hotkey.modifiers.testFlag(ModifierAlt));
+    }
+    if (m_shiftCheck) {
+        m_shiftCheck->setChecked(hotkey.modifiers.testFlag(ModifierShift));
+    }
+    if (m_winCheck) {
+        m_winCheck->setChecked(hotkey.modifiers.testFlag(ModifierWin));
+    }
+    if (m_hotkeyKeyEdit) {
+        m_hotkeyKeyEdit->setText(manualKeyText(hotkey.key));
+    }
+    updateManualHotkeyPreview();
 }
 
 QString RuleDialog::uiText(UiText::Key key) const {
@@ -224,7 +515,8 @@ void RuleDialog::updateUiForCategory() {
     m_descriptionEdit->setPlaceholderText(uiText(UiText::Key::DescriptionPlaceholder));
     m_argumentsEdit->setPlaceholderText(uiText(UiText::Key::ArgumentsPlaceholder));
     m_workingDirectoryEdit->setPlaceholderText(uiText(UiText::Key::WorkingDirectoryPlaceholder));
-    m_hotkeyEdit->setPlaceholderText(uiText(UiText::Key::HotkeyPlaceholder));
+    m_hotkeyKeyEdit->setPlaceholderText(uiText(UiText::Key::HotkeyKeyPlaceholder));
+    updateManualHotkeyPreview();
     updateSingleInstanceAvailability();
 }
 

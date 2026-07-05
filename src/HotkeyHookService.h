@@ -39,9 +39,9 @@ private:
     bool isTrackedSuppressedKey(int virtualKey) const;
     bool isModifierKey(int virtualKey) const;
     void updatePressedModifierState(int virtualKey, bool pressed);
-    bool syncPendingWinRelease(const KBDLLHOOKSTRUCT* event, bool isKeyDown, bool isKeyUp, bool replayCurrentEvent);
     void trackSuppressedChord(const HotkeyCombination& hotkey);
     void clearSuppressedKey(int virtualKey);
+    void resetKeyboardState(const QString& reason);
 
     HHOOK m_hook = nullptr;
     static HotkeyHookService* s_instance;
@@ -52,7 +52,6 @@ private:
     QSet<int> m_suppressedKeys;
     QHash<int, QString> m_suppressedTriggerIds;
     HotkeyModifiers m_pressedModifiers = ModifierNone;
-    bool m_pendingWinReleaseSync = false;
     bool m_leftWinPhysicallyDown = false;
     bool m_rightWinPhysicallyDown = false;
 #endif

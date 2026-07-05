@@ -158,6 +158,7 @@ enum class Key {
     SingleInstance,
     Hotkey,
     Record,
+    Apply,
     Browse,
     SelectFolder,
     SelectProgram,
@@ -168,6 +169,8 @@ enum class Key {
     ArgumentsPlaceholder,
     WorkingDirectoryPlaceholder,
     HotkeyPlaceholder,
+    HotkeyKeyPlaceholder,
+    HotkeyManualInvalid,
     TrayTooltip,
     SystemTrayUnavailable
 };
