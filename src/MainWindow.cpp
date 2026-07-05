@@ -1294,7 +1294,11 @@ void MainWindow::buildUi() {
         navBarLayout->addWidget(button, 1);
         m_navButtons.insert(category, button);
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    connect(m_navGroup, SIGNAL(idClicked(int)), this, SLOT(onCategoryButtonClicked(int)));
+#else
     connect(m_navGroup, SIGNAL(buttonClicked(int)), this, SLOT(onCategoryButtonClicked(int)));
+#endif
 
     contentLayout->addWidget(searchBand);
     contentLayout->addWidget(m_navBar);
