@@ -113,6 +113,7 @@ private slots:
     void refreshLauncher();
     void updateLauncherGrids();
     void showHotkeyListDialog();
+    void hideHotkeyVisualFeedback();
     void showItemAppearanceDialog();
     void showSectionAppearanceDialog();
     void showCategoryAppearanceDialog();
@@ -187,6 +188,7 @@ private:
     void revealFromTopAutoHide();
     void setAlwaysOnTop(bool enabled);
     void setTaskbarButtonVisible(bool visible);
+    void showHotkeyVisualFeedback();
     QScreen* currentScreen() const;
     QRect currentScreenAvailableGeometry() const;
 
@@ -262,6 +264,7 @@ private:
     QPoint m_pendingContextGlobalPos;
     bool m_ignoreNextContextMenuEvent = false;
     QTimer m_autoHideTimer;
+    QPointer<QWidget> m_hotkeyFeedbackOverlay;
     QRect m_autoHideShownGeometry;
     bool m_topAutoHidden = false;
     QPointer<QProgressDialog> m_updateProgressDialog;

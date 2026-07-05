@@ -30,6 +30,10 @@ QString keyName(int virtualKey) {
         return QString::fromLatin1("VK_LWIN");
     case VK_RWIN:
         return QString::fromLatin1("VK_RWIN");
+    case VK_CONTROL:
+        return QString::fromLatin1("VK_CONTROL");
+    case VK_SHIFT:
+        return QString::fromLatin1("VK_SHIFT");
     case VK_F24:
         return QString::fromLatin1("VK_F24");
     default:
@@ -65,20 +69,40 @@ bool isPhysicalKeyDown(int virtualKey) {
     return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
 }
 
-void sendCancelStartMenuInput() {
+bool isAnyControlKeyDown() {
+    return isPhysicalKeyDown(VK_CONTROL) || isPhysicalKeyDown(VK_LCONTROL) || isPhysicalKeyDown(VK_RCONTROL);
+}
+
+bool isAnyShiftKeyDown() {
+    return isPhysicalKeyDown(VK_SHIFT) || isPhysicalKeyDown(VK_LSHIFT) || isPhysicalKeyDown(VK_RSHIFT);
+}
+
+int cancelStartMenuVirtualKey(HotkeyModifiers modifiers) {
+    if (!modifiers.testFlag(ModifierCtrl) && !isAnyControlKeyDown()) {
+        return VK_CONTROL;
+    }
+    if (!modifiers.testFlag(ModifierShift) && !isAnyShiftKeyDown()) {
+        return VK_SHIFT;
+    }
+    return VK_F24;
+}
+
+int sendCancelStartMenuInput(HotkeyModifiers modifiers) {
+    const int cancelKey = cancelStartMenuVirtualKey(modifiers);
     INPUT inputs[2];
     ZeroMemory(inputs, sizeof(inputs));
 
     inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = VK_F24;
+    inputs[0].ki.wVk = static_cast<WORD>(cancelKey);
     inputs[0].ki.dwExtraInfo = kCancelStartMenuExtraInfo;
 
     inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = VK_F24;
+    inputs[1].ki.wVk = static_cast<WORD>(cancelKey);
     inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
     inputs[1].ki.dwExtraInfo = kCancelStartMenuExtraInfo;
 
     SendInput(2, inputs, sizeof(INPUT));
+    return cancelKey;
 }
 
 void sendWinKeyUp(int virtualKey) {
@@ -313,11 +337,12 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
         m_suppressedTriggerIds.insert(rule->hotkey.key, triggerId);
         if (rule->hotkey.modifiers.testFlag(ModifierWin)) {
             // The real trigger key is swallowed, so the shell would otherwise
-            // see a lone Win press. Send a no-op key while Win is still down so
-            // Start-menu activation is cancelled without hiding the Win release.
-            sendCancelStartMenuInput();
-            logHotkeyState(QString::fromLatin1("cancel-start-menu-input trigger=%1 %2")
-                               .arg(triggerId,
+            // see a lone Win press. Tap a free modifier while Win is still down;
+            // this cancels Start-menu activation with less visual disturbance
+            // than sending an extra function-key chord to the shell.
+            const int cancelKey = sendCancelStartMenuInput(modifiers);
+            logHotkeyState(QString::fromLatin1("cancel-start-menu-input trigger=%1 key=%2 %3")
+                               .arg(triggerId, keyName(cancelKey),
                                     hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
         }
         const HotkeyRule ruleCopy = *rule;

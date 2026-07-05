@@ -13,6 +13,9 @@
 #include <QBrush>
 #include <QCheckBox>
 #include <QCloseEvent>
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+#include <QDesktopWidget>
+#endif
 #include <QColorDialog>
 #include <QContextMenuEvent>
 #include <QCryptographicHash>
@@ -106,11 +109,47 @@ constexpr int AutoHideSnapDistance = 36;
 constexpr int AutoHideTriggerHeight = 4;
 constexpr int AutoHideRevealDistance = 4;
 constexpr int AutoHidePollIntervalMs = 80;
+constexpr int HotkeyFeedbackDurationMs = 90;
+constexpr qreal HotkeyFeedbackOpacity = 0.18;
 constexpr const char* StartupMinimizedArgument = "--startup-minimized";
 
 #if defined(Q_OS_WIN) && !defined(CALG_SHA_256)
 #define CALG_SHA_256 (ALG_CLASS_HASH | ALG_TYPE_ANY | ALG_SID_SHA_256)
 #endif
+
+QRect hotkeyFeedbackScreenGeometry() {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    QDesktopWidget* desktop = QApplication::desktop();
+    return desktop ? desktop->screenGeometry(QCursor::pos()) : QRect();
+#else
+    const QPoint cursorPosition = QCursor::pos();
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    for (QScreen* screen : screens) {
+        if (screen && screen->geometry().contains(cursorPosition)) {
+            return screen->geometry();
+        }
+    }
+    if (QScreen* primaryScreen = QGuiApplication::primaryScreen()) {
+        return primaryScreen->geometry();
+    }
+    return QRect();
+#endif
+}
+
+void applyHotkeyFeedbackWindowOptions(QWidget* overlay) {
+    if (!overlay) {
+        return;
+    }
+    overlay->setAttribute(Qt::WA_ShowWithoutActivating, true);
+    overlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+#ifdef Q_OS_WIN
+    HWND hwnd = reinterpret_cast<HWND>(overlay->winId());
+    if (hwnd) {
+        const LONG_PTR style = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT);
+    }
+#endif
+}
 
 bool wstartStartupRegistrationSupported() {
 #ifdef Q_OS_WIN
@@ -2211,12 +2250,41 @@ void MainWindow::onHotkeyTriggered(const HotkeyRule& rule) {
         return;
     }
 
+    showHotkeyVisualFeedback();
+
     QString error;
     if (!m_runner.run(rule.action, &error)) {
         setStatus(uiText(UiText::Key::LaunchFailed).arg(error));
         return;
     }
     setStatus(uiText(UiText::Key::Launched).arg(ruleTitle(rule)));
+}
+
+void MainWindow::showHotkeyVisualFeedback() {
+    QRect geometry = hotkeyFeedbackScreenGeometry();
+    if (!geometry.isValid()) {
+        return;
+    }
+
+    if (!m_hotkeyFeedbackOverlay) {
+        m_hotkeyFeedbackOverlay = new QWidget(nullptr, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+        m_hotkeyFeedbackOverlay->setObjectName(QString::fromLatin1("hotkeyFeedbackOverlay"));
+        m_hotkeyFeedbackOverlay->setAutoFillBackground(true);
+        m_hotkeyFeedbackOverlay->setStyleSheet(QString::fromLatin1("background-color: black;"));
+        m_hotkeyFeedbackOverlay->setWindowOpacity(HotkeyFeedbackOpacity);
+        applyHotkeyFeedbackWindowOptions(m_hotkeyFeedbackOverlay);
+    }
+
+    m_hotkeyFeedbackOverlay->setGeometry(geometry);
+    m_hotkeyFeedbackOverlay->show();
+    m_hotkeyFeedbackOverlay->raise();
+    QTimer::singleShot(HotkeyFeedbackDurationMs, this, SLOT(hideHotkeyVisualFeedback()));
+}
+
+void MainWindow::hideHotkeyVisualFeedback() {
+    if (m_hotkeyFeedbackOverlay) {
+        m_hotkeyFeedbackOverlay->hide();
+    }
 }
 
 void MainWindow::loadDocument() {
