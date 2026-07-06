@@ -357,7 +357,7 @@ void CoreTests::sectionAndCategoryAppearanceDefaultsAndFallback() {
     const LauncherSectionAppearance parsedSection = LauncherSectionAppearance::fromJson(invalid);
     QVERIFY(parsedSection.iconWidth >= 12);
     QVERIFY(parsedSection.iconHeight <= 96);
-    QVERIFY(parsedSection.headerHeight >= 24);
+    QVERIFY(parsedSection.headerHeight >= 12);
     QVERIFY(parsedSection.fontPointSize <= 18);
     QCOMPARE(parsedSection.textColor, QString());
 
@@ -367,6 +367,12 @@ void CoreTests::sectionAndCategoryAppearanceDefaultsAndFallback() {
     QVERIFY(parsedCategory.buttonHeight <= 96);
     QVERIFY(parsedCategory.fontPointSize <= 18);
     QCOMPARE(parsedCategory.textColor, QString());
+
+    QJsonObject tooSmall;
+    tooSmall["headerHeight"] = 1;
+    tooSmall["buttonHeight"] = 1;
+    QVERIFY(LauncherSectionAppearance::fromJson(tooSmall).headerHeight >= 12);
+    QVERIFY(LauncherCategoryAppearance::fromJson(tooSmall).buttonHeight >= 12);
 }
 
 void CoreTests::defaultSystemToolsAreSeededWithoutHotkeys() {

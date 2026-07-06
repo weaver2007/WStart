@@ -406,7 +406,7 @@ LauncherSectionAppearance LauncherSectionAppearance::fromJson(const QJsonObject&
     LauncherSectionAppearance appearance;
     appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
     appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
-    appearance.headerHeight = QtCompat::boundedInt(object.value("headerHeight").toInt(appearance.headerHeight), 24, 96);
+    appearance.headerHeight = QtCompat::boundedInt(object.value("headerHeight").toInt(appearance.headerHeight), 12, 96);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
     appearance.fontPointSize =
         QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);
@@ -430,7 +430,7 @@ LauncherCategoryAppearance LauncherCategoryAppearance::fromJson(const QJsonObjec
     LauncherCategoryAppearance appearance;
     appearance.iconWidth = QtCompat::boundedInt(object.value("iconWidth").toInt(appearance.iconWidth), 12, 96);
     appearance.iconHeight = QtCompat::boundedInt(object.value("iconHeight").toInt(appearance.iconHeight), 12, 96);
-    appearance.buttonHeight = QtCompat::boundedInt(object.value("buttonHeight").toInt(appearance.buttonHeight), 24, 96);
+    appearance.buttonHeight = QtCompat::boundedInt(object.value("buttonHeight").toInt(appearance.buttonHeight), 12, 96);
     appearance.fontFamily = object.value("fontFamily").toString(appearance.fontFamily).trimmed();
     appearance.fontPointSize =
         QtCompat::boundedInt(object.value("fontPointSize").toInt(appearance.fontPointSize), 6, 18);

@@ -2050,7 +2050,6 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
             sectionHeader = sectionHeader->parentWidget();
         }
         if (sectionHeader) {
-            expandSectionOnly(sectionHeader->property("sectionId").toString());
             return true;
         }
     }
@@ -2074,7 +2073,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
             sectionHeader = sectionHeader->parentWidget();
         }
         if (sectionHeader) {
-            expandSectionOnly(sectionHeader->property("sectionId").toString());
+            toggleSectionCollapsed(sectionHeader->property("sectionId").toString());
             return true;
         }
         m_dragPosition = {};
@@ -2765,7 +2764,7 @@ void MainWindow::showSectionAppearanceDialog() {
     const LauncherSectionAppearance appearance = m_document.settings.sectionAppearance;
     auto* iconWidth = makeSpin(12, 96, appearance.iconWidth);
     auto* iconHeight = makeSpin(12, 96, appearance.iconHeight);
-    auto* headerHeight = makeSpin(24, 96, appearance.headerHeight);
+    auto* headerHeight = makeSpin(12, 96, appearance.headerHeight);
     auto* fontFamily = new QFontComboBox(dialog);
     if (!appearance.fontFamily.isEmpty()) {
         fontFamily->setCurrentFont(QFont(appearance.fontFamily));
@@ -2838,7 +2837,7 @@ void MainWindow::showCategoryAppearanceDialog() {
     const LauncherCategoryAppearance appearance = m_document.settings.categoryAppearance;
     auto* iconWidth = makeSpin(12, 96, appearance.iconWidth);
     auto* iconHeight = makeSpin(12, 96, appearance.iconHeight);
-    auto* buttonHeight = makeSpin(24, 96, appearance.buttonHeight);
+    auto* buttonHeight = makeSpin(12, 96, appearance.buttonHeight);
     auto* fontFamily = new QFontComboBox(dialog);
     if (!appearance.fontFamily.isEmpty()) {
         fontFamily->setCurrentFont(QFont(appearance.fontFamily));
@@ -3012,6 +3011,10 @@ void MainWindow::resetCategoryTextColor() {
 
 void MainWindow::applyCategoryAppearance() {
     const LauncherCategoryAppearance appearance = scaledAppearance(m_document.settings.categoryAppearance);
+    if (m_navBar) {
+        m_navBar->setFixedHeight(appearance.buttonHeight);
+        m_navBar->updateGeometry();
+    }
     for (QToolButton* button : m_navButtons) {
         if (!button) {
             continue;
@@ -3354,9 +3357,58 @@ void MainWindow::toggleSectionCollapsed(const QString& sectionId) {
     if (index < 0) {
         return;
     }
-    m_document.sections[index].collapsed = !m_document.sections[index].collapsed;
-    saveDocument();
-    rebuildSections();
+
+    const LauncherSection current = m_document.sections[index];
+    QVector<LauncherSection> sections;
+    for (const LauncherSection& section : m_document.sections) {
+        if (section.category == current.category) {
+            sections.push_back(section);
+        }
+    }
+    std::sort(sections.begin(), sections.end(), [](const LauncherSection& left, const LauncherSection& right) {
+        if (left.sortOrder == right.sortOrder) {
+            return QString::localeAwareCompare(left.name, right.name) < 0;
+        }
+        return left.sortOrder < right.sortOrder;
+    });
+
+    int visibleIndex = -1;
+    for (int i = 0; i < sections.size(); ++i) {
+        if (sections[i].id == sectionId) {
+            visibleIndex = i;
+            break;
+        }
+    }
+    if (visibleIndex < 0) {
+        return;
+    }
+
+    QString targetSectionId;
+    if (current.collapsed) {
+        targetSectionId = sectionId;
+    } else if (sections.size() > 1) {
+        targetSectionId = visibleIndex + 1 < sections.size() ? sections[visibleIndex + 1].id
+                                                         : sections[visibleIndex - 1].id;
+    } else {
+        return;
+    }
+
+    bool changed = false;
+    for (LauncherSection& section : m_document.sections) {
+        if (section.category != current.category) {
+            continue;
+        }
+        const bool shouldCollapse = section.id != targetSectionId;
+        if (section.collapsed != shouldCollapse) {
+            section.collapsed = shouldCollapse;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        saveDocument();
+        rebuildSections();
+    }
 }
 
 void MainWindow::addRuleToSection(const QString& sectionId) {
