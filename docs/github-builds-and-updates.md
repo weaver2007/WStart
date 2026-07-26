@@ -2,13 +2,13 @@
 
 ## Build workflows
 
-The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix for pull requests, manual runs, and version tags matching `v*`. Normal pushes to `main` do not trigger this workflow:
+The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix for pull requests and manual runs only. Normal pushes to `main` and version tags do not trigger this workflow:
 
 - Windows / Qt 6.8.3 / VS2026 / dynamic Qt / x64
 - macOS / Qt 6.8.3 / clang / dynamic Qt / x64
 - Linux / Qt 6.8.3 / gcc / dynamic Qt / x64
 
-The CI workflow uploads a Windows zip artifact for successful main builds. Release packaging is handled separately by
+The CI workflow uploads a Windows zip artifact for successful Windows matrix builds. Release packaging is handled separately by
 `.github/workflows/release-quick.yml` and `.github/workflows/release.yml`.
 
 The full local variant matrix remains represented by `CMakePresets.json`. Running every variant in GitHub Actions would
@@ -20,7 +20,7 @@ global hotkeys remain disabled until platform-specific backends are implemented.
 
 ## Releases
 
-`.github/workflows/release-quick.yml` publishes the default low-cost release when a tag matching `v*` is pushed:
+`.github/workflows/release-quick.yml` is the only workflow that runs automatically when a tag matching `v*` is pushed. It publishes the default low-cost release:
 
 ```powershell
 git tag v0.3.0
