@@ -4,9 +4,9 @@
 
 The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix for pull requests, manual runs, and version tags matching `v*`. Normal pushes to `main` do not trigger this workflow:
 
-- Windows / Qt 6.11.1 / VS2026 / dynamic Qt / x64
-- macOS / Qt 6.11.1 / clang / dynamic Qt / x64
-- Linux / Qt 6.11.1 / gcc / dynamic Qt / x64
+- Windows / Qt 6.8.3 / VS2026 / dynamic Qt / x64
+- macOS / Qt 6.8.3 / clang / dynamic Qt / x64
+- Linux / Qt 6.8.3 / gcc / dynamic Qt / x64
 
 The CI workflow uploads a Windows zip artifact for successful main builds. Release packaging is handled separately by
 `.github/workflows/release-quick.yml` and `.github/workflows/release.yml`.

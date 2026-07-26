@@ -1,9 +1,9 @@
 param(
     [string]$Version = "0.2.0",
-    [string]$DynamicBuildPreset = "qt6.11.1-msvc2022-dynamic-x64-release",
-    [string]$DynamicConfigurePreset = "qt6.11.1-msvc2022-dynamic-x64",
-    [string]$StaticBuildPreset = "qt6.11.1-msvc2022-static-x64-release",
-    [string]$StaticConfigurePreset = "qt6.11.1-msvc2022-static-x64",
+    [string]$DynamicBuildPreset = "qt6.8.3-msvc2022-dynamic-x64-release",
+    [string]$DynamicConfigurePreset = "qt6.8.3-msvc2022-dynamic-x64",
+    [string]$StaticBuildPreset = "qt6.8.3-msvc2022-static-x64-release",
+    [string]$StaticConfigurePreset = "qt6.8.3-msvc2022-static-x64",
     [string]$BinaryCreator = "D:\Qt\Tools\QtInstallerFramework\4.10\bin\binarycreator.exe",
     [string]$OutputDir = "out\release"
 )
@@ -78,8 +78,8 @@ function Expand-Template([string]$Source, [string]$Destination, [hashtable]$Valu
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $outputRoot = Resolve-RepoPath $OutputDir
-$installerName = "WStart-$Version-setup-qt6.11.1-msvc2022-dynamic-x64.exe"
-$portableName = "WStart-$Version-portable-qt6.11.1-msvc2022-static-x64.zip"
+$installerName = "WStart-$Version-setup-qt6.8.3-msvc2022-dynamic-x64.exe"
+$portableName = "WStart-$Version-portable-qt6.8.3-msvc2022-static-x64.zip"
 $dynamicBuildDir = Join-Path $repoRoot "out\build\$DynamicConfigurePreset"
 $staticBuildDir = Join-Path $repoRoot "out\build\$StaticConfigurePreset"
 $dynamicReleaseDir = Join-Path $dynamicBuildDir "Release"

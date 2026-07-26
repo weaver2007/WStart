@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  QT_VERSION: 6.11.1
+  QT_VERSION: 6.8.3
   UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/releases/latest
 
 jobs:
@@ -20,21 +20,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows / Qt 6.11.1 / VS2026 / x64
+          - name: Windows / Qt 6.8.3 / VS2026 / x64
             os: windows-2025
             qt-host: windows
             qt-arch: win64_msvc2022_64
-            build-dir: out/build/github-windows-qt6.11.1-vs2026-dynamic-x64
-          - name: macOS / Qt 6.11.1 / clang / x64
+            build-dir: out/build/github-windows-qt6.8.3-vs2026-dynamic-x64
+          - name: macOS / Qt 6.8.3 / clang / x64
             os: macos-15-intel
             qt-host: mac
             qt-arch: clang_64
-            build-dir: out/build/github-macos-qt6.11.1-clang-x64
-          - name: Linux / Qt 6.11.1 / gcc / x64
+            build-dir: out/build/github-macos-qt6.8.3-clang-x64
+          - name: Linux / Qt 6.8.3 / gcc / x64
             os: ubuntu-22.04
             qt-host: linux
             qt-arch: linux_gcc_64
-            build-dir: out/build/github-linux-qt6.11.1-gcc-x64
+            build-dir: out/build/github-linux-qt6.8.3-gcc-x64
 
     steps:
       - uses: actions/checkout@v7
@@ -104,7 +104,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $artifactName = "WStart-qt6.11.1-vs2026-dynamic-x64"
+          $artifactName = "WStart-qt6.8.3-vs2026-dynamic-x64"
           $packageRoot = Join-Path $env:RUNNER_TEMP $artifactName
           New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
           Copy-Item -Path (Join-Path "${{ matrix.build-dir }}" "Release\*") -Destination $packageRoot -Recurse -Force

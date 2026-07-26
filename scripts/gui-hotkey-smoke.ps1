@@ -1,5 +1,5 @@
 param(
-    [string]$ExePath = (Join-Path $PSScriptRoot '..\out\build\qt6.11.1-msvc2022-dynamic-x64\WStart.exe'),
+    [string]$ExePath = (Join-Path $PSScriptRoot '..\out\build\qt6.8.3-msvc2022-dynamic-x64\WStart.exe'),
     [string]$ConfigPath = (Join-Path $env:LOCALAPPDATA 'WStart\WStart\rules.json'),
     [switch]$StrictStartMenuCheck,
     [switch]$KeepWStartRunning

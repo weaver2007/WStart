@@ -33,7 +33,7 @@ WStart 是一个桌面快捷启动与全局快捷键管理工具。它以轻量�
 - Qt 5.6.3 变体按支持 Windows XP 的目标组织。
 - Qt 5.15.2 用于覆盖 Qt5 LTS 和 Windows 7 兼容诉求。
 - Qt 6.8.3 用于 Qt6 LTS 主要版本。
-- Qt 6.11.1 用于跟进最新 Qt6 发行版本。
+- 最新 Qt 版本用于跟进最新 Qt 运行环境。
 
 ### 4.2 macOS 与 Linux
 
@@ -388,7 +388,7 @@ WStart 是一个桌面快捷启动与全局快捷键管理工具。它以轻量�
 - Qt 5.6.3：用于最后一代 Windows XP 目标构建。
 - Qt 5.15.2：用于 Qt5 最后 LTS 和 Windows 7 目标。
 - Qt 6.8.3：用于 Qt6 LTS。
-- Qt 6.11.1：用于跟进最新 Qt6 发布版。
+- 最新 Qt 版本：用于跟进最新 Qt 发布版。
 
 非 LTS 且无特殊目的的版本可以清理，不作为长期维护变体。
 
@@ -405,7 +405,7 @@ WStart 是一个桌面快捷启动与全局快捷键管理工具。它以轻量�
 
 示例：
 
-- `qt6.11.1-msvc2022-dynamic-x64-release`
+- `qt6.8.3-msvc2022-dynamic-x64-release`
 - `qt5.6.3-msvc2015-xp-static-x86-release`
 - `qt4.8.7-msvc-dynamic-x86-release`
 
