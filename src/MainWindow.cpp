@@ -466,6 +466,24 @@ bool confirm(QWidget* parent, const QString& language, const QString& title, con
     return box.exec() == QMessageBox::Yes;
 }
 
+bool isDangerousSystemAction(const HotkeyRule& rule) {
+    const QString target = QFileInfo(rule.action.target).fileName().toLower();
+    QString arguments = rule.action.arguments.toLower();
+    arguments.replace('-', '/');
+    const QString title = rule.description.toLower();
+
+    if (target == QString::fromLatin1("shutdown.exe")) {
+        if (arguments.contains(QString::fromLatin1("/a"))) {
+            return false;
+        }
+        return true;
+    }
+
+    return title.contains(QString::fromUtf8("关闭计算机")) || title.contains(QString::fromUtf8("重启计算机")) ||
+           title.contains(QString::fromLatin1("shutdown")) || title.contains(QString::fromLatin1("restart")) ||
+           title.contains(QString::fromLatin1("reboot"));
+}
+
 QString cssQuoted(const QString& value) {
     QString escaped = value;
     escaped.replace("\\", "\\\\");
@@ -2308,6 +2326,10 @@ void MainWindow::onHotkeyTriggered(const HotkeyRule& rule) {
         return;
     }
 
+    if (!confirmDangerousRule(rule)) {
+        return;
+    }
+
     showHotkeyVisualFeedback();
 
     QString error;
@@ -3684,12 +3706,25 @@ void MainWindow::runRuleAsAdmin(const QString& ruleId) {
 
 #ifdef Q_OS_WIN
     const HotkeyRule& rule = m_document.rules[index];
+    if (!confirmDangerousRule(rule)) {
+        return;
+    }
     if (!shellExecutePath(rule.action.target, L"runas", rule.action.arguments, rule.action.workingDirectory)) {
         setStatus(uiText(UiText::Key::LaunchFailed).arg(QString::number(GetLastError())));
     }
 #else
     runRule(ruleId);
 #endif
+}
+
+bool MainWindow::confirmDangerousRule(const HotkeyRule& rule) {
+    if (!isDangerousSystemAction(rule)) {
+        return true;
+    }
+
+    QWidget* parent = isVisible() ? this : nullptr;
+    return confirm(parent, language(), uiText(UiText::Key::DangerousActionTitle),
+                   uiText(UiText::Key::DangerousActionConfirm).arg(ruleTitle(rule)));
 }
 
 void MainWindow::showExplorerContextMenuForRule(const QString& ruleId, const QPoint& globalPos) {
@@ -3819,7 +3854,11 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
     switch (rule.category) {
     case LauncherCategory::Program: {
         const QString target = QFileInfo(rule.action.target).fileName().toLower();
+        const QString arguments = rule.action.arguments.toLower();
         const QString title = rule.description.toLower();
+        const auto hasTitle = [&title](const char* text) { return title.contains(QString::fromUtf8(text)); };
+        const auto hasLatinTitle = [&title](const char* text) { return title.contains(QString::fromLatin1(text)); };
+        const auto hasArgument = [&arguments](const char* text) { return arguments.contains(QString::fromLatin1(text)); };
         const auto nativeOrFallback = [this](const QString& path, QStyle::StandardPixmap fallback) {
 #ifdef Q_OS_WIN
             const QIcon native = nativeFileIcon(path);
@@ -3831,32 +3870,106 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
 #endif
             return style()->standardIcon(fallback);
         };
-        if (target == "control.exe" || title.contains(QString::fromUtf8("控制面板")) || title.contains("control")) {
-            return nativeOrFallback("control.exe", QStyle::SP_ComputerIcon);
+
+        if (hasTitle("我的文档") || hasArgument("shell:personal")) {
+            return themedIcon("documents");
         }
-        if (target == "taskmgr.exe" || title.contains(QString::fromUtf8("任务管理器")) || title.contains("task")) {
-            return nativeOrFallback("taskmgr.exe", QStyle::SP_FileDialogDetailedView);
+        if (hasTitle("我的电脑") || hasArgument("shell:mycomputerfolder")) {
+            return themedIcon("control-panel");
         }
-        if (target == "cmd.exe" || target == "powershell.exe" || title.contains(QString::fromUtf8("命令")) ||
-            title.contains("terminal")) {
-            return nativeOrFallback("cmd.exe", QStyle::SP_ComputerIcon);
+        if (hasTitle("网络连接") || hasArgument("ncpa.cpl")) {
+            return themedIcon("network");
         }
-        if (target == "regedit.exe" || title.contains(QString::fromUtf8("注册表")) || title.contains("registry")) {
-            return nativeOrFallback("regedit.exe", QStyle::SP_FileIcon);
+        if (hasTitle("控制面板") || hasLatinTitle("control")) {
+            return themedIcon("control-panel");
         }
-        if (target == "services.msc" || title.contains(QString::fromUtf8("服务")) || title.contains("services")) {
-            return nativeOrFallback("services.msc", QStyle::SP_FileDialogInfoView);
+        if (hasTitle("回收站") || hasArgument("shell:recyclebinfolder")) {
+            return themedIcon("recycle");
         }
-        if (target == "devmgmt.msc" || title.contains(QString::fromUtf8("设备")) || title.contains("device")) {
-            return nativeOrFallback("devmgmt.msc", QStyle::SP_ComputerIcon);
+        if (hasTitle("打印机") || hasArgument("printers")) {
+            return themedIcon("printer");
         }
-        if (target == "calc.exe" || title.contains(QString::fromUtf8("计算器")) || title.contains("calculator")) {
-            return nativeOrFallback("calc.exe", QStyle::SP_FileIcon);
+        if (hasTitle("显示") || hasTitle("关闭显示器") || hasArgument("desk.cpl")) {
+            return themedIcon("display");
         }
-        if (target == "msinfo32.exe" || title.contains(QString::fromUtf8("系统信息")) ||
-            title.contains("system info")) {
-            return nativeOrFallback("msinfo32.exe", QStyle::SP_FileDialogInfoView);
+        if (hasTitle("截图") || target == QString::fromLatin1("ms-screenclip:")) {
+            return themedIcon("screenshot");
         }
+        if (hasTitle("日期时间") || hasArgument("timedate.cpl")) {
+            return themedIcon("clock");
+        }
+        if (hasLatinTitle("internet") || hasArgument("inetcpl.cpl")) {
+            return themedIcon("globe");
+        }
+        if (hasTitle("环境变量")) {
+            return themedIcon("settings");
+        }
+        if (hasTitle("系统属性") || hasTitle("系统信息") || target == QString::fromLatin1("msinfo32.exe") ||
+            hasLatinTitle("system info")) {
+            return themedIcon("system-info");
+        }
+        if (hasTitle("系统配置") || target == QString::fromLatin1("msconfig.exe")) {
+            return themedIcon("settings");
+        }
+        if (hasTitle("文件夹选项") || hasArgument("folders")) {
+            return themedIcon("folder");
+        }
+        if (target == "taskmgr.exe" || hasTitle("任务管理器") || hasLatinTitle("task")) {
+            return themedIcon("task-manager");
+        }
+        if (target == "cmd.exe" || target == "powershell.exe" || hasTitle("命令") || hasLatinTitle("terminal")) {
+            return themedIcon("terminal");
+        }
+        if (target == "regedit.exe" || hasTitle("注册表") || hasLatinTitle("registry")) {
+            return themedIcon("registry");
+        }
+        if (target == "services.msc" || hasTitle("服务") || hasLatinTitle("services")) {
+            return themedIcon("services");
+        }
+        if (target == "devmgmt.msc" || hasTitle("设备") || hasLatinTitle("device")) {
+            return themedIcon("device-manager");
+        }
+        if (target == "calc.exe" || hasTitle("计算器") || hasLatinTitle("calculator")) {
+            return themedIcon("calculator");
+        }
+        if (hasTitle("添加删除程序") || hasArgument("appwiz.cpl")) {
+            return themedIcon("settings");
+        }
+        if (target == "notepad.exe" || hasTitle("记事本")) {
+            return themedIcon("notepad");
+        }
+        if (hasTitle("磁盘清理") || hasTitle("磁盘管理") || target == "cleanmgr.exe" || target == "diskmgmt.msc") {
+            return themedIcon("disk");
+        }
+        if (hasTitle("计算机管理") || target == "compmgmt.msc") {
+            return themedIcon("control-panel");
+        }
+        if (hasTitle("组策略") || target == "gpedit.msc") {
+            return themedIcon("settings");
+        }
+        if (target == "mstsc.exe" || hasTitle("远程桌面")) {
+            return themedIcon("remote-desktop");
+        }
+        if (hasTitle("鼠标") || hasArgument("mouse")) {
+            return themedIcon("mouse");
+        }
+        if (hasTitle("键盘") || target == "osk.exe" || hasArgument("keyboard")) {
+            return themedIcon("keyboard");
+        }
+        if (hasTitle("声音") || hasTitle("音量") || hasArgument("mmsys.cpl") || target == "sndvol.exe") {
+            return themedIcon("sound");
+        }
+        if (hasTitle("电源选项") || target == "shutdown.exe" || hasArgument("powercfg.cpl")) {
+            return themedIcon("power");
+        }
+        if (hasTitle("防火墙") || hasLatinTitle("uac") || hasArgument("firewall.cpl") ||
+            target == "useraccountcontrolsettings.exe") {
+            return themedIcon("shield");
+        }
+        if (target == "control.exe") {
+            return themedIcon("control-panel");
+        }
+
         const QFileInfo targetInfo(rule.action.target);
         if (targetInfo.isFile() && targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0) {
             const QIcon fileIcon = QFileIconProvider().icon(targetInfo);
@@ -3870,7 +3983,7 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
                 return fileIcon;
             }
         }
-        return style()->standardIcon(QStyle::SP_ComputerIcon);
+        return nativeOrFallback(rule.action.target, QStyle::SP_ComputerIcon);
     }
     case LauncherCategory::Folder: {
         const QFileInfo targetInfo(rule.action.target);
@@ -3915,6 +4028,12 @@ QIcon MainWindow::iconForSection(const LauncherSection& section) const {
     if (section.encrypted) {
         return style()->standardIcon(QStyle::SP_MessageBoxWarning);
     }
+    if (section.iconKey == "system") {
+        return themedIcon("settings");
+    }
+    if (section.iconKey == "program") {
+        return themedIcon("control-panel");
+    }
     if (section.iconKey == "folder-system") {
         return themedIcon("folder");
     }
@@ -3941,17 +4060,21 @@ QIcon MainWindow::themedIcon(const QString& key) const {
     if (normalized == "settings") {
         return style()->standardIcon(QStyle::SP_FileDialogDetailedView);
     }
-    if (normalized == "globe") {
+    if (normalized == "globe" || normalized == "network") {
         return style()->standardIcon(QStyle::SP_DriveNetIcon);
     }
-    if (normalized == "control-panel" || normalized == "program" || normalized == "system") {
+    if (normalized == "control-panel" || normalized == "program" || normalized == "system" ||
+        normalized == "display" || normalized == "remote-desktop") {
         return style()->standardIcon(QStyle::SP_ComputerIcon);
     }
     if (normalized == "task-manager" || normalized == "services" || normalized == "system-info") {
         return style()->standardIcon(QStyle::SP_FileDialogInfoView);
     }
     if (normalized == "terminal" || normalized == "registry" || normalized == "calculator" ||
-        normalized == "device-manager") {
+        normalized == "device-manager" || normalized == "printer" || normalized == "recycle" ||
+        normalized == "power" || normalized == "clock" || normalized == "keyboard" || normalized == "mouse" ||
+        normalized == "sound" || normalized == "shield" || normalized == "screenshot" || normalized == "disk" ||
+        normalized == "notepad") {
         return style()->standardIcon(QStyle::SP_FileIcon);
     }
     return AppIcon::launcherIcon();

@@ -71,6 +71,7 @@ QVector<HotkeyRule> RuleStore::defaultSystemProgramRules() {
         {"日期时间", "control.exe", "timedate.cpl"},
         {"Internet", "control.exe", "inetcpl.cpl"},
         {"系统属性", "control.exe", "sysdm.cpl"},
+        {"环境变量", "rundll32.exe", "sysdm.cpl,EditEnvironmentVariables"},
         {"系统信息", "msinfo32.exe", ""},
         {"系统配置", "msconfig.exe", ""},
         {"文件夹选项", "control.exe", "folders"},
@@ -305,9 +306,27 @@ void RuleStore::ensureDefaultRules(LauncherDocument* document) const {
         });
     };
 
+    auto hasRuleId = [document](const QString& id) {
+        return std::any_of(document->rules.begin(), document->rules.end(), [&id](const HotkeyRule& rule) {
+            return rule.id == id;
+        });
+    };
+
+    auto uniqueRuleId = [&hasRuleId](const QString& preferredId) {
+        if (!hasRuleId(preferredId)) {
+            return preferredId;
+        }
+        QString id = preferredId + QString::fromLatin1("-") + QUuid::createUuid().toString();
+        id.remove(QLatin1Char('{'));
+        id.remove(QLatin1Char('}'));
+        return id;
+    };
+
     for (HotkeyRule rule : systemRules) {
         rule.sectionId = systemSection;
         if (!hasSystemRule(rule)) {
+            // Default rule ids were historically index-based, so inserted tools must not collide with existing configs.
+            rule.id = uniqueRuleId(rule.id);
             document->rules.push_back(rule);
         }
     }

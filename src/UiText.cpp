@@ -284,6 +284,11 @@ QString text(const QString& language, Key key) {
         return en ? "Delete item" : QString::fromUtf8("删除条目");
     case Key::DeleteItemConfirm:
         return en ? "Delete \"%1\"?" : QString::fromUtf8("确定删除“%1”？");
+    case Key::DangerousActionTitle:
+        return en ? "Confirm system action" : QString::fromUtf8("确认系统操作");
+    case Key::DangerousActionConfirm:
+        return en ? "\"%1\" may shut down or restart this computer. Continue?"
+                  : QString::fromUtf8("“%1”可能会关闭或重启电脑，确定继续吗？");
     case Key::UnlockSectionTitle:
         return en ? "Unlock section" : QString::fromUtf8("解锁栏目");
     case Key::UnlockSectionPrompt:

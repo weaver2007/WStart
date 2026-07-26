@@ -4,6 +4,7 @@
 #include "../src/UpdateChecker.h"
 
 #include <QFile>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -379,9 +380,12 @@ void CoreTests::defaultSystemToolsAreSeededWithoutHotkeys() {
     const QVector<HotkeyRule> rules = RuleStore::defaultSystemProgramRules();
     QStringList actualNames;
     QHash<QString, HotkeyRule> rulesByName;
+    QSet<QString> ruleIds;
     for (const HotkeyRule& rule : rules) {
         actualNames << rule.description;
         rulesByName.insert(rule.description, rule);
+        QVERIFY2(!ruleIds.contains(rule.id), qPrintable(QString("Duplicate default rule id: %1").arg(rule.id)));
+        ruleIds.insert(rule.id);
         QVERIFY(!rule.hotkey.isValid());
         QCOMPARE(rule.sectionId, QString("program-system"));
         QCOMPARE(static_cast<int>(rule.category), static_cast<int>(LauncherCategory::Program));
@@ -393,7 +397,8 @@ void CoreTests::defaultSystemToolsAreSeededWithoutHotkeys() {
     expectedNames << QString::fromUtf8("我的文档") << QString::fromUtf8("我的电脑") << QString::fromUtf8("网络连接")
                   << QString::fromUtf8("控制面板") << QString::fromUtf8("回收站") << QString::fromUtf8("打印机")
                   << QString::fromUtf8("显示") << QString::fromUtf8("截图") << QString::fromUtf8("日期时间")
-                  << QString::fromUtf8("Internet") << QString::fromUtf8("系统属性") << QString::fromUtf8("系统信息")
+                  << QString::fromUtf8("Internet") << QString::fromUtf8("系统属性") << QString::fromUtf8("环境变量")
+                  << QString::fromUtf8("系统信息")
                   << QString::fromUtf8("系统配置") << QString::fromUtf8("文件夹选项") << QString::fromUtf8("设备管理器")
                   << QString::fromUtf8("添加删除程序") << QString::fromUtf8("记事本") << QString::fromUtf8("磁盘清理")
                   << QString::fromUtf8("磁盘管理") << QString::fromUtf8("计算机管理") << QString::fromUtf8("服务")

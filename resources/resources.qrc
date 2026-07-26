@@ -16,5 +16,19 @@
         <file>icon-desktop.svg</file>
         <file>icon-documents.svg</file>
         <file>icon-downloads.svg</file>
+        <file>icon-network.svg</file>
+        <file>icon-power.svg</file>
+        <file>icon-printer.svg</file>
+        <file>icon-display.svg</file>
+        <file>icon-clock.svg</file>
+        <file>icon-recycle.svg</file>
+        <file>icon-keyboard.svg</file>
+        <file>icon-mouse.svg</file>
+        <file>icon-sound.svg</file>
+        <file>icon-shield.svg</file>
+        <file>icon-screenshot.svg</file>
+        <file>icon-remote-desktop.svg</file>
+        <file>icon-disk.svg</file>
+        <file>icon-notepad.svg</file>
     </qresource>
 </RCC>

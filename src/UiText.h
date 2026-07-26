@@ -130,6 +130,8 @@ enum class Key {
     HotkeyCheckWindowsOnly,
     DeleteItemTitle,
     DeleteItemConfirm,
+    DangerousActionTitle,
+    DangerousActionConfirm,
     UnlockSectionTitle,
     UnlockSectionPrompt,
     WrongPasswordTitle,
