@@ -2,7 +2,7 @@
 
 ## Build workflows
 
-The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix:
+The workflow in `.github/workflows/build.yml` builds the GitHub-hosted UI matrix for pull requests, manual runs, and version tags matching `v*`. Normal pushes to `main` do not trigger this workflow:
 
 - Windows / Qt 6.11.1 / VS2026 / dynamic Qt / x64
 - macOS / Qt 6.11.1 / clang / dynamic Qt / x64
