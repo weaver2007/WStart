@@ -46,6 +46,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPointer>
+#include <QProcess>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -164,24 +165,78 @@ QString wstartStartupCommandLine() {
     return QString("\"%1\" %2").arg(exePath).arg(QString::fromLatin1(StartupMinimizedArgument));
 }
 
-bool setWstartStartupRegistration(bool enabled, QString* error) {
 #ifdef Q_OS_WIN
+QString wstartStartupTaskName() {
+    return QString::fromLatin1("WStart");
+}
+
+bool removeLegacyWstartRunRegistration(QString* error) {
     QSettings runSettings(QString::fromLatin1("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
                           QSettings::NativeFormat);
-    const QString valueName = QString::fromLatin1("WStart");
-    if (enabled) {
-        runSettings.setValue(valueName, wstartStartupCommandLine());
-    } else {
-        runSettings.remove(valueName);
-    }
+    runSettings.remove(QString::fromLatin1("WStart"));
     runSettings.sync();
     if (runSettings.status() != QSettings::NoError) {
         if (error) {
-            *error = QString::fromLatin1("QSettings status %1").arg(static_cast<int>(runSettings.status()));
+            *error = QString::fromLatin1("Failed to remove legacy Run entry: QSettings status %1")
+                         .arg(static_cast<int>(runSettings.status()));
         }
         return false;
     }
     return true;
+}
+
+bool runSchtasks(const QStringList& arguments, QString* error) {
+    QProcess process;
+    process.start(QString::fromLatin1("schtasks.exe"), arguments);
+    if (!process.waitForStarted()) {
+        if (error) {
+            *error = QString::fromLatin1("Failed to start schtasks.exe.");
+        }
+        return false;
+    }
+    process.waitForFinished(-1);
+    const int exitCode = process.exitCode();
+    const QString output = QString::fromLocal8Bit(process.readAllStandardOutput()).trimmed();
+    const QString stderrText = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
+    const QString combined = (output + QString::fromLatin1("\n") + stderrText).trimmed();
+    if (exitCode == 0) {
+        return true;
+    }
+
+    if (error) {
+        *error = combined.isEmpty() ? QString::fromLatin1("schtasks.exe exit code %1").arg(exitCode) : combined;
+    }
+    return false;
+}
+#endif
+
+bool setWstartStartupRegistration(bool enabled, QString* error) {
+#ifdef Q_OS_WIN
+    QString cleanupError;
+    if (!removeLegacyWstartRunRegistration(&cleanupError)) {
+        if (error) {
+            *error = cleanupError;
+        }
+        return false;
+    }
+
+    const QString taskName = wstartStartupTaskName();
+    if (!enabled) {
+        if (!runSchtasks(QStringList() << QString::fromLatin1("/Query") << QString::fromLatin1("/TN") << taskName,
+                         nullptr)) {
+            return true;
+        }
+        return runSchtasks(QStringList() << QString::fromLatin1("/Delete") << QString::fromLatin1("/TN") << taskName
+                                        << QString::fromLatin1("/F"),
+                           error);
+    }
+
+    return runSchtasks(QStringList() << QString::fromLatin1("/Create") << QString::fromLatin1("/TN") << taskName
+                                    << QString::fromLatin1("/SC") << QString::fromLatin1("ONLOGON")
+                                    << QString::fromLatin1("/RL") << QString::fromLatin1("HIGHEST")
+                                    << QString::fromLatin1("/TR") << wstartStartupCommandLine()
+                                    << QString::fromLatin1("/F"),
+                       error);
 #else
     if (enabled) {
         if (error) {

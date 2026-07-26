@@ -58,44 +58,12 @@
     {
       "name": "msvc-vs2019-ninja-x64-base",
       "hidden": true,
-      "inherits": "base",
-      "generator": "Ninja",
-      "environment": {
-        "PATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x86;$penv{PATH}",
-        "INCLUDE": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/include;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/winrt",
-        "LIB": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x64;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/um/x64",
-        "LIBPATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x64;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x64"
-      },
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "cl",
-        "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_RC_COMPILER": "rc",
-        "CMAKE_MT": "mt",
-        "CMAKE_MAKE_PROGRAM": "C:/Strawberry/c/bin/ninja.exe",
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_SYSTEM_VERSION": "10.0.19041.0"
-      }
+      "inherits": "msvc-vs2026-base"
     },
     {
       "name": "msvc-vs2019-ninja-x86-base",
       "hidden": true,
-      "inherits": "base",
-      "generator": "Ninja",
-      "environment": {
-        "PATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/bin/Hostx64/x86;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x86;C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x64;$penv{PATH}",
-        "INCLUDE": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/include;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/winrt",
-        "LIB": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x86;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x86;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/ucrt/x86;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/um/x86",
-        "LIBPATH": "D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/lib/x86;D:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.29.30133/atlmfc/lib/x86"
-      },
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "cl",
-        "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_RC_COMPILER": "rc",
-        "CMAKE_MT": "mt",
-        "CMAKE_MAKE_PROGRAM": "C:/Strawberry/c/bin/ninja.exe",
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_SYSTEM_VERSION": "10.0.19041.0"
-      }
+      "inherits": "msvc-vs2026-x86-base"
     },
     {
       "name": "msvc-vs2015-xp-nmake-x86-base",

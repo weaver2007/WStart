@@ -19,13 +19,13 @@ permissions:
   contents: write
 
 env:
-  QT_VERSION: 6.8.3
+  QT_VERSION: 6.11.1
   UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/releases/latest
 
 jobs:
   quick-release:
     name: Windows x64 portable release
-    runs-on: windows-2022
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7
         with:
@@ -65,8 +65,8 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
-          cmake -S . -B out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64 `
-            -G "Visual Studio 17 2022" -A x64 `
+          cmake -S . -B out/build/release-windows-qt6.11.1-vs2026-dynamic-x64 `
+            -G "Visual Studio 18 2026" -A x64 `
             -DCMAKE_PREFIX_PATH="$env:QT_PREFIX" `
             -DHKM_QT_MAJOR=6 `
             -DHKM_DEPLOY_QT_RUNTIME=ON `
@@ -75,11 +75,11 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: cmake --build out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64 --config Release --parallel
+        run: cmake --build out/build/release-windows-qt6.11.1-vs2026-dynamic-x64 --config Release --parallel
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64 -C Release --output-on-failure
+        run: ctest --test-dir out/build/release-windows-qt6.11.1-vs2026-dynamic-x64 -C Release --output-on-failure
 
       - name: Package portable and update manifest
         shell: pwsh
@@ -92,7 +92,7 @@ jobs:
           $packageRoot = Join-Path $env:RUNNER_TEMP $artifactBase
           $payload = Join-Path $packageRoot "payload"
           New-Item -ItemType Directory -Force -Path $payload | Out-Null
-          Copy-Item -Path "out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64/Release/*" -Destination $payload -Recurse -Force
+          Copy-Item -Path "out/build/release-windows-qt6.11.1-vs2026-dynamic-x64/Release/*" -Destination $payload -Recurse -Force
 
           $portablePath = Join-Path (Get-Location) "$artifactBase-portable.zip"
           New-Item -ItemType File -Force -Path (Join-Path $payload "WStart.portable") | Out-Null

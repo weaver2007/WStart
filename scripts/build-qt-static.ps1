@@ -671,7 +671,6 @@ function Get-VcVarsAllCandidates() {
 
     foreach ($path in @(
         "D:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat",
-        "D:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat"
     )) {
         if (Test-Path $path) {
             $candidates.Add($path)
@@ -697,10 +696,6 @@ function Import-VsDevEnvironment([string]$Version, [string]$Arch) {
     }
 
     $vcvarsVersion = $null
-    if ($Version -eq "5.15.2") {
-        $vcvarsVersion = "14.29"
-    }
-
     foreach ($vcvars in $vcvarsCandidates) {
         $vcvarsArgs = @($requestedArch)
         if ($vcvarsVersion) {

@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 env:
-  QT_VERSION: 6.8.3
+  QT_VERSION: 6.11.1
   UPDATE_MANIFEST_URL: https://api.github.com/repos/${{ github.repository }}/releases/latest
 
 jobs:
@@ -27,55 +27,55 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows / Qt 6.8.3 / MSVC / x64
+          - name: Windows / Qt 6.11.1 / VS2026 / x64
             platform: windows
             arch: x64
-            os: windows-2022
+            os: windows-2025
             qt-host: windows
             qt-arch: win64_msvc2022_64
-            cmake-generator: Visual Studio 17 2022
+            cmake-generator: Visual Studio 18 2026
             cmake-arch: x64
-            build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-x64
-          - name: Windows / Qt 6.8.3 / MSVC / arm64
+            build-dir: out/build/release-windows-qt6.11.1-vs2026-dynamic-x64
+          - name: Windows / Qt 6.11.1 / VS2026 / arm64
             platform: windows
             arch: arm64
-            os: windows-11-arm
+            os: windows-11-vs2026-arm
             qt-host: windows
             qt-arch: win64_msvc2022_arm64_cross_compiled
             qt-host-arch: win64_msvc2022_64
-            cmake-generator: Visual Studio 17 2022
+            cmake-generator: Visual Studio 18 2026
             cmake-arch: ARM64
-            build-dir: out/build/release-windows-qt6.8.3-msvc2022-dynamic-arm64
-          - name: macOS / Qt 6.8.3 / clang / x64
+            build-dir: out/build/release-windows-qt6.11.1-vs2026-dynamic-arm64
+          - name: macOS / Qt 6.11.1 / clang / x64
             platform: macos
             arch: x64
             os: macos-15-intel
             qt-host: mac
             qt-arch: clang_64
-            build-dir: out/build/release-macos-qt6.8.3-clang-x64
-          - name: macOS / Qt 6.8.3 / clang / arm64
+            build-dir: out/build/release-macos-qt6.11.1-clang-x64
+          - name: macOS / Qt 6.11.1 / clang / arm64
             platform: macos
             arch: arm64
             os: macos-15
             qt-host: mac
             qt-arch: clang_64
-            build-dir: out/build/release-macos-qt6.8.3-clang-arm64
-          - name: Linux / Qt 6.8.3 / gcc / x64
+            build-dir: out/build/release-macos-qt6.11.1-clang-arm64
+          - name: Linux / Qt 6.11.1 / gcc / x64
             platform: linux
             arch: x64
             deb-arch: amd64
             os: ubuntu-24.04
             qt-host: linux
             qt-arch: linux_gcc_64
-            build-dir: out/build/release-linux-qt6.8.3-gcc-x64
-          - name: Linux / Qt 6.8.3 / gcc / arm64
+            build-dir: out/build/release-linux-qt6.11.1-gcc-x64
+          - name: Linux / Qt 6.11.1 / gcc / arm64
             platform: linux
             arch: arm64
             deb-arch: arm64
             os: ubuntu-24.04-arm
             qt-host: linux_arm64
             qt-arch: linux_gcc_arm64
-            build-dir: out/build/release-linux-qt6.8.3-gcc-arm64
+            build-dir: out/build/release-linux-qt6.11.1-gcc-arm64
 
     steps:
       - uses: actions/checkout@v7
