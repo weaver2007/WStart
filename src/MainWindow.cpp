@@ -959,7 +959,7 @@ bool showShellContextMenu(QWidget* parent, const QString& path, const QPoint& gl
 QString lightStyleSheet() {
     return R"(
         QMainWindow { background: #d7e7f7; }
-        QWidget#root { background: #f6fbff; border: 1px solid #95b4d1; }
+        QWidget#root { background: #7fb3ca; border: none; }
         QFrame#topPanel {
             background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #5be3c5, stop:1 #2b9bd7);
             border-bottom: 1px solid #7fb3ca;
@@ -1099,7 +1099,7 @@ QString lightStyleSheet() {
 QString darkStyleSheet() {
     return R"(
         QMainWindow { background: #101822; }
-        QWidget#root { background: #111923; border: 1px solid #355163; }
+        QWidget#root { background: #1b86a4; border: none; }
         QFrame#topPanel {
             background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #13866f, stop:1 #176b9e);
             border-bottom: 1px solid #315a6c;
@@ -1296,7 +1296,7 @@ void MainWindow::buildUi() {
     root->setObjectName("root");
     root->setAcceptDrops(true);
     auto* layout = new QVBoxLayout(root);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(1, 0, 1, 1);
     layout->setSpacing(0);
 
     auto* header = new QFrame(root);
@@ -1494,6 +1494,7 @@ void MainWindow::buildSettingsMenu() {
     }
     m_languageMenu = nullptr;
     m_themeMenu = nullptr;
+    m_pathStorageMenu = nullptr;
     m_settingsMenu = new QMenu(this);
     m_hotkeysEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeysEnabled));
     m_hotkeysEnabledAction->setCheckable(true);
@@ -1542,6 +1543,20 @@ void MainWindow::buildSettingsMenu() {
     connect(m_themeSystemAction, SIGNAL(triggered()), this, SLOT(setThemeSystem()));
     connect(m_themeLightAction, SIGNAL(triggered()), this, SLOT(setThemeLight()));
     connect(m_themeDarkAction, SIGNAL(triggered()), this, SLOT(setThemeDark()));
+
+    m_pathStorageMenu = m_settingsMenu->addMenu(uiText(UiText::Key::PathStorage));
+    auto* pathStorageGroup = new QActionGroup(m_pathStorageMenu);
+    pathStorageGroup->setExclusive(true);
+    m_pathRelativeAction = m_pathStorageMenu->addAction(uiText(UiText::Key::UseRelativePaths));
+    m_pathAbsoluteAction = m_pathStorageMenu->addAction(uiText(UiText::Key::UseAbsolutePaths));
+    QList<QAction*> pathStorageActions;
+    pathStorageActions << m_pathRelativeAction << m_pathAbsoluteAction;
+    for (QAction* action : pathStorageActions) {
+        action->setCheckable(true);
+        pathStorageGroup->addAction(action);
+    }
+    connect(m_pathRelativeAction, SIGNAL(triggered()), this, SLOT(setPathStorageRelative()));
+    connect(m_pathAbsoluteAction, SIGNAL(triggered()), this, SLOT(setPathStorageAbsolute()));
 
     m_itemAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::ItemAppearance));
     connect(m_itemAppearanceAction, SIGNAL(triggered()), this, SLOT(showItemAppearanceDialog()));
@@ -1600,6 +1615,9 @@ void MainWindow::retranslateUi() {
     if (m_themeMenu) {
         m_themeMenu->setTitle(uiText(UiText::Key::Theme));
     }
+    if (m_pathStorageMenu) {
+        m_pathStorageMenu->setTitle(uiText(UiText::Key::PathStorage));
+    }
     if (m_itemAppearanceAction) {
         m_itemAppearanceAction->setText(uiText(UiText::Key::ItemAppearance));
     }
@@ -1633,6 +1651,16 @@ void MainWindow::retranslateUi() {
         const QSignalBlocker blocker(m_themeDarkAction);
         m_themeDarkAction->setText(uiText(UiText::Key::ThemeDark));
         m_themeDarkAction->setChecked(m_document.settings.themeMode == "dark");
+    }
+    if (m_pathRelativeAction) {
+        const QSignalBlocker blocker(m_pathRelativeAction);
+        m_pathRelativeAction->setText(uiText(UiText::Key::UseRelativePaths));
+        m_pathRelativeAction->setChecked(m_document.settings.pathStorageMode != "absolute");
+    }
+    if (m_pathAbsoluteAction) {
+        const QSignalBlocker blocker(m_pathAbsoluteAction);
+        m_pathAbsoluteAction->setText(uiText(UiText::Key::UseAbsolutePaths));
+        m_pathAbsoluteAction->setChecked(m_document.settings.pathStorageMode == "absolute");
     }
     rebuildNavItems();
     refreshLauncher();
@@ -1708,6 +1736,14 @@ void MainWindow::setThemeLight() {
 
 void MainWindow::setThemeDark() {
     setThemeMode("dark");
+}
+
+void MainWindow::setPathStorageRelative() {
+    setPathStorageMode("relative");
+}
+
+void MainWindow::setPathStorageAbsolute() {
+    setPathStorageMode("absolute");
 }
 
 void MainWindow::setUpdatesEnabled(bool enabled) {
@@ -2773,6 +2809,20 @@ void MainWindow::setThemeMode(const QString& themeMode) {
     m_document.settings.themeMode = normalized;
     saveDocumentSilently();
     applyTheme();
+}
+
+void MainWindow::setPathStorageMode(const QString& mode) {
+    const QString normalized = mode.compare("absolute", Qt::CaseInsensitive) == 0 ? "absolute" : "relative";
+    const bool useAbsolute = normalized == "absolute";
+
+    for (HotkeyRule& rule : m_document.rules) {
+        rule.action = useAbsolute ? PathUtils::toAbsoluteAction(rule.action) : PathUtils::toPortableAction(rule.action);
+    }
+
+    m_document.settings.pathStorageMode = normalized;
+    saveDocumentSilently();
+    retranslateUi();
+    setStatus(uiText(useAbsolute ? UiText::Key::PathsConvertedAbsolute : UiText::Key::PathsConvertedRelative));
 }
 
 void MainWindow::showHotkeyListDialog() {

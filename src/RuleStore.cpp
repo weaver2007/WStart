@@ -185,7 +185,10 @@ bool RuleStore::saveDocument(const LauncherDocument& document, QString* error) c
     for (const HotkeyRule& rule : document.rules) {
         if (rule.isValid()) {
             HotkeyRule storedRule = rule;
-            storedRule.action = PathUtils::toPortableAction(storedRule.action);
+            storedRule.action =
+                document.settings.pathStorageMode.compare("absolute", Qt::CaseInsensitive) == 0
+                    ? PathUtils::toAbsoluteAction(storedRule.action)
+                    : PathUtils::toPortableAction(storedRule.action);
             rules.append(storedRule.toJson());
         }
     }

@@ -143,6 +143,7 @@ struct AppSettings {
     bool updatesEnabled = true;
     bool startupEnabled = false;
     QString themeMode = "system";
+    QString pathStorageMode = "relative";
     LauncherItemAppearance itemAppearance;
     LauncherSectionAppearance sectionAppearance;
     LauncherCategoryAppearance categoryAppearance;

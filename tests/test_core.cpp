@@ -212,6 +212,7 @@ void CoreTests::appSettingsRoundTrip() {
     settings.updatesEnabled = false;
     settings.startupEnabled = true;
     settings.themeMode = "dark";
+    settings.pathStorageMode = "absolute";
     settings.itemAppearance.itemWidth = 88;
     settings.itemAppearance.showEllipsis = true;
     settings.sectionAppearance.iconWidth = 22;
@@ -229,6 +230,7 @@ void CoreTests::appSettingsRoundTrip() {
     QCOMPARE(parsed.updatesEnabled, false);
     QCOMPARE(parsed.startupEnabled, true);
     QCOMPARE(parsed.themeMode, QString("dark"));
+    QCOMPARE(parsed.pathStorageMode, QString("absolute"));
     QCOMPARE(parsed.itemAppearance.itemWidth, 88);
     QCOMPARE(parsed.itemAppearance.showEllipsis, true);
     QCOMPARE(parsed.sectionAppearance.iconWidth, 22);
@@ -248,6 +250,7 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback() {
     QCOMPARE(defaults.updatesEnabled, true);
     QCOMPARE(defaults.startupEnabled, false);
     QCOMPARE(defaults.themeMode, QString("system"));
+    QCOMPARE(defaults.pathStorageMode, QString("relative"));
     QCOMPARE(defaults.itemAppearance.iconWidth, 48);
     QCOMPARE(defaults.itemAppearance.itemWidth, 64);
     QCOMPARE(defaults.sectionAppearance.iconWidth, 18);
@@ -263,12 +266,14 @@ void CoreTests::appSettingsDefaultsAndLanguageFallback() {
     invalid["updatesEnabled"] = false;
     invalid["startupEnabled"] = true;
     invalid["themeMode"] = "sepia";
+    invalid["pathStorageMode"] = "mapped";
     const AppSettings parsed = AppSettings::fromJson(invalid);
     QCOMPARE(parsed.language, QString("zh-CN"));
     QCOMPARE(parsed.hotkeysEnabled, false);
     QCOMPARE(parsed.updatesEnabled, false);
     QCOMPARE(parsed.startupEnabled, true);
     QCOMPARE(parsed.themeMode, QString("system"));
+    QCOMPARE(parsed.pathStorageMode, QString("relative"));
 }
 
 void CoreTests::itemAppearanceRoundTrip() {

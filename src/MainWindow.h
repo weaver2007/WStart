@@ -88,6 +88,8 @@ private slots:
     void setThemeSystem();
     void setThemeLight();
     void setThemeDark();
+    void setPathStorageRelative();
+    void setPathStorageAbsolute();
     void setUpdatesEnabled(bool enabled);
     void setStartupEnabled(bool enabled);
     void configureGithubToken();
@@ -136,6 +138,7 @@ private:
     void setCurrentCategory(LauncherCategory category);
     void setLanguage(const QString& language);
     void setThemeMode(const QString& themeMode);
+    void setPathStorageMode(const QString& mode);
     void applyTheme();
     void applyItemAppearanceChange();
     void applySectionAppearanceChange();
@@ -223,6 +226,7 @@ private:
     QMenu* m_settingsMenu = nullptr;
     QMenu* m_languageMenu = nullptr;
     QMenu* m_themeMenu = nullptr;
+    QMenu* m_pathStorageMenu = nullptr;
     QAction* m_hotkeysEnabledAction = nullptr;
     QAction* m_updatesEnabledAction = nullptr;
     QAction* m_startupEnabledAction = nullptr;
@@ -234,6 +238,8 @@ private:
     QAction* m_themeSystemAction = nullptr;
     QAction* m_themeLightAction = nullptr;
     QAction* m_themeDarkAction = nullptr;
+    QAction* m_pathRelativeAction = nullptr;
+    QAction* m_pathAbsoluteAction = nullptr;
     QAction* m_itemAppearanceAction = nullptr;
     QAction* m_sectionAppearanceAction = nullptr;
     QAction* m_categoryAppearanceAction = nullptr;

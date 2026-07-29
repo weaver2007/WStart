@@ -94,6 +94,16 @@ QString text(const QString& language, Key key) {
         return en ? "Light" : QString::fromUtf8("亮色");
     case Key::ThemeDark:
         return en ? "Dark" : QString::fromUtf8("暗色");
+    case Key::PathStorage:
+        return en ? "Path storage" : QString::fromUtf8("路径存储");
+    case Key::UseRelativePaths:
+        return en ? "Use relative paths" : QString::fromUtf8("使用相对路径");
+    case Key::UseAbsolutePaths:
+        return en ? "Use absolute paths" : QString::fromUtf8("使用绝对路径");
+    case Key::PathsConvertedRelative:
+        return en ? "Converted item paths to relative paths." : QString::fromUtf8("已将条目路径转换为相对路径。");
+    case Key::PathsConvertedAbsolute:
+        return en ? "Converted item paths to absolute paths." : QString::fromUtf8("已将条目路径转换为绝对路径。");
     case Key::ItemAppearance:
         return en ? "Item appearance" : QString::fromUtf8("条目外观");
     case Key::SectionAppearance:

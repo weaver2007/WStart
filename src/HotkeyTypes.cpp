@@ -339,11 +339,14 @@ QJsonObject AppSettings::toJson() const {
     const QString normalizedTheme = themeMode.compare("light", Qt::CaseInsensitive) == 0  ? "light"
                                     : themeMode.compare("dark", Qt::CaseInsensitive) == 0 ? "dark"
                                                                                           : "system";
+    const QString normalizedPathStorage =
+        pathStorageMode.compare("absolute", Qt::CaseInsensitive) == 0 ? "absolute" : "relative";
     return {{"language", normalizedLanguage},
             {"hotkeysEnabled", hotkeysEnabled},
             {"updatesEnabled", updatesEnabled},
             {"startupEnabled", startupEnabled},
             {"themeMode", normalizedTheme},
+            {"pathStorageMode", normalizedPathStorage},
             {"itemAppearance", itemAppearance.toJson()},
             {"sectionAppearance", sectionAppearance.toJson()},
             {"categoryAppearance", categoryAppearance.toJson()}};
@@ -452,6 +455,9 @@ AppSettings AppSettings::fromJson(const QJsonObject& object) {
     settings.themeMode = themeValue.compare("light", Qt::CaseInsensitive) == 0  ? "light"
                          : themeValue.compare("dark", Qt::CaseInsensitive) == 0 ? "dark"
                                                                                 : "system";
+    const QString pathStorageValue = object.value("pathStorageMode").toString(settings.pathStorageMode);
+    settings.pathStorageMode =
+        pathStorageValue.compare("absolute", Qt::CaseInsensitive) == 0 ? "absolute" : "relative";
     settings.itemAppearance = LauncherItemAppearance::fromJson(object.value("itemAppearance").toObject());
     settings.sectionAppearance = LauncherSectionAppearance::fromJson(object.value("sectionAppearance").toObject());
     settings.categoryAppearance = LauncherCategoryAppearance::fromJson(object.value("categoryAppearance").toObject());
