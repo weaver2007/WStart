@@ -262,6 +262,7 @@ set(HKM_SOURCES
     src/PathUtils.cpp
     src/RuleStore.cpp
     src/SelfUpdater.cpp
+    src/SystemIconProvider.cpp
     src/TrayController.cpp
     src/UiText.cpp
     src/UpdateChecker.cpp
@@ -278,6 +279,7 @@ set(HKM_HEADERS
     src/HotkeyTypes.h
     src/RuleStore.h
     src/SelfUpdater.h
+    src/SystemIconProvider.h
     src/TrayController.h
     src/UiText.h
     src/UpdateChecker.h

@@ -6,6 +6,7 @@
 #include "QtCompat.h"
 #include "RuleDialog.h"
 #include "SelfUpdater.h"
+#include "SystemIconProvider.h"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -73,7 +74,6 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
-#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -727,93 +727,6 @@ bool shellExecutePath(const QString& path, const wchar_t* verb, const QString& p
     return ShellExecuteExW(&info);
 }
 
-QString windowsKnownExecutablePath(const QString& fileName) {
-    const QString normalized = fileName.trimmed();
-    if (normalized.isEmpty() || QFileInfo(normalized).isAbsolute()) {
-        return normalized;
-    }
-
-    wchar_t windowsPath[MAX_PATH] = {};
-    const UINT windowsLength = GetWindowsDirectoryW(windowsPath, MAX_PATH);
-    if (windowsLength > 0 && windowsLength < MAX_PATH) {
-        const QDir windowsDir(fromWideString(windowsPath, static_cast<int>(windowsLength)));
-        const QString system32Path = windowsDir.filePath(QString::fromLatin1("System32/%1").arg(normalized));
-        if (QFileInfo(system32Path).exists()) {
-            return system32Path;
-        }
-        const QString windowsFilePath = windowsDir.filePath(normalized);
-        if (QFileInfo(windowsFilePath).exists()) {
-            return windowsFilePath;
-        }
-    }
-
-    return normalized;
-}
-
-QPixmap pixmapFromNativeIcon(HICON icon, int width, int height) {
-    if (!icon || width <= 0 || height <= 0) {
-        return QPixmap();
-    }
-
-    HDC screenDc = GetDC(nullptr);
-    if (!screenDc) {
-        return QPixmap();
-    }
-
-    BITMAPINFO bitmapInfo = {};
-    bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bitmapInfo.bmiHeader.biWidth = width;
-    bitmapInfo.bmiHeader.biHeight = -height;
-    bitmapInfo.bmiHeader.biPlanes = 1;
-    bitmapInfo.bmiHeader.biBitCount = 32;
-    bitmapInfo.bmiHeader.biCompression = BI_RGB;
-
-    void* bits = nullptr;
-    HBITMAP bitmap = CreateDIBSection(screenDc, &bitmapInfo, DIB_RGB_COLORS, &bits, nullptr, 0);
-    HDC dc = bitmap ? CreateCompatibleDC(screenDc) : nullptr;
-    ReleaseDC(nullptr, screenDc);
-
-    if (!bitmap || !dc || !bits) {
-        if (dc) {
-            DeleteDC(dc);
-        }
-        if (bitmap) {
-            DeleteObject(bitmap);
-        }
-        return QPixmap();
-    }
-
-    std::memset(bits, 0, static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
-    HGDIOBJ previousBitmap = SelectObject(dc, bitmap);
-    DrawIconEx(dc, 0, 0, icon, width, height, 0, nullptr, DI_NORMAL);
-
-    QImage image(static_cast<uchar*>(bits), width, height, QImage::Format_ARGB32);
-    QPixmap pixmap = QPixmap::fromImage(image.copy());
-
-    SelectObject(dc, previousBitmap);
-    DeleteDC(dc);
-    DeleteObject(bitmap);
-    return pixmap;
-}
-
-QIcon nativeFileIcon(const QString& path) {
-    const QString resolvedPath = windowsKnownExecutablePath(PathUtils::toAbsolutePath(path));
-    const bool exists = QFileInfo(resolvedPath).exists();
-    const QString nativePath = QDir::toNativeSeparators(resolvedPath);
-    const std::wstring nativePathW = toWideString(nativePath);
-    SHFILEINFOW fileInfo = {};
-    const DWORD_PTR result =
-        SHGetFileInfoW(nativePathW.c_str(), exists ? 0 : FILE_ATTRIBUTE_NORMAL, &fileInfo, sizeof(fileInfo),
-                       SHGFI_ICON | SHGFI_SMALLICON | (exists ? 0 : SHGFI_USEFILEATTRIBUTES));
-    if (!result || !fileInfo.hIcon) {
-        return QIcon();
-    }
-    const QPixmap pixmap =
-        pixmapFromNativeIcon(fileInfo.hIcon, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
-    QIcon icon(pixmap);
-    DestroyIcon(fileInfo.hIcon);
-    return icon;
-}
 
 bool revealInExplorer(const QString& path) {
     const QFileInfo info(PathUtils::toAbsolutePath(path));
@@ -4180,6 +4093,12 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
     const LaunchAction action = PathUtils::toAbsoluteAction(rule.action);
     switch (rule.category) {
     case LauncherCategory::Program: {
+#ifdef Q_OS_WIN
+        const QIcon systemIcon = SystemIconProvider::systemToolIcon(rule);
+        if (!systemIcon.isNull()) {
+            return systemIcon;
+        }
+#endif
         const QString target = QFileInfo(action.target).fileName().toLower();
         const QString arguments = action.arguments.toLower();
         const QString title = rule.description.toLower();
@@ -4188,7 +4107,7 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
         const auto hasArgument = [&arguments](const char* text) { return arguments.contains(QString::fromLatin1(text)); };
         const auto nativeOrFallback = [this](const QString& path, QStyle::StandardPixmap fallback) {
 #ifdef Q_OS_WIN
-            const QIcon native = nativeFileIcon(path);
+            const QIcon native = SystemIconProvider::fileIcon(path);
             if (!native.isNull()) {
                 return native;
             }
@@ -4216,7 +4135,10 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
         if (hasTitle("打印机") || hasArgument("printers")) {
             return themedIcon("printer");
         }
-        if (hasTitle("显示") || hasTitle("关闭显示器") || hasArgument("desk.cpl")) {
+        if (hasTitle("关闭显示器")) {
+            return themedIcon("monitor-off");
+        }
+        if (hasTitle("显示") || hasArgument("desk.cpl")) {
             return themedIcon("display");
         }
         if (hasTitle("截图") || target == QString::fromLatin1("ms-screenclip:")) {
@@ -4286,7 +4208,13 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
         if (hasTitle("声音") || hasTitle("音量") || hasArgument("mmsys.cpl") || target == "sndvol.exe") {
             return themedIcon("sound");
         }
-        if (hasTitle("电源选项") || target == "shutdown.exe" || hasArgument("powercfg.cpl")) {
+        if (target == "shutdown.exe" && arguments.contains(QString::fromLatin1("/r"))) {
+            return themedIcon("restart");
+        }
+        if (target == "shutdown.exe") {
+            return themedIcon("shutdown");
+        }
+        if (hasTitle("电源选项") || hasArgument("powercfg.cpl")) {
             return themedIcon("power");
         }
         if (hasTitle("防火墙") || hasLatinTitle("uac") || hasArgument("firewall.cpl") ||
@@ -4401,7 +4329,8 @@ QIcon MainWindow::themedIcon(const QString& key) const {
         normalized == "device-manager" || normalized == "printer" || normalized == "recycle" ||
         normalized == "power" || normalized == "clock" || normalized == "keyboard" || normalized == "mouse" ||
         normalized == "sound" || normalized == "shield" || normalized == "screenshot" || normalized == "disk" ||
-        normalized == "notepad") {
+        normalized == "notepad" || normalized == "shutdown" || normalized == "restart" ||
+        normalized == "monitor-off") {
         return style()->standardIcon(QStyle::SP_FileIcon);
     }
     return AppIcon::launcherIcon();
