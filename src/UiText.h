@@ -109,6 +109,7 @@ enum class Key {
     CopiedItem,
     CutItem,
     PastedItem,
+    MovedItem,
     PasteSameCategoryOnly,
     NewSectionTitle,
     EditSectionTitle,

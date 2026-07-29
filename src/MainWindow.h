@@ -101,6 +101,7 @@ private slots:
     void showSectionContextMenu(const QPoint& pos);
     void showListContextMenu(const QPoint& pos);
     void runClickedRule(QListWidgetItem* item);
+    void clearDragLaunchSuppression();
     void applyItemAppearanceDialogChange();
     void applySectionAppearanceDialogChange();
     void applyCategoryAppearanceDialogChange();
@@ -155,6 +156,9 @@ private:
     void enablePointerTracking(QWidget* widget);
     void addRuleToSection(const QString& sectionId);
     void addDroppedPathsToSection(const QString& sectionId, const QList<QUrl>& urls);
+    bool canMoveRuleToSection(const QString& ruleId, const QString& sectionId, bool allowSameSection) const;
+    bool moveRuleToSection(const QString& ruleId, const QString& sectionId, const QString& beforeRuleId, bool copy);
+    QString ruleIdBeforeDrop(QListWidget* list, const QPoint& viewportPos, const QString& draggedRuleId) const;
     QString sectionIdAtGlobalPosition(const QPoint& globalPos) const;
     QString fallbackDropSectionId() const;
     void editRule(const QString& ruleId);
@@ -277,4 +281,5 @@ private:
     QString m_ruleClipboardSourceRuleId;
     bool m_hasRuleClipboard = false;
     bool m_ruleClipboardCut = false;
+    bool m_ignoreNextLeftReleaseAfterDrag = false;
 };

@@ -21,6 +21,7 @@
 #include <QCryptographicHash>
 #include <QCursor>
 #include <QDate>
+#include <QDataStream>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -39,6 +40,7 @@
 #include <QImage>
 #include <QInputDialog>
 #include <QLineEdit>
+#include <QMap>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
@@ -113,6 +115,7 @@ constexpr int AutoHidePollIntervalMs = 80;
 constexpr int HotkeyFeedbackDurationMs = 90;
 constexpr qreal HotkeyFeedbackOpacity = 0.18;
 constexpr const char* StartupMinimizedArgument = "--startup-minimized";
+constexpr const char* InternalRuleMimeType = "application/x-qabstractitemmodeldatalist";
 
 #if defined(Q_OS_WIN) && !defined(CALG_SHA_256)
 #define CALG_SHA_256 (ALG_CLASS_HASH | ALG_TYPE_ANY | ALG_SID_SHA_256)
@@ -445,6 +448,36 @@ QListWidget* ancestorListWidget(QWidget* widget) {
         widget = widget->parentWidget();
     }
     return nullptr;
+}
+
+QWidget* ancestorSectionHeader(QWidget* widget) {
+    while (widget && widget->objectName() != QString::fromLatin1("sectionHeader")) {
+        widget = widget->parentWidget();
+    }
+    return widget;
+}
+
+QStringList ruleIdsFromMimeData(const QMimeData* mimeData) {
+    QStringList ruleIds;
+    if (!mimeData || !mimeData->hasFormat(QString::fromLatin1(InternalRuleMimeType))) {
+        return ruleIds;
+    }
+
+    QByteArray encoded = mimeData->data(QString::fromLatin1(InternalRuleMimeType));
+    QDataStream stream(&encoded, QIODevice::ReadOnly);
+    while (!stream.atEnd()) {
+        int row = 0;
+        int column = 0;
+        QMap<int, QVariant> roleDataMap;
+        stream >> row >> column >> roleDataMap;
+        Q_UNUSED(row)
+        Q_UNUSED(column)
+        const QString ruleId = roleDataMap.value(RuleIdRole).toString();
+        if (!ruleId.isEmpty() && !ruleIds.contains(ruleId)) {
+            ruleIds << ruleId;
+        }
+    }
+    return ruleIds;
 }
 
 void showWarning(QWidget* parent, const QString& language, const QString& title, const QString& message) {
@@ -1887,6 +1920,10 @@ void MainWindow::runClickedRule(QListWidgetItem* item) {
     runRule(item->data(RuleIdRole).toString());
 }
 
+void MainWindow::clearDragLaunchSuppression() {
+    m_ignoreNextLeftReleaseAfterDrag = false;
+}
+
 void MainWindow::closeEvent(QCloseEvent* event) {
     hide();
     event->ignore();
@@ -1908,9 +1945,47 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop) {
         auto* widget = qobject_cast<QWidget*>(watched);
         auto* dropBaseEvent = static_cast<QDropEvent*>(event);
+        const QPoint globalDropPos = widget ? widget->mapToGlobal(eventPosition(dropBaseEvent)) : QCursor::pos();
+        const QStringList draggedRuleIds = ruleIdsFromMimeData(dropBaseEvent->mimeData());
+        if (!draggedRuleIds.isEmpty()) {
+            const QString ruleId = draggedRuleIds.first();
+            QWidget* targetHeader = ancestorSectionHeader(widget);
+            QListWidget* targetList = ancestorListWidget(widget);
+            QString sectionId = targetHeader ? targetHeader->property("sectionId").toString() : QString();
+            if (sectionId.isEmpty() && targetList) {
+                sectionId = targetList->property("sectionId").toString();
+            }
+            if (sectionId.isEmpty()) {
+                sectionId = sectionIdAtGlobalPosition(globalDropPos);
+            }
+
+            const bool targetIsList = targetList && targetList->property("sectionId").toString() == sectionId;
+            if (canMoveRuleToSection(ruleId, sectionId, targetIsList)) {
+                const bool copy = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
+                const Qt::DropAction action = copy ? Qt::CopyAction : Qt::MoveAction;
+                if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
+                    dropBaseEvent->setDropAction(action);
+                    dropBaseEvent->accept();
+                    return true;
+                }
+
+                const QPoint viewportPos = targetList ? targetList->viewport()->mapFromGlobal(globalDropPos) : QPoint();
+                const QString beforeRuleId = targetList ? ruleIdBeforeDrop(targetList, viewportPos, ruleId) : QString();
+                if (moveRuleToSection(ruleId, sectionId, beforeRuleId, copy)) {
+                    dropBaseEvent->setDropAction(action);
+                    dropBaseEvent->accept();
+                    m_ignoreNextLeftReleaseAfterDrag = true;
+                    QTimer::singleShot(300, this, SLOT(clearDragLaunchSuppression()));
+                    return true;
+                }
+            }
+            dropBaseEvent->ignore();
+            return true;
+        }
+
         QString sectionId = widget ? widget->property("sectionId").toString() : QString();
         if (widget && (sectionId.isEmpty() || sectionIndexById(sectionId) < 0)) {
-            sectionId = sectionIdAtGlobalPosition(widget->mapToGlobal(eventPosition(dropBaseEvent)));
+            sectionId = sectionIdAtGlobalPosition(globalDropPos);
         }
         if (sectionId.isEmpty()) {
             sectionId = fallbackDropSectionId();
@@ -2076,6 +2151,10 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     }
 
     if (event->type() == QEvent::MouseButtonRelease && mouseEvent->button() == Qt::LeftButton) {
+        if (m_ignoreNextLeftReleaseAfterDrag) {
+            m_ignoreNextLeftReleaseAfterDrag = false;
+            return true;
+        }
         if (QListWidget* list = ancestorListWidget(widget)) {
             const QPoint viewportPos = list->viewport()->mapFromGlobal(eventGlobalPosition(mouseEvent));
             if (QListWidgetItem* item = list->itemAt(viewportPos)) {
@@ -2560,8 +2639,9 @@ void MainWindow::rebuildSections() {
                 list->setWordWrap(m_document.settings.itemAppearance.multilineText);
                 list->setUniformItemSizes(true);
                 list->setAcceptDrops(true);
-                list->setDragDropMode(QAbstractItemView::DropOnly);
-                list->setDefaultDropAction(Qt::CopyAction);
+                list->setDragEnabled(true);
+                list->setDragDropMode(QAbstractItemView::DragDrop);
+                list->setDefaultDropAction(Qt::MoveAction);
                 list->setDropIndicatorShown(true);
                 list->installEventFilter(this);
                 list->viewport()->setAcceptDrops(true);
@@ -2596,6 +2676,7 @@ void MainWindow::rebuildSections() {
                         rule.hotkey.isValid() ? rule.hotkey.displayText() : uiText(UiText::Key::UnboundHotkey);
                     item->setToolTip(QString("%1\n%2\n%3").arg(ruleTitle(rule), rule.action.target, hotkeyTip));
                     item->setData(RuleIdRole, rule.id);
+                    item->setFlags(item->flags() | Qt::ItemIsDragEnabled);
                     if (!rule.enabled) {
                         item->setForeground(QColor("#8a94a3"));
                     }
@@ -3584,6 +3665,119 @@ void MainWindow::addDroppedPathsToSection(const QString& sectionId, const QList<
     if (addedCount > 0) {
         saveDocument();
     }
+}
+
+bool MainWindow::canMoveRuleToSection(const QString& ruleId, const QString& sectionId, bool allowSameSection) const {
+    const int ruleIndex = ruleIndexById(ruleId);
+    const int sectionIndex = sectionIndexById(sectionId);
+    if (ruleIndex < 0 || sectionIndex < 0) {
+        return false;
+    }
+
+    const HotkeyRule& rule = m_document.rules[ruleIndex];
+    const LauncherSection& section = m_document.sections[sectionIndex];
+    if (rule.category != section.category) {
+        return false;
+    }
+    if (rule.sectionId == section.id && !allowSameSection) {
+        return false;
+    }
+    return true;
+}
+
+bool MainWindow::moveRuleToSection(const QString& ruleId, const QString& sectionId, const QString& beforeRuleId,
+                                   bool copy) {
+    const int ruleIndex = ruleIndexById(ruleId);
+    const int sectionIndex = sectionIndexById(sectionId);
+    if (ruleIndex < 0 || sectionIndex < 0) {
+        return false;
+    }
+
+    const HotkeyRule sourceRule = m_document.rules[ruleIndex];
+    const LauncherSection targetSection = m_document.sections[sectionIndex];
+    if (sourceRule.category != targetSection.category) {
+        setStatus(uiText(UiText::Key::PasteSameCategoryOnly));
+        return false;
+    }
+    if (!ensureSectionUnlocked(sourceRule.sectionId)) {
+        return false;
+    }
+    if (sourceRule.sectionId != targetSection.id && !ensureSectionUnlocked(targetSection.id)) {
+        return false;
+    }
+
+    HotkeyRule movedRule = sourceRule;
+    movedRule.category = targetSection.category;
+    movedRule.sectionId = targetSection.id;
+    if (copy) {
+        movedRule.id = QtCompat::uuidWithoutBraces();
+        movedRule.hotkey = HotkeyCombination();
+    }
+
+    QVector<HotkeyRule> reorderedRules;
+    reorderedRules.reserve(m_document.rules.size() + (copy ? 1 : 0));
+    for (int i = 0; i < m_document.rules.size(); ++i) {
+        const HotkeyRule& current = m_document.rules[i];
+        if (!copy && current.id == sourceRule.id) {
+            continue;
+        }
+        reorderedRules.push_back(current);
+    }
+
+    int insertIndex = reorderedRules.size();
+    if (!beforeRuleId.isEmpty() && beforeRuleId != sourceRule.id) {
+        for (int i = 0; i < reorderedRules.size(); ++i) {
+            if (reorderedRules[i].id == beforeRuleId && reorderedRules[i].sectionId == targetSection.id) {
+                insertIndex = i;
+                break;
+            }
+        }
+    }
+    if (insertIndex == reorderedRules.size()) {
+        for (int i = reorderedRules.size() - 1; i >= 0; --i) {
+            if (reorderedRules[i].sectionId == targetSection.id) {
+                insertIndex = i + 1;
+                break;
+            }
+        }
+    }
+
+    reorderedRules.insert(insertIndex, movedRule);
+    m_document.rules = reorderedRules;
+    if (!copy && m_ruleClipboardCut && m_ruleClipboardSourceRuleId == sourceRule.id) {
+        m_ruleClipboard = movedRule;
+    }
+
+    saveDocument();
+    setStatus(uiText(copy ? UiText::Key::PastedItem : UiText::Key::MovedItem).arg(ruleTitle(movedRule)));
+    return true;
+}
+
+QString MainWindow::ruleIdBeforeDrop(QListWidget* list, const QPoint& viewportPos, const QString& draggedRuleId) const {
+    if (!list) {
+        return QString();
+    }
+
+    QListWidgetItem* item = list->itemAt(viewportPos);
+    if (!item) {
+        return QString();
+    }
+
+    int row = list->row(item);
+    const QRect itemRect = list->visualItemRect(item);
+    const bool afterItem = viewportPos.y() > itemRect.center().y() ||
+                           (viewportPos.y() == itemRect.center().y() && viewportPos.x() > itemRect.center().x());
+    if (afterItem) {
+        ++row;
+    }
+
+    for (int i = row; i < list->count(); ++i) {
+        const QString nextRuleId = list->item(i)->data(RuleIdRole).toString();
+        if (!nextRuleId.isEmpty() && nextRuleId != draggedRuleId) {
+            return nextRuleId;
+        }
+    }
+    return QString();
 }
 
 QString MainWindow::sectionIdAtGlobalPosition(const QPoint& globalPos) const {

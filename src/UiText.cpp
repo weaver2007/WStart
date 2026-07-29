@@ -230,6 +230,8 @@ QString text(const QString& language, Key key) {
         return en ? "Cut: %1" : QString::fromUtf8("已剪切：%1");
     case Key::PastedItem:
         return en ? "Pasted: %1" : QString::fromUtf8("已粘贴：%1");
+    case Key::MovedItem:
+        return en ? "Moved: %1" : QString::fromUtf8("已移动：%1");
     case Key::PasteSameCategoryOnly:
         return en ? "Items can only be pasted into the same category."
                   : QString::fromUtf8("条目只能粘贴到同一分类下。");
