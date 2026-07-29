@@ -1,6 +1,7 @@
 #include "RuleStore.h"
 
 #include "HotkeyConflictDetector.h"
+#include "PathUtils.h"
 #include "UiText.h"
 
 #include <QDir>
@@ -183,7 +184,9 @@ bool RuleStore::saveDocument(const LauncherDocument& document, QString* error) c
     QJsonArray rules;
     for (const HotkeyRule& rule : document.rules) {
         if (rule.isValid()) {
-            rules.append(rule.toJson());
+            HotkeyRule storedRule = rule;
+            storedRule.action = PathUtils::toPortableAction(storedRule.action);
+            rules.append(storedRule.toJson());
         }
     }
 

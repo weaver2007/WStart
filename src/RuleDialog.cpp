@@ -1,6 +1,7 @@
 #include "RuleDialog.h"
 
 #include "HotkeyConflictDetector.h"
+#include "PathUtils.h"
 #include "QtCompat.h"
 
 #include <QAbstractButton>
@@ -350,7 +351,7 @@ HotkeyRule RuleDialog::rule() const {
         m_category == LauncherCategory::Program && targetLooksLikeExe(result.action.target) &&
         m_singleInstanceCheck->isChecked();
     if (m_category == LauncherCategory::Program && result.action.workingDirectory.isEmpty()) {
-        const QFileInfo targetInfo(result.action.target);
+        const QFileInfo targetInfo(PathUtils::toAbsolutePath(result.action.target));
         if (targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && !targetInfo.absolutePath().isEmpty()) {
             result.action.workingDirectory = targetInfo.absolutePath();
         }

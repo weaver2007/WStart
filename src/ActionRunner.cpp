@@ -1,5 +1,7 @@
 #include "ActionRunner.h"
 
+#include "PathUtils.h"
+
 #include <QDir>
 #include <QDesktopServices>
 #include <QFileInfo>
@@ -154,7 +156,8 @@ bool activateExistingApplicationWindow(const QString& target) {
 ActionRunner::ActionRunner(QObject* parent) : QObject(parent) {}
 
 bool ActionRunner::run(const LaunchAction& action, QString* error) const {
-    if (!action.isValid()) {
+    const LaunchAction resolvedAction = PathUtils::toAbsoluteAction(action);
+    if (!resolvedAction.isValid()) {
         if (error) {
             *error = "Action target is empty.";
         }
@@ -162,16 +165,16 @@ bool ActionRunner::run(const LaunchAction& action, QString* error) const {
     }
 
 #ifdef Q_OS_WIN
-    if (action.singleInstance && action.type == LaunchActionType::Application &&
-        activateExistingApplicationWindow(action.target)) {
+    if (resolvedAction.singleInstance && resolvedAction.type == LaunchActionType::Application &&
+        activateExistingApplicationWindow(resolvedAction.target)) {
         return true;
     }
 
     const std::wstring verb = L"open";
-    const std::wstring target = toWideString(action.target);
-    const std::wstring arguments = toWideString(action.arguments);
-    const std::wstring workingDirectory = toWideString(QDir::toNativeSeparators(action.workingDirectory));
-    const int showCommand = showCommandForWindowState(action.windowState);
+    const std::wstring target = toWideString(resolvedAction.target);
+    const std::wstring arguments = toWideString(resolvedAction.arguments);
+    const std::wstring workingDirectory = toWideString(QDir::toNativeSeparators(resolvedAction.workingDirectory));
+    const int showCommand = showCommandForWindowState(resolvedAction.windowState);
 
     SHELLEXECUTEINFOW info = {};
     info.cbSize = sizeof(info);
@@ -191,17 +194,17 @@ bool ActionRunner::run(const LaunchAction& action, QString* error) const {
     if (info.hProcess) {
         CloseHandle(info.hProcess);
     }
-    if (action.type == LaunchActionType::Application && action.windowState == LaunchWindowState::Normal) {
-        activateExistingApplicationWindow(action.target);
+    if (resolvedAction.type == LaunchActionType::Application && resolvedAction.windowState == LaunchWindowState::Normal) {
+        activateExistingApplicationWindow(resolvedAction.target);
     }
     return true;
 #else
-    const QUrl url = action.type == LaunchActionType::Url ? QUrl(action.target) : QUrl::fromLocalFile(action.target);
+    const QUrl url = resolvedAction.type == LaunchActionType::Url ? QUrl(resolvedAction.target) : QUrl::fromLocalFile(resolvedAction.target);
     if (QDesktopServices::openUrl(url)) {
         return true;
     }
     if (error) {
-        *error = QString("Failed to open target: %1").arg(action.target);
+        *error = QString("Failed to open target: %1").arg(resolvedAction.target);
     }
     return false;
 #endif

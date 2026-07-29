@@ -259,6 +259,7 @@ set(HKM_SOURCES
     src/HotkeyConflictDetector.cpp
     src/HotkeyHookService.cpp
     src/HotkeyTypes.cpp
+    src/PathUtils.cpp
     src/RuleStore.cpp
     src/SelfUpdater.cpp
     src/TrayController.cpp
@@ -510,6 +511,7 @@ add_executable(HotKeyManagerTests
     ${HKM_QT4_COMPAT_SOURCES}
     src/HotkeyConflictDetector.cpp
     src/HotkeyTypes.cpp
+    src/PathUtils.cpp
     src/RuleStore.cpp
     src/UpdateChecker.cpp
     src/UiText.cpp

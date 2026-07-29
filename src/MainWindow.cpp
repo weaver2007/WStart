@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AppIcon.h"
+#include "PathUtils.h"
 #include "CredentialStore.h"
 #include "QtCompat.h"
 #include "RuleDialog.h"
@@ -796,7 +797,7 @@ QPixmap pixmapFromNativeIcon(HICON icon, int width, int height) {
 }
 
 QIcon nativeFileIcon(const QString& path) {
-    const QString resolvedPath = windowsKnownExecutablePath(path);
+    const QString resolvedPath = windowsKnownExecutablePath(PathUtils::toAbsolutePath(path));
     const bool exists = QFileInfo(resolvedPath).exists();
     const QString nativePath = QDir::toNativeSeparators(resolvedPath);
     const std::wstring nativePathW = toWideString(nativePath);
@@ -815,7 +816,7 @@ QIcon nativeFileIcon(const QString& path) {
 }
 
 bool revealInExplorer(const QString& path) {
-    const QFileInfo info(path);
+    const QFileInfo info(PathUtils::toAbsolutePath(path));
     if (!info.exists()) {
         return false;
     }
@@ -853,10 +854,11 @@ bool createShortcutFile(const QString& shortcutPath, const HotkeyRule& rule, con
         return false;
     }
 
-    const QString target = QDir::toNativeSeparators(rule.action.target);
-    const QString workingDirectory = QDir::toNativeSeparators(rule.action.workingDirectory);
+    const LaunchAction action = PathUtils::toAbsoluteAction(rule.action);
+    const QString target = QDir::toNativeSeparators(action.target);
+    const QString workingDirectory = QDir::toNativeSeparators(action.workingDirectory);
     const std::wstring targetW = toWideString(target);
-    const std::wstring argumentsW = toWideString(rule.action.arguments);
+    const std::wstring argumentsW = toWideString(action.arguments);
     const std::wstring workingDirectoryW = toWideString(workingDirectory);
     const std::wstring descriptionW = toWideString(title);
 
@@ -884,7 +886,7 @@ bool createShortcutFile(const QString& shortcutPath, const HotkeyRule& rule, con
 }
 
 bool showShellContextMenu(QWidget* parent, const QString& path, const QPoint& globalPos) {
-    const QFileInfo info(path);
+    const QFileInfo info(PathUtils::toAbsolutePath(path));
     if (!info.exists()) {
         return false;
     }
@@ -3982,7 +3984,8 @@ void MainWindow::runRuleAsAdmin(const QString& ruleId) {
     if (!confirmDangerousRule(rule)) {
         return;
     }
-    if (!shellExecutePath(rule.action.target, L"runas", rule.action.arguments, rule.action.workingDirectory)) {
+    const LaunchAction action = PathUtils::toAbsoluteAction(rule.action);
+    if (!shellExecutePath(action.target, L"runas", action.arguments, action.workingDirectory)) {
         setStatus(uiText(UiText::Key::LaunchFailed).arg(QString::number(GetLastError())));
     }
 #else
@@ -4028,7 +4031,7 @@ void MainWindow::browseRuleTarget(const QString& ruleId) {
 #ifdef Q_OS_WIN
     revealInExplorer(m_document.rules[index].action.target);
 #else
-    const QFileInfo info(m_document.rules[index].action.target);
+    const QFileInfo info(PathUtils::toAbsolutePath(m_document.rules[index].action.target));
     const QString folder = info.isDir() ? info.absoluteFilePath() : info.absolutePath();
     if (!folder.isEmpty()) {
         QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
@@ -4124,10 +4127,11 @@ int MainWindow::ruleIndexById(const QString& ruleId) const {
 }
 
 QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
+    const LaunchAction action = PathUtils::toAbsoluteAction(rule.action);
     switch (rule.category) {
     case LauncherCategory::Program: {
-        const QString target = QFileInfo(rule.action.target).fileName().toLower();
-        const QString arguments = rule.action.arguments.toLower();
+        const QString target = QFileInfo(action.target).fileName().toLower();
+        const QString arguments = action.arguments.toLower();
         const QString title = rule.description.toLower();
         const auto hasTitle = [&title](const char* text) { return title.contains(QString::fromUtf8(text)); };
         const auto hasLatinTitle = [&title](const char* text) { return title.contains(QString::fromLatin1(text)); };
@@ -4243,30 +4247,30 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
             return themedIcon("control-panel");
         }
 
-        const QFileInfo targetInfo(rule.action.target);
+        const QFileInfo targetInfo(action.target);
         if (targetInfo.isFile() && targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0) {
             const QIcon fileIcon = QFileIconProvider().icon(targetInfo);
             if (!fileIcon.isNull()) {
                 return fileIcon;
             }
         }
-        if (rule.action.type == LaunchActionType::File && targetInfo.exists()) {
+        if (action.type == LaunchActionType::File && targetInfo.exists()) {
             const QIcon fileIcon = QFileIconProvider().icon(targetInfo);
             if (!fileIcon.isNull()) {
                 return fileIcon;
             }
         }
-        return nativeOrFallback(rule.action.target, QStyle::SP_ComputerIcon);
+        return nativeOrFallback(action.target, QStyle::SP_ComputerIcon);
     }
     case LauncherCategory::Folder: {
-        const QFileInfo targetInfo(rule.action.target);
-        if (rule.action.type == LaunchActionType::File && targetInfo.exists()) {
+        const QFileInfo targetInfo(action.target);
+        if (action.type == LaunchActionType::File && targetInfo.exists()) {
             const QIcon fileIcon = QFileIconProvider().icon(targetInfo);
             if (!fileIcon.isNull()) {
                 return fileIcon;
             }
         }
-        const QString target = QFileInfo(rule.action.target).fileName().toLower();
+        const QString target = QFileInfo(action.target).fileName().toLower();
         const QString title = rule.description.toLower();
         if (target == "desktop" || title.contains(QString::fromUtf8("桌面")) || title.contains("desktop")) {
             return themedIcon("desktop");

@@ -1,5 +1,6 @@
 #include "../src/HotkeyConflictDetector.h"
 #include "../src/HotkeyTypes.h"
+#include "../src/PathUtils.h"
 #include "../src/RuleStore.h"
 #include "../src/UpdateChecker.h"
 
@@ -19,6 +20,7 @@ private slots:
     void hotkeyDisplayText();
     void launchActionWindowOptionsRoundTrip();
     void launchActionWindowOptionsDefaultsAndFallback();
+    void portablePathConversion();
     void jsonRoundTrip();
     void sectionJsonRoundTrip();
     void ruleCanBeValidWithoutHotkey();
@@ -93,6 +95,32 @@ void CoreTests::launchActionWindowOptionsDefaultsAndFallback() {
     QCOMPARE(parsed.singleInstance, true);
 }
 
+void CoreTests::portablePathConversion() {
+    const QString base = QString::fromLatin1("D:/Tools/WStart");
+    QCOMPARE(PathUtils::toAbsolutePath(QString::fromLatin1("notepad.exe"), base), QString::fromLatin1("notepad.exe"));
+    QCOMPARE(PathUtils::toAbsolutePath(QString::fromLatin1("ms-settings:"), base), QString::fromLatin1("ms-settings:"));
+
+#ifdef Q_OS_WIN
+    QCOMPARE(PathUtils::toPortablePath(QString::fromLatin1("D:/Tools/WStart/Foo.exe"), base),
+             QString::fromLatin1("./Foo.exe"));
+    QCOMPARE(PathUtils::toPortablePath(QString::fromLatin1("D:/Tools/WStart/apps/Foo.exe"), base),
+             QString::fromLatin1("apps/Foo.exe"));
+    QCOMPARE(PathUtils::toPortablePath(QString::fromLatin1("E:/Apps/Foo.exe"), base),
+             QString::fromLatin1("E:/Apps/Foo.exe"));
+    QCOMPARE(PathUtils::toAbsolutePath(QString::fromLatin1("./Foo.exe"), base),
+             QString::fromLatin1("D:/Tools/WStart/Foo.exe"));
+    QCOMPARE(PathUtils::toAbsolutePath(QString::fromLatin1("apps/Foo.exe"), base),
+             QString::fromLatin1("D:/Tools/WStart/apps/Foo.exe"));
+
+    LaunchAction action;
+    action.type = LaunchActionType::Application;
+    action.target = QString::fromLatin1("D:/Tools/WStart/apps/Foo.exe");
+    action.workingDirectory = QString::fromLatin1("D:/Tools/WStart/apps");
+    const LaunchAction portableAction = PathUtils::toPortableAction(action, base);
+    QCOMPARE(portableAction.target, QString::fromLatin1("apps/Foo.exe"));
+    QCOMPARE(portableAction.workingDirectory, QString::fromLatin1("./apps"));
+#endif
+}
 void CoreTests::jsonRoundTrip() {
     HotkeyRule rule;
     rule.id = "rule-1";
