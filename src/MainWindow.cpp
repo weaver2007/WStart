@@ -3211,9 +3211,12 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
     QAction* browseAction = nullptr;
     QAction* desktopShortcutAction = nullptr;
     QAction* startupAction = nullptr;
+    QAction* cutAction = nullptr;
+    QAction* copyAction = nullptr;
     QAction* editAction = nullptr;
     QAction* deleteAction = nullptr;
     QAction* addAction = nullptr;
+    QAction* pasteAction = nullptr;
     QString ruleId;
     if (item) {
         ruleId = item->data(RuleIdRole).toString();
@@ -3228,10 +3231,15 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
         startupAction = menu.addAction(uiText(UiText::Key::SetStartup));
 #endif
         menu.addSeparator();
+        cutAction = menu.addAction(uiText(UiText::Key::Cut));
+        copyAction = menu.addAction(uiText(UiText::Key::Copy));
+        menu.addSeparator();
         editAction = menu.addAction(uiText(UiText::Key::Edit));
         deleteAction = menu.addAction(uiText(UiText::Key::Delete));
     } else {
         addAction = menu.addAction(uiText(UiText::Key::AddItem));
+        pasteAction = menu.addAction(uiText(UiText::Key::Paste));
+        pasteAction->setEnabled(canPasteRuleToSection(sectionId));
     }
     const QPoint globalPos = list ? list->viewport()->mapToGlobal(viewportPos) : QCursor::pos();
     QAction* selected = menu.exec(globalPos);
@@ -3250,12 +3258,18 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
         createDesktopShortcutForRule(ruleId);
     } else if (selected == startupAction) {
         setRuleStartupShortcut(ruleId);
+    } else if (selected == cutAction) {
+        copyRuleToClipboard(ruleId, true);
+    } else if (selected == copyAction) {
+        copyRuleToClipboard(ruleId, false);
     } else if (selected == editAction) {
         editRule(ruleId);
     } else if (selected == deleteAction) {
         deleteRule(ruleId);
     } else if (addAction && selected == addAction) {
         addRuleToSection(sectionId);
+    } else if (pasteAction && selected == pasteAction) {
+        pasteRuleToSection(sectionId);
     }
 }
 
@@ -3682,6 +3696,71 @@ void MainWindow::deleteRule(const QString& ruleId) {
     }
     m_document.rules.remove(index);
     saveDocument();
+}
+
+void MainWindow::copyRuleToClipboard(const QString& ruleId, bool cut) {
+    const int index = ruleIndexById(ruleId);
+    if (index < 0) {
+        return;
+    }
+    if (!ensureSectionUnlocked(m_document.rules[index].sectionId)) {
+        return;
+    }
+
+    m_ruleClipboard = m_document.rules[index];
+    m_ruleClipboardSourceRuleId = ruleId;
+    m_hasRuleClipboard = true;
+    m_ruleClipboardCut = cut;
+    setStatus(uiText(cut ? UiText::Key::CutItem : UiText::Key::CopiedItem).arg(ruleTitle(m_ruleClipboard)));
+}
+
+bool MainWindow::canPasteRuleToSection(const QString& sectionId) const {
+    if (!m_hasRuleClipboard) {
+        return false;
+    }
+    const int sectionIndex = sectionIndexById(sectionId);
+    if (sectionIndex < 0) {
+        return false;
+    }
+    return m_document.sections[sectionIndex].category == m_ruleClipboard.category;
+}
+
+void MainWindow::pasteRuleToSection(const QString& sectionId) {
+    const int sectionIndex = sectionIndexById(sectionId);
+    if (sectionIndex < 0 || !m_hasRuleClipboard) {
+        return;
+    }
+    const LauncherSection& section = m_document.sections[sectionIndex];
+    if (section.category != m_ruleClipboard.category) {
+        setStatus(uiText(UiText::Key::PasteSameCategoryOnly));
+        return;
+    }
+    if (!ensureSectionUnlocked(sectionId)) {
+        return;
+    }
+
+    HotkeyRule pasted = m_ruleClipboard;
+    pasted.category = section.category;
+    pasted.sectionId = section.id;
+
+    const int sourceIndex = m_ruleClipboardCut ? ruleIndexById(m_ruleClipboardSourceRuleId) : -1;
+    if (m_ruleClipboardCut && sourceIndex >= 0) {
+        pasted.id = m_ruleClipboardSourceRuleId;
+        m_document.rules[sourceIndex] = pasted;
+        m_hasRuleClipboard = false;
+        m_ruleClipboardCut = false;
+        m_ruleClipboardSourceRuleId.clear();
+    } else {
+        pasted.id = QtCompat::uuidWithoutBraces();
+        pasted.hotkey = HotkeyCombination();
+        m_document.rules.push_back(pasted);
+        m_ruleClipboard = pasted;
+        m_ruleClipboardSourceRuleId = pasted.id;
+        m_ruleClipboardCut = false;
+    }
+
+    saveDocument();
+    setStatus(uiText(UiText::Key::PastedItem).arg(ruleTitle(pasted)));
 }
 
 void MainWindow::runRule(const QString& ruleId) {

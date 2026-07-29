@@ -159,6 +159,9 @@ private:
     QString fallbackDropSectionId() const;
     void editRule(const QString& ruleId);
     void deleteRule(const QString& ruleId);
+    void copyRuleToClipboard(const QString& ruleId, bool cut);
+    bool canPasteRuleToSection(const QString& sectionId) const;
+    void pasteRuleToSection(const QString& sectionId);
     void runRule(const QString& ruleId);
     void runRuleAsAdmin(const QString& ruleId);
     bool confirmDangerousRule(const HotkeyRule& rule);
@@ -270,4 +273,8 @@ private:
     bool m_topAutoHidden = false;
     QPointer<QProgressDialog> m_updateProgressDialog;
     UpdateInfo m_pendingUpdateInfo;
+    HotkeyRule m_ruleClipboard;
+    QString m_ruleClipboardSourceRuleId;
+    bool m_hasRuleClipboard = false;
+    bool m_ruleClipboardCut = false;
 };

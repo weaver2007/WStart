@@ -186,6 +186,12 @@ QString text(const QString& language, Key key) {
         return en ? "Edit" : QString::fromUtf8("编辑");
     case Key::Delete:
         return en ? "Delete" : QString::fromUtf8("删除");
+    case Key::Cut:
+        return en ? "Cut" : QString::fromUtf8("剪切");
+    case Key::Copy:
+        return en ? "Copy" : QString::fromUtf8("复制");
+    case Key::Paste:
+        return en ? "Paste" : QString::fromUtf8("粘贴");
     case Key::LockedHint:
         return en ? "This section is encrypted. Right-click the section to unlock, edit, or delete it."
                   : QString::fromUtf8("栏目已加密。右键栏目可解锁、修改或删除。");
@@ -218,6 +224,15 @@ QString text(const QString& language, Key key) {
         return en ? "Save failed" : QString::fromUtf8("保存失败");
     case Key::SavedItems:
         return en ? "Saved %1 item(s)." : QString::fromUtf8("已保存 %1 个条目。");
+    case Key::CopiedItem:
+        return en ? "Copied: %1" : QString::fromUtf8("已复制：%1");
+    case Key::CutItem:
+        return en ? "Cut: %1" : QString::fromUtf8("已剪切：%1");
+    case Key::PastedItem:
+        return en ? "Pasted: %1" : QString::fromUtf8("已粘贴：%1");
+    case Key::PasteSameCategoryOnly:
+        return en ? "Items can only be pasted into the same category."
+                  : QString::fromUtf8("条目只能粘贴到同一分类下。");
     case Key::NewSectionTitle:
         return en ? "New section" : QString::fromUtf8("新建栏目");
     case Key::EditSectionTitle:
