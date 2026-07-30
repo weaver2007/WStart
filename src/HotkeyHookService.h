@@ -1,14 +1,15 @@
 #pragma once
 
+#include "HotkeyState.h"
 #include "HotkeyTypes.h"
 
-#include <QHash>
+#include <QMutex>
 #include <QObject>
-#include <QSet>
 #include <QVector>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+class HotkeyHookThread;
 #endif
 
 class HotkeyHookService : public QObject {
@@ -29,31 +30,40 @@ signals:
     void hotkeyTriggered(const HotkeyRule& rule);
     void hookError(const QString& message);
     void queuedHotkeyTriggered(const HotkeyRule& rule);
+    void diagnosticQueued(const QString& message);
+
+private slots:
+    void writeQueuedDiagnostic(const QString& message);
 
 private:
 #ifdef Q_OS_WIN
+    friend class HotkeyHookThread;
+
     static LRESULT CALLBACK keyboardProc(int code, WPARAM wParam, LPARAM lParam);
     LRESULT handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTRUCT* event);
     HotkeyModifiers currentModifiers(int eventKey, bool isKeyDown, bool isKeyUp);
-    const HotkeyRule* matchingRule(int virtualKey, HotkeyModifiers modifiers) const;
+    bool matchingRule(int virtualKey, HotkeyModifiers modifiers, HotkeyRule* match) const;
     bool isTrackedSuppressedKey(int virtualKey) const;
     bool isModifierKey(int virtualKey) const;
     void updatePressedModifierState(int virtualKey, bool pressed);
-    void trackSuppressedChord(const HotkeyCombination& hotkey);
-    void clearSuppressedKey(int virtualKey);
     void resetKeyboardState(const QString& reason);
+    void synchronizePhysicalModifierState();
+    void queueDiagnostic(const QString& message);
 
     HHOOK m_hook = nullptr;
+    HotkeyHookThread* m_thread = nullptr;
+    volatile LONG m_running = 0;
+    volatile LONG m_paused = 0;
     static HotkeyHookService* s_instance;
 #endif
     QVector<HotkeyRule> m_rules;
-    QSet<QString> m_activeTriggers;
+    mutable QMutex m_rulesMutex;
 #ifdef Q_OS_WIN
-    QSet<int> m_suppressedKeys;
-    QHash<int, QString> m_suppressedTriggerIds;
-    HotkeyModifiers m_pressedModifiers = ModifierNone;
+    HotkeyState m_state;
     bool m_leftWinPhysicallyDown = false;
     bool m_rightWinPhysicallyDown = false;
 #endif
+#ifndef Q_OS_WIN
     bool m_paused = false;
+#endif
 };

@@ -1,13 +1,17 @@
 #include "../src/HotkeyConflictDetector.h"
+#include "../src/HotkeyState.h"
 #include "../src/HotkeyTypes.h"
 #include "../src/PathUtils.h"
 #include "../src/RuleStore.h"
 #include "../src/UpdateChecker.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <algorithm>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -18,9 +22,14 @@ class CoreTests : public QObject {
 
 private slots:
     void hotkeyDisplayText();
+    void hotkeyStateRequiresExactModifiers();
+    void hotkeyStateSuppressesOneChordLifecycle();
     void launchActionWindowOptionsRoundTrip();
     void launchActionWindowOptionsDefaultsAndFallback();
     void portablePathConversion();
+    void ruleStoreAtomicSaveRoundTrip();
+    void corruptConfigurationIsBackedUp();
+    void defaultRulesAreMigratedOnlyOnce();
     void jsonRoundTrip();
     void sectionJsonRoundTrip();
     void ruleCanBeValidWithoutHotkey();
@@ -41,6 +50,11 @@ private slots:
     void updateManifestDecodesGithubContentsPayload();
     void updateManifestOlderThanCurrentIsNotUpdate();
     void updateManifestWithoutMatchingAssetReturnsError();
+    void updateManifestWithoutSha256ReturnsError();
+    void updateManifestRejectsUnsafeFileName();
+    void updateManifestRejectsInsecureUrl();
+    void updateManifestRejectsInvalidUtf8();
+    void updateManifestRejectsOversizedPayload();
     void updateSha256Verification();
 };
 
@@ -54,6 +68,124 @@ void CoreTests::hotkeyDisplayText() {
 #endif
     QCOMPARE(hotkey.displayText(), QString("Ctrl+Alt+K"));
     QVERIFY(hotkey.isValid());
+}
+
+void CoreTests::hotkeyStateRequiresExactModifiers() {
+    HotkeyRule winRule;
+    winRule.id = QString::fromLatin1("win-e");
+    winRule.hotkey.modifiers = ModifierWin;
+    winRule.hotkey.key = 'E';
+    winRule.action.target = QString::fromLatin1("notepad.exe");
+
+    QVector<HotkeyRule> rules;
+    rules.push_back(winRule);
+    HotkeyRule match;
+    QVERIFY(!HotkeyState::findMatchingRule(rules, 'E', ModifierNone, &match));
+    QVERIFY(HotkeyState::findMatchingRule(rules, 'E', ModifierWin, &match));
+    QCOMPARE(match.id, winRule.id);
+
+    HotkeyState state;
+    state.setModifierKey(0x5B, ModifierWin, true);
+    QCOMPARE(static_cast<int>(state.pressedModifiers()), static_cast<int>(ModifierWin));
+    state.setModifierKey(0x5B, ModifierWin, false);
+    QCOMPARE(static_cast<int>(state.pressedModifiers()), static_cast<int>(ModifierNone));
+
+    state.setModifierKey(0x5B, ModifierWin, true);
+    state.setModifierKey(0x5C, ModifierWin, true);
+    state.setModifierKey(0x5B, ModifierWin, false);
+    QCOMPARE(static_cast<int>(state.pressedModifiers()), static_cast<int>(ModifierWin));
+    state.setModifierKey(0x5C, ModifierWin, false);
+    QCOMPARE(static_cast<int>(state.pressedModifiers()), static_cast<int>(ModifierNone));
+}
+
+void CoreTests::hotkeyStateSuppressesOneChordLifecycle() {
+    HotkeyState state;
+    const QString triggerId = QString::fromLatin1("8:69");
+
+    QVERIFY(state.claimTrigger('E', triggerId));
+    QVERIFY(state.isSuppressed('E'));
+    QVERIFY(state.isTriggerActive(triggerId));
+    QVERIFY(!state.claimTrigger('E', triggerId));
+
+    QCOMPARE(state.releaseSuppressedKey('E'), triggerId);
+    QVERIFY(!state.isSuppressed('E'));
+    QVERIFY(!state.isTriggerActive(triggerId));
+    QVERIFY(state.claimTrigger('E', triggerId));
+}
+
+void CoreTests::ruleStoreAtomicSaveRoundTrip() {
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString configPath = temporaryDirectory.filePath(QString::fromLatin1("nested/rules.json"));
+    RuleStore store(configPath);
+
+    LauncherDocument document;
+    HotkeyRule rule;
+    rule.id = QString::fromLatin1("atomic-save");
+    rule.category = LauncherCategory::Program;
+    rule.sectionId = QString::fromLatin1("program-user");
+    rule.action.target = QString::fromLatin1("notepad.exe");
+    rule.description = QString::fromLatin1("Atomic save");
+    document.rules.push_back(rule);
+
+    QString error;
+    QVERIFY2(store.saveDocument(document, &error), qPrintable(error));
+    QVERIFY(QFileInfo(configPath).exists());
+    QVERIFY(!QFileInfo(configPath + QString::fromLatin1(".tmp")).exists());
+
+    const LauncherDocument loaded = store.loadDocument(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    bool found = false;
+    for (const HotkeyRule& loadedRule : loaded.rules) {
+        if (loadedRule.id == rule.id) {
+            found = true;
+            QCOMPARE(loadedRule.description, rule.description);
+        }
+    }
+    QVERIFY(found);
+}
+
+void CoreTests::corruptConfigurationIsBackedUp() {
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString configPath = temporaryDirectory.filePath(QString::fromLatin1("rules.json"));
+    QFile file(configPath);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QCOMPARE(file.write("not-json"), qint64(8));
+    file.close();
+
+    RuleStore store(configPath);
+    QString error;
+    const LauncherDocument document = store.loadDocument(&error);
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!document.sections.isEmpty());
+
+    const QString backupPath = configPath + QString::fromLatin1(".corrupt");
+    QVERIFY(QFileInfo(backupPath).exists());
+    QFile backup(backupPath);
+    QVERIFY(backup.open(QIODevice::ReadOnly));
+    QCOMPARE(backup.readAll(), QByteArray("not-json"));
+}
+
+void CoreTests::defaultRulesAreMigratedOnlyOnce() {
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    RuleStore store(temporaryDirectory.filePath(QString::fromLatin1("rules.json")));
+
+    LauncherDocument document = store.loadDocument();
+    QVERIFY(document.defaultRulesVersion > 0);
+    const QString removedId = QString::fromLatin1("default-program-system-1");
+    document.rules.erase(std::remove_if(document.rules.begin(), document.rules.end(),
+                                        [&removedId](const HotkeyRule& rule) { return rule.id == removedId; }),
+                         document.rules.end());
+
+    QString error;
+    QVERIFY2(store.saveDocument(document, &error), qPrintable(error));
+    const LauncherDocument reloaded = store.loadDocument(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    for (const HotkeyRule& rule : reloaded.rules) {
+        QVERIFY(rule.id != removedId);
+    }
 }
 
 void CoreTests::launchActionWindowOptionsRoundTrip() {
@@ -431,16 +563,16 @@ void CoreTests::defaultSystemToolsAreSeededWithoutHotkeys() {
                   << QString::fromUtf8("控制面板") << QString::fromUtf8("回收站") << QString::fromUtf8("打印机")
                   << QString::fromUtf8("显示") << QString::fromUtf8("截图") << QString::fromUtf8("日期时间")
                   << QString::fromUtf8("Internet") << QString::fromUtf8("系统属性") << QString::fromUtf8("环境变量")
-                  << QString::fromUtf8("系统信息")
-                  << QString::fromUtf8("系统配置") << QString::fromUtf8("文件夹选项") << QString::fromUtf8("设备管理器")
-                  << QString::fromUtf8("添加删除程序") << QString::fromUtf8("记事本") << QString::fromUtf8("磁盘清理")
-                  << QString::fromUtf8("磁盘管理") << QString::fromUtf8("计算机管理") << QString::fromUtf8("服务")
-                  << QString::fromUtf8("组策略") << QString::fromUtf8("计算器") << QString::fromUtf8("注册表")
-                  << QString::fromUtf8("命令提示符") << QString::fromUtf8("远程桌面") << QString::fromUtf8("任务管理器")
-                  << QString::fromUtf8("鼠标") << QString::fromUtf8("键盘") << QString::fromUtf8("屏幕键盘")
-                  << QString::fromUtf8("声音") << QString::fromUtf8("音量") << QString::fromUtf8("电源选项")
-                  << QString::fromUtf8("防火墙") << QString::fromUtf8("UAC") << QString::fromUtf8("关闭计算机")
-                  << QString::fromUtf8("重启计算机") << QString::fromUtf8("关闭显示器");
+                  << QString::fromUtf8("系统信息") << QString::fromUtf8("系统配置") << QString::fromUtf8("文件夹选项")
+                  << QString::fromUtf8("设备管理器") << QString::fromUtf8("添加删除程序") << QString::fromUtf8("记事本")
+                  << QString::fromUtf8("磁盘清理") << QString::fromUtf8("磁盘管理") << QString::fromUtf8("计算机管理")
+                  << QString::fromUtf8("服务") << QString::fromUtf8("组策略") << QString::fromUtf8("计算器")
+                  << QString::fromUtf8("注册表") << QString::fromUtf8("命令提示符") << QString::fromUtf8("远程桌面")
+                  << QString::fromUtf8("任务管理器") << QString::fromUtf8("鼠标") << QString::fromUtf8("键盘")
+                  << QString::fromUtf8("屏幕键盘") << QString::fromUtf8("声音") << QString::fromUtf8("音量")
+                  << QString::fromUtf8("电源选项") << QString::fromUtf8("防火墙") << QString::fromUtf8("UAC")
+                  << QString::fromUtf8("关闭计算机") << QString::fromUtf8("重启计算机")
+                  << QString::fromUtf8("关闭显示器");
 
     for (const QString& name : expectedNames) {
         QVERIFY2(actualNames.contains(name), qPrintable(QString("Missing default system tool: %1").arg(name)));
@@ -507,12 +639,12 @@ void CoreTests::updateManifestSelectsCurrentAsset() {
         "version": "9.9.9",
         "releaseNotes": "Test release",
         "assets": [
-          {"platform": "%1", "arch": "%2", "type": "installer", "url": "https://example.com/setup.exe", "apiUrl": "https://api.example.com/assets/1"},
-          {"platform": "%1", "arch": "%2", "type": "portable", "url": "https://example.com/portable.zip"}
+          {"platform": "%1", "arch": "%2", "type": "installer", "url": "https://example.com/setup.exe", "apiUrl": "https://api.example.com/assets/1", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+          {"platform": "%1", "arch": "%2", "type": "portable", "url": "https://example.com/portable.zip", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
         ]
     })")
-                                  .arg(platform, arch)
-                                  .toUtf8();
+                                .arg(platform, arch)
+                                .toUtf8();
 
     QString error;
     const UpdateInfo installed =
@@ -533,16 +665,17 @@ void CoreTests::updateManifestLegacyDownloadUrl() {
     const QByteArray json = R"({
         "version": "1.0.0",
         "downloadUrl": "https://example.com/WStart.zip",
-        "sha256": "abc",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "releaseNotes": "Legacy"
     })";
 
     QString error;
-    const UpdateInfo info = UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.9.0", true, &error);
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.9.0", true, &error);
     QVERIFY(error.isEmpty());
     QVERIFY(info.updateAvailable);
     QCOMPARE(info.asset.url, QString("https://example.com/WStart.zip"));
-    QCOMPARE(info.asset.sha256, QString("abc"));
+    QCOMPARE(info.asset.sha256, QString("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
 }
 
 void CoreTests::updateManifestAssetUrlFromReleasePayload() {
@@ -563,11 +696,11 @@ void CoreTests::updateManifestDecodesGithubContentsPayload() {
     const QByteArray manifest = QString(R"({
         "version": "0.3.7",
         "assets": [
-          {"platform": "%1", "arch": "%2", "type": "installer", "url": "https://example.com/setup.exe"}
+          {"platform": "%1", "arch": "%2", "type": "installer", "url": "https://example.com/setup.exe", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
         ]
     })")
-                                      .arg(platform, arch)
-                                      .toUtf8();
+                                    .arg(platform, arch)
+                                    .toUtf8();
     const QString encoded = QString::fromLatin1(manifest.toBase64());
     const QByteArray payload = QString(R"({
         "name": "update.json",
@@ -579,8 +712,8 @@ void CoreTests::updateManifestDecodesGithubContentsPayload() {
 
     QString error;
     const UpdateInfo info = UpdateChecker::parseManifest(
-        payload, "https://api.github.com/repos/weaver2007/HotKeyManager/contents/update.json?ref=main", "0.3.6",
-        false, &error);
+        payload, "https://api.github.com/repos/weaver2007/WStart/contents/update.json?ref=main", "0.3.6", false,
+        &error);
     QVERIFY(error.isEmpty());
     QVERIFY(info.updateAvailable);
     QCOMPARE(info.latestVersion, QString("0.3.7"));
@@ -594,7 +727,8 @@ void CoreTests::updateManifestOlderThanCurrentIsNotUpdate() {
     })";
 
     QString error;
-    const UpdateInfo info = UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.6", true, &error);
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.6", true, &error);
     QVERIFY(error.isEmpty());
     QVERIFY(!info.updateAvailable);
     QCOMPARE(info.latestVersion, QString("0.3.5"));
@@ -603,16 +737,98 @@ void CoreTests::updateManifestOlderThanCurrentIsNotUpdate() {
 void CoreTests::updateManifestWithoutMatchingAssetReturnsError() {
     const QByteArray json = R"({
         "version": "9.9.9",
-        "pageUrl": "https://github.com/weaver2007/HotKeyManager/releases/tag/v9.9.9",
+        "pageUrl": "https://github.com/weaver2007/WStart/releases/tag/v9.9.9",
         "assets": []
     })";
 
     QString error;
-    const UpdateInfo info = UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.8", false, &error);
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.8", false, &error);
     QVERIFY(!error.isEmpty());
     QVERIFY(!info.updateAvailable);
     QVERIFY(!info.asset.isValid());
     QVERIFY(!info.asset.url.contains("/releases/tag/"));
+}
+
+void CoreTests::updateManifestWithoutSha256ReturnsError() {
+    const QString platform = UpdateChecker::currentPlatformKey();
+    const QString arch = UpdateChecker::currentArchKey();
+    const QByteArray json = QString(R"({
+        "version": "9.9.9",
+        "assets": [
+          {"platform": "%1", "arch": "%2", "type": "portable", "url": "https://example.com/WStart.zip"}
+        ]
+    })")
+                                .arg(platform, arch)
+                                .toUtf8();
+
+    QString error;
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.8", true, &error);
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!info.updateAvailable);
+}
+
+void CoreTests::updateManifestRejectsUnsafeFileName() {
+    const QString platform = UpdateChecker::currentPlatformKey();
+    const QString arch = UpdateChecker::currentArchKey();
+    const QByteArray json = QString(R"({
+        "version": "9.9.9",
+        "assets": [
+          {"platform": "%1", "arch": "%2", "type": "portable", "url": "https://example.com/WStart.zip", "fileName": "../WStart.zip", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ]
+    })")
+                                .arg(platform, arch)
+                                .toUtf8();
+
+    QString error;
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.8", true, &error);
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!info.updateAvailable);
+    QVERIFY(!info.asset.isValid());
+}
+
+void CoreTests::updateManifestRejectsInsecureUrl() {
+    const QString platform = UpdateChecker::currentPlatformKey();
+    const QString arch = UpdateChecker::currentArchKey();
+    const QByteArray json = QString(R"({
+        "version": "9.9.9",
+        "assets": [
+          {"platform": "%1", "arch": "%2", "type": "portable", "url": "http://example.com/WStart.zip", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ]
+    })")
+                                .arg(platform, arch)
+                                .toUtf8();
+
+    QString error;
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.8", true, &error);
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!info.updateAvailable);
+    QVERIFY(!info.asset.isValid());
+}
+
+void CoreTests::updateManifestRejectsInvalidUtf8() {
+    QByteArray json = "{\"version\":\"9.9.9\",\"releaseNotes\":\"";
+    json.append(char(0xc3));
+    json.append(char(0x28));
+    json.append("\"}");
+
+    QString error;
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(json, "https://example.com/update.json", "0.3.8", true, &error);
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!info.updateAvailable);
+}
+
+void CoreTests::updateManifestRejectsOversizedPayload() {
+    const QByteArray payload(1024 * 1024 + 1, ' ');
+    QString error;
+    const UpdateInfo info =
+        UpdateChecker::parseManifest(payload, "https://example.com/update.json", "0.3.8", true, &error);
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!info.updateAvailable);
 }
 
 void CoreTests::updateSha256Verification() {
@@ -625,9 +841,12 @@ void CoreTests::updateSha256Verification() {
     file.close();
 
     QString error;
-    QVERIFY(UpdateChecker::verifySha256(path, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-                                        &error));
+    QVERIFY(
+        UpdateChecker::verifySha256(path, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", &error));
     QVERIFY(!UpdateChecker::verifySha256(path, "deadbeef", &error));
+    QVERIFY(!error.isEmpty());
+    error.clear();
+    QVERIFY(!UpdateChecker::verifySha256(path, QString(), &error));
     QVERIFY(!error.isEmpty());
 }
 

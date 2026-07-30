@@ -175,7 +175,7 @@ QString text(const QString& language, Key key) {
     case Key::DeleteSection:
         return en ? "Delete section" : QString::fromUtf8("删除栏目");
     case Key::EncryptSection:
-        return en ? "Encrypt section" : QString::fromUtf8("栏目加密");
+        return en ? "Lock section" : QString::fromUtf8("锁定栏目");
     case Key::UnlockSection:
         return en ? "Unlock section" : QString::fromUtf8("解锁栏目");
     case Key::AddItem:
@@ -203,14 +203,14 @@ QString text(const QString& language, Key key) {
     case Key::Paste:
         return en ? "Paste" : QString::fromUtf8("粘贴");
     case Key::LockedHint:
-        return en ? "This section is encrypted. Right-click the section to unlock, edit, or delete it."
-                  : QString::fromUtf8("栏目已加密。右键栏目可解锁、修改或删除。");
+        return en ? "This section is locked in WStart. Right-click the section to unlock, edit, or delete it."
+                  : QString::fromUtf8("栏目已在 WStart 中锁定。右键栏目可解锁、修改或删除。");
     case Key::UnboundHotkey:
         return en ? "No hotkey" : QString::fromUtf8("未绑定快捷键");
     case Key::Disabled:
         return en ? "Disabled" : QString::fromUtf8("已禁用");
     case Key::EncryptedItemCount:
-        return en ? "Encrypted · %1 items" : QString::fromUtf8("已加密 · %1 项");
+        return en ? "Locked · %1 items" : QString::fromUtf8("已锁定 · %1 项");
     case Key::ItemCount:
         return en ? "%1 items" : QString::fromUtf8("%1 项");
     case Key::HotkeyHookFailed:
@@ -267,10 +267,10 @@ QString text(const QString& language, Key key) {
     case Key::DeleteSectionConfirm:
         return en ? "Delete section \"%1\"?" : QString::fromUtf8("确定删除栏目“%1”？");
     case Key::EncryptSectionTitle:
-        return en ? "Encrypt section" : QString::fromUtf8("栏目加密");
+        return en ? "Lock section" : QString::fromUtf8("锁定栏目");
     case Key::EncryptSectionPrompt:
-        return en ? "Enter a new password. Leave empty to remove encryption."
-                  : QString::fromUtf8("输入新密码，留空则取消加密");
+        return en ? "Enter an access password. Leave empty to remove the lock. This lock does not encrypt rules.json."
+                  : QString::fromUtf8("输入访问密码，留空则取消锁定。此功能不会加密 rules.json 配置文件。");
     case Key::InvalidItem:
         return en ? "Invalid item" : QString::fromUtf8("无效条目");
     case Key::ItemTargetRequired:

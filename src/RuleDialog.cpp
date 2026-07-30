@@ -347,9 +347,8 @@ HotkeyRule RuleDialog::rule() const {
     result.action.workingDirectory =
         m_category == LauncherCategory::Program ? m_workingDirectoryEdit->text().trimmed() : QString();
     result.action.windowState = selectedWindowState();
-    result.action.singleInstance =
-        m_category == LauncherCategory::Program && targetLooksLikeExe(result.action.target) &&
-        m_singleInstanceCheck->isChecked();
+    result.action.singleInstance = m_category == LauncherCategory::Program &&
+                                   targetLooksLikeExe(result.action.target) && m_singleInstanceCheck->isChecked();
     if (m_category == LauncherCategory::Program && result.action.workingDirectory.isEmpty()) {
         const QFileInfo targetInfo(PathUtils::toAbsolutePath(result.action.target));
         if (targetInfo.suffix().compare("exe", Qt::CaseInsensitive) == 0 && !targetInfo.absolutePath().isEmpty()) {
@@ -537,7 +536,8 @@ LaunchWindowState RuleDialog::selectedWindowState() const {
     if (!m_windowStateCombo) {
         return LaunchWindowState::Normal;
     }
-    return LaunchAction::windowStateFromName(m_windowStateCombo->itemData(m_windowStateCombo->currentIndex()).toString());
+    return LaunchAction::windowStateFromName(
+        m_windowStateCombo->itemData(m_windowStateCombo->currentIndex()).toString());
 }
 
 void RuleDialog::setSelectedWindowState(LaunchWindowState windowState) {

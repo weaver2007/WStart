@@ -456,8 +456,7 @@ AppSettings AppSettings::fromJson(const QJsonObject& object) {
                          : themeValue.compare("dark", Qt::CaseInsensitive) == 0 ? "dark"
                                                                                 : "system";
     const QString pathStorageValue = object.value("pathStorageMode").toString(settings.pathStorageMode);
-    settings.pathStorageMode =
-        pathStorageValue.compare("absolute", Qt::CaseInsensitive) == 0 ? "absolute" : "relative";
+    settings.pathStorageMode = pathStorageValue.compare("absolute", Qt::CaseInsensitive) == 0 ? "absolute" : "relative";
     settings.itemAppearance = LauncherItemAppearance::fromJson(object.value("itemAppearance").toObject());
     settings.sectionAppearance = LauncherSectionAppearance::fromJson(object.value("sectionAppearance").toObject());
     settings.categoryAppearance = LauncherCategoryAppearance::fromJson(object.value("categoryAppearance").toObject());

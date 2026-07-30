@@ -4,7 +4,7 @@
     <Version>@VERSION@</Version>
     <Title>WStart Setup</Title>
     <Publisher>WStart</Publisher>
-    <ProductUrl>https://github.com/weaver2007/HotKeyManager</ProductUrl>
+    <ProductUrl>https://github.com/weaver2007/WStart</ProductUrl>
     <StartMenuDir>WStart</StartMenuDir>
     <TargetDir>@ApplicationsDirX64@/WStart</TargetDir>
     <InstallerApplicationIcon>app</InstallerApplicationIcon>

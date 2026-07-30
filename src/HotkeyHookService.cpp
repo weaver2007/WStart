@@ -2,15 +2,17 @@
 
 #include "AppLogger.h"
 
-#include <QCoreApplication>
-#include <QMetaObject>
 #include <QMetaType>
+#include <QMutexLocker>
+#include <QThread>
 
 #ifdef Q_OS_WIN
 HotkeyHookService* HotkeyHookService::s_instance = nullptr;
 
 namespace {
 const ULONG_PTR kCancelStartMenuExtraInfo = static_cast<ULONG_PTR>(0x57535457u);
+const UINT kResetHookStateMessage = WM_APP + 0x257;
+const DWORD kHookStartupTimeoutMs = 10000;
 
 bool isCancelStartMenuInput(const KBDLLHOOKSTRUCT* event) {
     return event && (event->flags & LLKHF_INJECTED) && event->dwExtraInfo == kCancelStartMenuExtraInfo;
@@ -61,10 +63,6 @@ QString hookStateText(bool leftWinDown, bool rightWinDown, HotkeyModifiers press
         .arg(static_cast<int>(pressedModifiers));
 }
 
-void logHotkeyState(const QString& message) {
-    AppLogger::writeLine(QString::fromLatin1("HOTKEY"), message);
-}
-
 bool isPhysicalKeyDown(int virtualKey) {
     return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
 }
@@ -87,58 +85,138 @@ int cancelStartMenuVirtualKey(HotkeyModifiers modifiers) {
     return VK_F24;
 }
 
-int sendCancelStartMenuInput(HotkeyModifiers modifiers) {
-    const int cancelKey = cancelStartMenuVirtualKey(modifiers);
+struct CancelStartMenuResult {
+    int virtualKey = 0;
+    UINT sentInputCount = 0;
+    DWORD error = ERROR_SUCCESS;
+};
+
+CancelStartMenuResult sendCancelStartMenuInput(HotkeyModifiers modifiers) {
+    CancelStartMenuResult result;
+    result.virtualKey = cancelStartMenuVirtualKey(modifiers);
+
     INPUT inputs[2];
     ZeroMemory(inputs, sizeof(inputs));
-
     inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = static_cast<WORD>(cancelKey);
+    inputs[0].ki.wVk = static_cast<WORD>(result.virtualKey);
     inputs[0].ki.dwExtraInfo = kCancelStartMenuExtraInfo;
-
     inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = static_cast<WORD>(cancelKey);
+    inputs[1].ki.wVk = static_cast<WORD>(result.virtualKey);
     inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
     inputs[1].ki.dwExtraInfo = kCancelStartMenuExtraInfo;
 
-    SendInput(2, inputs, sizeof(INPUT));
-    return cancelKey;
-}
-
-void sendWinKeyUp(int virtualKey) {
-    INPUT input;
-    ZeroMemory(&input, sizeof(input));
-    input.type = INPUT_KEYBOARD;
-    input.ki.wVk = static_cast<WORD>(virtualKey);
-    input.ki.dwFlags = KEYEVENTF_KEYUP | KEYEVENTF_EXTENDEDKEY;
-    SendInput(1, &input, sizeof(INPUT));
-}
-
-void resetSystemWinKeyState(const QString& reason) {
-    const bool leftDown = isPhysicalKeyDown(VK_LWIN);
-    const bool rightDown = isPhysicalKeyDown(VK_RWIN);
-    logHotkeyState(QString::fromLatin1("%1 reset-system-win-state beforeLeft=%2 beforeRight=%3")
-                       .arg(reason, boolText(leftDown), boolText(rightDown)));
-
-    if (leftDown) {
-        sendWinKeyUp(VK_LWIN);
+    SetLastError(ERROR_SUCCESS);
+    result.sentInputCount = SendInput(2, inputs, sizeof(INPUT));
+    if (result.sentInputCount != 2) {
+        result.error = GetLastError();
     }
-    if (rightDown) {
-        sendWinKeyUp(VK_RWIN);
-    }
+    return result;
 }
 } // namespace
+
+class HotkeyHookThread : public QThread {
+public:
+    explicit HotkeyHookThread(HotkeyHookService* service)
+        : m_service(service), m_readyEvent(CreateEventW(nullptr, TRUE, FALSE, nullptr)) {
+        if (!m_readyEvent) {
+            m_startupError = GetLastError();
+        }
+    }
+
+    ~HotkeyHookThread() override {
+        if (m_readyEvent) {
+            CloseHandle(m_readyEvent);
+        }
+    }
+
+    bool waitUntilReady(DWORD timeoutMs) const {
+        return m_readyEvent && WaitForSingleObject(m_readyEvent, timeoutMs) == WAIT_OBJECT_0;
+    }
+
+    bool canStart() const {
+        return m_readyEvent != nullptr;
+    }
+
+    DWORD startupError() const {
+        return m_startupError;
+    }
+
+    void requestStop() const {
+        InterlockedExchange(&m_stopRequested, 1);
+        const LONG threadId = InterlockedCompareExchange(&m_threadId, 0, 0);
+        if (threadId != 0) {
+            PostThreadMessageW(static_cast<DWORD>(threadId), WM_QUIT, 0, 0);
+        }
+    }
+
+    void requestStateReset() const {
+        const LONG threadId = InterlockedCompareExchange(&m_threadId, 0, 0);
+        if (threadId != 0) {
+            PostThreadMessageW(static_cast<DWORD>(threadId), kResetHookStateMessage, 0, 0);
+        }
+    }
+
+protected:
+    void run() override {
+        InterlockedExchange(&m_threadId, static_cast<LONG>(GetCurrentThreadId()));
+
+        // Creating the queue before signalling readiness guarantees that stop()
+        // can always wake this thread with PostThreadMessage.
+        MSG message;
+        PeekMessageW(&message, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+        HotkeyHookService::s_instance = m_service;
+        m_service->resetKeyboardState(QString::fromLatin1("hook-thread-start"));
+        m_service->synchronizePhysicalModifierState();
+        m_service->m_hook =
+            SetWindowsHookExW(WH_KEYBOARD_LL, &HotkeyHookService::keyboardProc, GetModuleHandleW(nullptr), 0);
+        if (!m_service->m_hook) {
+            m_startupError = GetLastError();
+        } else {
+            InterlockedExchange(&m_service->m_running, 1);
+        }
+        SetEvent(m_readyEvent);
+
+        if (m_service->m_hook && InterlockedCompareExchange(&m_stopRequested, 0, 0) == 0) {
+            while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+                if (message.message == kResetHookStateMessage) {
+                    m_service->resetKeyboardState(QString::fromLatin1("hook-state-reset"));
+                    if (!m_service->isPaused()) {
+                        m_service->synchronizePhysicalModifierState();
+                    }
+                    continue;
+                }
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+        }
+
+        if (m_service->m_hook) {
+            UnhookWindowsHookEx(m_service->m_hook);
+            m_service->m_hook = nullptr;
+        }
+
+        m_service->resetKeyboardState(QString::fromLatin1("hook-thread-stop"));
+        InterlockedExchange(&m_service->m_running, 0);
+        if (HotkeyHookService::s_instance == m_service) {
+            HotkeyHookService::s_instance = nullptr;
+        }
+    }
+
+private:
+    HotkeyHookService* m_service = nullptr;
+    HANDLE m_readyEvent = nullptr;
+    mutable volatile LONG m_threadId = 0;
+    mutable volatile LONG m_stopRequested = 0;
+    DWORD m_startupError = ERROR_SUCCESS;
+};
 #endif
 
 HotkeyHookService::HotkeyHookService(QObject* parent) : QObject(parent) {
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
     qRegisterMetaType<HotkeyRule>("HotkeyRule");
     connect(this, SIGNAL(queuedHotkeyTriggered(HotkeyRule)), this, SIGNAL(hotkeyTriggered(HotkeyRule)),
             Qt::QueuedConnection);
-#else
-    connect(this, &HotkeyHookService::queuedHotkeyTriggered, this, &HotkeyHookService::hotkeyTriggered,
-            Qt::QueuedConnection);
-#endif
+    connect(this, SIGNAL(diagnosticQueued(QString)), this, SLOT(writeQueuedDiagnostic(QString)), Qt::QueuedConnection);
 }
 
 HotkeyHookService::~HotkeyHookService() {
@@ -147,88 +225,115 @@ HotkeyHookService::~HotkeyHookService() {
 
 bool HotkeyHookService::start(QString* error) {
 #ifdef Q_OS_WIN
-    if (m_hook) {
+    if (isRunning()) {
         return true;
     }
-    resetSystemWinKeyState(QString::fromLatin1("pre-hook-start"));
-    s_instance = this;
-    resetKeyboardState(QString::fromLatin1("hook-start"));
-    m_hook = SetWindowsHookExW(WH_KEYBOARD_LL, &HotkeyHookService::keyboardProc, GetModuleHandleW(nullptr), 0);
+    if (m_thread) {
+        stop();
+    }
 
-    if (!m_hook) {
-        const DWORD lastError = GetLastError();
-        logHotkeyState(QString::fromLatin1("hook-start-failed error=%1").arg(lastError));
+    m_thread = new HotkeyHookThread(this);
+    if (!m_thread->canStart()) {
+        const DWORD startupError = m_thread->startupError();
+        delete m_thread;
+        m_thread = nullptr;
         if (error) {
-            *error = QString("SetWindowsHookEx failed with error %1.").arg(lastError);
+            *error = QString::fromLatin1("Unable to create keyboard hook synchronization event (Windows error %1).")
+                         .arg(startupError);
         }
-        s_instance = nullptr;
+        queueDiagnostic(QString::fromLatin1("hook-ready-event-failed error=%1").arg(startupError));
         return false;
     }
-    logHotkeyState(QString::fromLatin1("hook-started reset-win-state %1")
-                       .arg(hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
+    m_thread->start();
+    if (!m_thread->waitUntilReady(kHookStartupTimeoutMs)) {
+        m_thread->requestStop();
+        m_thread->wait();
+        delete m_thread;
+        m_thread = nullptr;
+        if (error) {
+            *error = QString::fromLatin1("Keyboard hook thread did not start within %1 ms.").arg(kHookStartupTimeoutMs);
+        }
+        queueDiagnostic(QString::fromLatin1("hook-thread-start-timeout"));
+        return false;
+    }
+
+    const DWORD startupError = m_thread->startupError();
+    if (startupError != ERROR_SUCCESS || !isRunning()) {
+        m_thread->wait();
+        delete m_thread;
+        m_thread = nullptr;
+        if (error) {
+            *error = QString::fromLatin1("SetWindowsHookEx failed with error %1.").arg(startupError);
+        }
+        queueDiagnostic(QString::fromLatin1("hook-start-failed error=%1").arg(startupError));
+        return false;
+    }
+
+    queueDiagnostic(
+        QString::fromLatin1("hook-started thread=dedicated %1")
+            .arg(hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_state.pressedModifiers())));
     return true;
 #else
     Q_UNUSED(error)
     // Non-Windows platforms keep the UI and rule management available first.
-    // Platform-specific global hotkey backends can be added without changing callers.
     return true;
 #endif
 }
 
 void HotkeyHookService::stop() {
 #ifdef Q_OS_WIN
-    const bool hadHook = m_hook != nullptr;
-    if (m_hook) {
-        UnhookWindowsHookEx(m_hook);
-        m_hook = nullptr;
+    if (!m_thread) {
+        return;
     }
-    if (hadHook) {
-        resetSystemWinKeyState(QString::fromLatin1("post-hook-stop"));
-    }
-    if (s_instance == this) {
-        resetKeyboardState(QString::fromLatin1("hook-stopped"));
-        s_instance = nullptr;
-    }
+    m_thread->requestStop();
+    m_thread->wait();
+    delete m_thread;
+    m_thread = nullptr;
+    queueDiagnostic(QString::fromLatin1("hook-stopped"));
 #endif
 }
 
 bool HotkeyHookService::isRunning() const {
 #ifdef Q_OS_WIN
-    return m_hook != nullptr;
+    return m_running != 0;
 #else
     return false;
 #endif
 }
 
 void HotkeyHookService::setPaused(bool paused) {
-    m_paused = paused;
 #ifdef Q_OS_WIN
-    logHotkeyState(QString::fromLatin1("set-paused paused=%1").arg(boolText(paused)));
-#endif
-#ifdef Q_OS_WIN
-    resetKeyboardState(paused ? QString::fromLatin1("paused") : QString::fromLatin1("resumed"));
-    if (paused) {
-        resetSystemWinKeyState(QString::fromLatin1("paused"));
+    InterlockedExchange(&m_paused, paused ? 1 : 0);
+    queueDiagnostic(QString::fromLatin1("set-paused paused=%1").arg(boolText(paused)));
+    if (m_thread) {
+        m_thread->requestStateReset();
     }
 #else
-    if (paused) {
-        m_activeTriggers.clear();
-    }
+    m_paused = paused;
 #endif
 }
 
 bool HotkeyHookService::isPaused() const {
+#ifdef Q_OS_WIN
+    return m_paused != 0;
+#else
     return m_paused;
+#endif
 }
 
 void HotkeyHookService::setRules(const QVector<HotkeyRule>& rules) {
+    QMutexLocker locker(&m_rulesMutex);
     m_rules = rules;
+}
+
+void HotkeyHookService::writeQueuedDiagnostic(const QString& message) {
+    AppLogger::writeLine(QString::fromLatin1("HOTKEY"), message);
 }
 
 #ifdef Q_OS_WIN
 LRESULT CALLBACK HotkeyHookService::keyboardProc(int code, WPARAM wParam, LPARAM lParam) {
     if (code >= 0 && s_instance) {
-        const auto* event = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+        const KBDLLHOOKSTRUCT* event = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
         const LRESULT result = s_instance->handleKeyboardEvent(wParam, event);
         if (result != 0) {
             return result;
@@ -238,10 +343,9 @@ LRESULT CALLBACK HotkeyHookService::keyboardProc(int code, WPARAM wParam, LPARAM
 }
 
 LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTRUCT* event) {
-    if (m_paused || !event) {
+    if (isPaused() || !event) {
         return 0;
     }
-
     if (isCancelStartMenuInput(event)) {
         return 0;
     }
@@ -254,150 +358,83 @@ LRESULT HotkeyHookService::handleKeyboardEvent(WPARAM wParam, const KBDLLHOOKSTR
 
     const int virtualKey = static_cast<int>(event->vkCode);
     const bool isModifier = isModifierKey(virtualKey);
-    const bool leftWinBefore = m_leftWinPhysicallyDown;
-    const bool rightWinBefore = m_rightWinPhysicallyDown;
-
     if (isWinKey(virtualKey)) {
         if (virtualKey == VK_LWIN) {
             m_leftWinPhysicallyDown = isKeyDown;
         } else {
             m_rightWinPhysicallyDown = isKeyDown;
         }
-        logHotkeyState(QString::fromLatin1("win-event event=%1 key=%2 flags=%3 injected=%4 %5")
-                           .arg(eventName(isKeyDown, isKeyUp), keyName(virtualKey), flagsText(event->flags),
-                                boolText((event->flags & LLKHF_INJECTED) != 0),
-                                hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
-    } else {
-        m_leftWinPhysicallyDown = isPhysicalKeyDown(VK_LWIN);
-        m_rightWinPhysicallyDown = isPhysicalKeyDown(VK_RWIN);
-        if (leftWinBefore != m_leftWinPhysicallyDown || rightWinBefore != m_rightWinPhysicallyDown) {
-            logHotkeyState(QString::fromLatin1("async-win-state-cleared currentKey=%1 event=%2 beforeLeft=%3 beforeRight=%4 %5")
-                               .arg(keyName(virtualKey), eventName(isKeyDown, isKeyUp), boolText(leftWinBefore),
-                                    boolText(rightWinBefore),
-                                    hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
-        }
-    }
-    if (isKeyDown && isModifier) {
-        updatePressedModifierState(virtualKey, true);
-    }
-    if (isKeyUp && isModifier) {
-        updatePressedModifierState(virtualKey, false);
+        queueDiagnostic(
+            QString::fromLatin1("win-event event=%1 key=%2 flags=%3 injected=%4 %5")
+                .arg(eventName(isKeyDown, isKeyUp), keyName(virtualKey), flagsText(event->flags),
+                     boolText((event->flags & LLKHF_INJECTED) != 0),
+                     hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_state.pressedModifiers())));
     }
 
-    // Once a chord is claimed, swallow the key-up events that belong to it too.
-    // Modifier releases must continue to the system; swallowing Win-up leaves
-    // Windows thinking the Win key is still pressed for subsequent keystrokes.
+    if (isModifier) {
+        updatePressedModifierState(virtualKey, isKeyDown);
+    }
+
+    // Once a chord is claimed, swallow the trigger key-up too. Modifier
+    // releases always continue to Windows, otherwise the OS can retain Win.
     if (isTrackedSuppressedKey(virtualKey)) {
-        logHotkeyState(QString::fromLatin1("swallow-suppressed event=%1 key=%2 %3")
-                           .arg(eventName(isKeyDown, isKeyUp), keyName(virtualKey),
-                                hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
+        queueDiagnostic(
+            QString::fromLatin1("swallow-suppressed event=%1 key=%2 %3")
+                .arg(eventName(isKeyDown, isKeyUp), keyName(virtualKey),
+                     hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_state.pressedModifiers())));
         if (isKeyUp) {
-            const QString triggerId = m_suppressedTriggerIds.take(virtualKey);
-            if (!triggerId.isEmpty()) {
-                m_activeTriggers.remove(triggerId);
-                logHotkeyState(QString::fromLatin1("trigger-finished trigger=%1 key=%2").arg(triggerId, keyName(virtualKey)));
-            }
-            clearSuppressedKey(virtualKey);
+            m_state.releaseSuppressedKey(virtualKey);
         }
         return 1;
     }
 
-
-    const HotkeyModifiers modifiers = currentModifiers(virtualKey, isKeyDown, isKeyUp);
-    const HotkeyRule* rule = matchingRule(virtualKey, modifiers);
-    if (!rule) {
-        if (isKeyUp && isModifier) {
-            clearSuppressedKey(virtualKey);
-        }
+    // A release belongs to Windows unless this hook previously claimed the
+    // corresponding key-down. Swallowing an untracked release can leave the
+    // foreground application believing that the key is still held.
+    if (!isKeyDown) {
         return 0;
     }
 
-    const QString triggerId = rule->hotkey.stableId();
-    if (isKeyUp) {
-        m_activeTriggers.remove(triggerId);
-        clearSuppressedKey(virtualKey);
-        if (isModifier) {
-            updatePressedModifierState(virtualKey, false);
-        }
-        logHotkeyState(QString::fromLatin1("swallow-rule-keyup trigger=%1 key=%2 %3")
-                           .arg(triggerId, keyName(virtualKey),
-                                hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
-        return 1;
+    const HotkeyModifiers modifiers = currentModifiers(virtualKey, isKeyDown, isKeyUp);
+    HotkeyRule rule;
+    if (!matchingRule(virtualKey, modifiers, &rule)) {
+        return 0;
     }
 
-    if (!m_activeTriggers.contains(triggerId)) {
-        m_activeTriggers.insert(triggerId);
-        logHotkeyState(QString::fromLatin1("trigger-start rule=%1 hotkey=%2 key=%3 modifiers=%4 %5")
-                           .arg(rule->id, rule->hotkey.displayText(), keyName(virtualKey))
-                           .arg(static_cast<int>(modifiers))
-                           .arg(hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
-        // The low-level hook sees each key as a separate event; remember the
-        // non-modifier key so repeated key-down messages do not re-launch the action.
-        trackSuppressedChord(rule->hotkey);
-        m_suppressedTriggerIds.insert(rule->hotkey.key, triggerId);
-        if (rule->hotkey.modifiers.testFlag(ModifierWin)) {
-            // The real trigger key is swallowed, so the shell would otherwise
-            // see a lone Win press. Tap a free modifier while Win is still down;
-            // this cancels Start-menu activation with less visual disturbance
-            // than sending an extra function-key chord to the shell.
-            const int cancelKey = sendCancelStartMenuInput(modifiers);
-            logHotkeyState(QString::fromLatin1("cancel-start-menu-input trigger=%1 key=%2 %3")
-                               .arg(triggerId, keyName(cancelKey),
-                                    hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_pressedModifiers)));
+    const QString triggerId = rule.hotkey.stableId();
+    if (m_state.claimTrigger(rule.hotkey.key, triggerId)) {
+        queueDiagnostic(
+            QString::fromLatin1("trigger-start rule=%1 hotkey=%2 key=%3 modifiers=%4 %5")
+                .arg(rule.id, rule.hotkey.displayText(), keyName(virtualKey))
+                .arg(static_cast<int>(modifiers))
+                .arg(hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_state.pressedModifiers())));
+
+        if (rule.hotkey.modifiers.testFlag(ModifierWin)) {
+            const CancelStartMenuResult cancelResult = sendCancelStartMenuInput(modifiers);
+            queueDiagnostic(QString::fromLatin1("cancel-start-menu-input trigger=%1 key=%2 sent=%3 error=%4")
+                                .arg(triggerId, keyName(cancelResult.virtualKey))
+                                .arg(cancelResult.sentInputCount)
+                                .arg(cancelResult.error));
         }
-        const HotkeyRule ruleCopy = *rule;
-        emit queuedHotkeyTriggered(ruleCopy);
-    } else {
-        logHotkeyState(QString::fromLatin1("trigger-repeat-ignored trigger=%1 key=%2")
-                           .arg(triggerId, keyName(virtualKey)));
-    }
-    if (isModifier) {
-        updatePressedModifierState(virtualKey, true);
+        emit queuedHotkeyTriggered(rule);
     }
     return 1;
 }
 
 HotkeyModifiers HotkeyHookService::currentModifiers(int eventKey, bool isKeyDown, bool isKeyUp) {
-    HotkeyModifiers modifiers = ModifierNone;
-
-    auto pressed = [eventKey, isKeyDown, isKeyUp](int key) {
-        if (isKeyDown && eventKey == key) {
-            return true;
-        }
-        if (isKeyUp && eventKey == key) {
-            return false;
-        }
-        return (GetAsyncKeyState(key) & 0x8000) != 0;
-    };
-
-    if (pressed(VK_CONTROL) || pressed(VK_LCONTROL) || pressed(VK_RCONTROL)) {
-        modifiers |= ModifierCtrl;
-    }
-    if (pressed(VK_MENU) || pressed(VK_LMENU) || pressed(VK_RMENU)) {
-        modifiers |= ModifierAlt;
-    }
-    if (pressed(VK_SHIFT) || pressed(VK_LSHIFT) || pressed(VK_RSHIFT)) {
-        modifiers |= ModifierShift;
-    }
-    if (m_leftWinPhysicallyDown || m_rightWinPhysicallyDown) {
-        modifiers |= ModifierWin;
-    }
-    m_pressedModifiers = modifiers;
-    return modifiers;
+    Q_UNUSED(eventKey)
+    Q_UNUSED(isKeyDown)
+    Q_UNUSED(isKeyUp)
+    return m_state.pressedModifiers();
 }
 
-const HotkeyRule* HotkeyHookService::matchingRule(int virtualKey, HotkeyModifiers modifiers) const {
-    for (const HotkeyRule& rule : m_rules) {
-        if (rule.enabled && rule.hotkey.isValid() && rule.hotkey.key == virtualKey &&
-            rule.hotkey.modifiers == modifiers) {
-            return &rule;
-        }
-    }
-    return nullptr;
+bool HotkeyHookService::matchingRule(int virtualKey, HotkeyModifiers modifiers, HotkeyRule* match) const {
+    QMutexLocker locker(&m_rulesMutex);
+    return HotkeyState::findMatchingRule(m_rules, virtualKey, modifiers, match);
 }
 
 bool HotkeyHookService::isTrackedSuppressedKey(int virtualKey) const {
-    return m_suppressedKeys.contains(virtualKey);
+    return m_state.isSuppressed(virtualKey);
 }
 
 bool HotkeyHookService::isModifierKey(int virtualKey) const {
@@ -429,35 +466,42 @@ void HotkeyHookService::updatePressedModifierState(int virtualKey, bool pressed)
         : (virtualKey == VK_MENU || virtualKey == VK_LMENU || virtualKey == VK_RMENU)        ? ModifierAlt
         : (virtualKey == VK_SHIFT || virtualKey == VK_LSHIFT || virtualKey == VK_RSHIFT)     ? ModifierShift
                                                                                              : ModifierWin;
-
-    if (pressed) {
-        m_pressedModifiers |= modifier;
-    } else {
-        m_pressedModifiers &= ~modifier;
-    }
-}
-
-void HotkeyHookService::trackSuppressedChord(const HotkeyCombination& hotkey) {
-    if (!hotkey.isValid()) {
-        return;
-    }
-    m_suppressedKeys.insert(hotkey.key);
-}
-
-void HotkeyHookService::clearSuppressedKey(int virtualKey) {
-    m_suppressedTriggerIds.remove(virtualKey);
-    m_suppressedKeys.remove(virtualKey);
+    m_state.setModifierKey(virtualKey, modifier, pressed);
 }
 
 void HotkeyHookService::resetKeyboardState(const QString& reason) {
-    m_activeTriggers.clear();
-    m_suppressedKeys.clear();
-    m_suppressedTriggerIds.clear();
-    m_pressedModifiers = ModifierNone;
+    m_state.reset();
     m_leftWinPhysicallyDown = false;
     m_rightWinPhysicallyDown = false;
-    logHotkeyState(QString::fromLatin1("%1 reset-keyboard-state %2")
-                       .arg(reason, hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown,
-                                                  m_pressedModifiers)));
+    queueDiagnostic(
+        QString::fromLatin1("%1 reset-keyboard-state %2")
+            .arg(reason, hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_state.pressedModifiers())));
+}
+
+void HotkeyHookService::synchronizePhysicalModifierState() {
+    m_leftWinPhysicallyDown = isPhysicalKeyDown(VK_LWIN);
+    m_rightWinPhysicallyDown = isPhysicalKeyDown(VK_RWIN);
+
+    const auto synchronizeModifier = [this](int genericKey, int leftKey, int rightKey, HotkeyModifier modifier) {
+        const bool leftDown = isPhysicalKeyDown(leftKey);
+        const bool rightDown = isPhysicalKeyDown(rightKey);
+        m_state.setModifierKey(leftKey, modifier, leftDown);
+        m_state.setModifierKey(rightKey, modifier, rightDown);
+        // Some remote-input and accessibility providers report only the
+        // generic virtual key. Track it only when neither side is available.
+        m_state.setModifierKey(genericKey, modifier, !leftDown && !rightDown && isPhysicalKeyDown(genericKey));
+    };
+    synchronizeModifier(VK_CONTROL, VK_LCONTROL, VK_RCONTROL, ModifierCtrl);
+    synchronizeModifier(VK_MENU, VK_LMENU, VK_RMENU, ModifierAlt);
+    synchronizeModifier(VK_SHIFT, VK_LSHIFT, VK_RSHIFT, ModifierShift);
+    m_state.setModifierKey(VK_LWIN, ModifierWin, m_leftWinPhysicallyDown);
+    m_state.setModifierKey(VK_RWIN, ModifierWin, m_rightWinPhysicallyDown);
+    queueDiagnostic(
+        QString::fromLatin1("physical-state-synchronized %1")
+            .arg(hookStateText(m_leftWinPhysicallyDown, m_rightWinPhysicallyDown, m_state.pressedModifiers())));
+}
+
+void HotkeyHookService::queueDiagnostic(const QString& message) {
+    emit diagnosticQueued(message);
 }
 #endif

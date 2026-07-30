@@ -6,14 +6,29 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 1, 0)
+#include <QSaveFile>
+#endif
 #include <QStandardPaths>
 #include <QUuid>
 
 #include <algorithm>
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 1, 0) && defined(Q_OS_WIN)
+#include <windows.h>
+#endif
+
 namespace {
+
+const int kDefaultRulesVersion = 1;
+
+QString standardFolderPath(QStandardPaths::StandardLocation location, const QString& fallbackName) {
+    const QString path = QStandardPaths::writableLocation(location);
+    return path.isEmpty() ? QDir::home().filePath(fallbackName) : path;
+}
 
 HotkeyRule makeProgramRule(const QString& sectionId, const QString& id, const QString& name, const QString& target,
                            const QString& arguments = QString()) {
@@ -99,7 +114,8 @@ QVector<HotkeyRule> RuleStore::defaultSystemProgramRules() {
         {"UAC", "UserAccountControlSettings.exe", ""},
         {"关闭计算机", "shutdown.exe", "/s /t 0"},
         {"重启计算机", "shutdown.exe", "/r /t 0"},
-        {"关闭显示器", "powershell.exe", R"wstart(-NoProfile -ExecutionPolicy Bypass -Command "(Add-Type '[DllImport(\"user32.dll\")] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);' -Name Native -Namespace WStart -PassThru)::SendMessage(-1, 0x0112, 0xF170, 2)")wstart"},
+        {"关闭显示器", "powershell.exe",
+         R"wstart(-NoProfile -ExecutionPolicy Bypass -Command "(Add-Type '[DllImport(\"user32.dll\")] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam);' -Name Native -Namespace WStart -PassThru)::SendMessage(-1, 0x0112, 0xF170, 2)")wstart"},
     };
 
     QVector<HotkeyRule> rules;
@@ -115,8 +131,12 @@ QVector<HotkeyRule> RuleStore::defaultSystemProgramRules() {
 
 RuleStore::RuleStore(QObject* parent) : QObject(parent) {}
 
+RuleStore::RuleStore(const QString& configPathOverride, QObject* parent)
+    : QObject(parent), m_configPathOverride(QDir::cleanPath(configPathOverride)) {}
+
 LauncherDocument RuleStore::loadDocument(QString* error) const {
-    QFile file(configPath());
+    const QString path = configPath();
+    QFile file(path);
     if (!file.exists()) {
         return createDefaultDocument();
     }
@@ -127,16 +147,27 @@ LauncherDocument RuleStore::loadDocument(QString* error) const {
         return createDefaultDocument();
     }
 
-    const QJsonDocument json = QJsonDocument::fromJson(file.readAll());
+    const QByteArray contents = file.readAll();
+    file.close();
+    const QJsonDocument json = QJsonDocument::fromJson(contents);
     if (!json.isObject()) {
+        const QString backupPath = path + QString::fromLatin1(".corrupt");
+        const bool backupExists = QFileInfo(backupPath).exists();
+        const bool backupCreated = backupExists || QFile::copy(path, backupPath);
         if (error) {
-            *error = "Configuration root must be an object.";
+            *error = backupCreated
+                         ? QString::fromLatin1("Configuration root must be an object. The original file was preserved "
+                                               "at %1.")
+                               .arg(backupPath)
+                         : QString::fromLatin1("Configuration root must be an object and the original file could not "
+                                               "be backed up.");
         }
         return createDefaultDocument();
     }
 
     LauncherDocument document;
     const QJsonObject root = json.object();
+    document.defaultRulesVersion = root.value("defaultRulesVersion").toInt(0);
     document.settings = AppSettings::fromJson(root.value("settings").toObject());
 
     const QJsonArray sectionArray = root.value("sections").toArray();
@@ -160,7 +191,10 @@ LauncherDocument RuleStore::loadDocument(QString* error) const {
         }
     }
 
-    ensureDefaultRules(&document);
+    if (document.defaultRulesVersion < kDefaultRulesVersion) {
+        ensureDefaultRules(&document);
+        document.defaultRulesVersion = kDefaultRulesVersion;
+    }
 
     return document;
 }
@@ -185,29 +219,106 @@ bool RuleStore::saveDocument(const LauncherDocument& document, QString* error) c
     for (const HotkeyRule& rule : document.rules) {
         if (rule.isValid()) {
             HotkeyRule storedRule = rule;
-            storedRule.action =
-                document.settings.pathStorageMode.compare("absolute", Qt::CaseInsensitive) == 0
-                    ? PathUtils::toAbsoluteAction(storedRule.action)
-                    : PathUtils::toPortableAction(storedRule.action);
+            storedRule.action = document.settings.pathStorageMode.compare("absolute", Qt::CaseInsensitive) == 0
+                                    ? PathUtils::toAbsoluteAction(storedRule.action)
+                                    : PathUtils::toPortableAction(storedRule.action);
             rules.append(storedRule.toJson());
         }
     }
 
     QJsonObject root;
     root["version"] = 2;
+    root["defaultRulesVersion"] = document.defaultRulesVersion;
     root["settings"] = document.settings.toJson();
     root["sections"] = sections;
     root["rules"] = rules;
 
-    QFile file(configPath());
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    const QByteArray contents = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    const QString path = configPath();
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 1, 0)
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
         if (error) {
             *error = file.errorString();
         }
         return false;
     }
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    if (file.write(contents) != contents.size()) {
+        if (error) {
+            *error = file.errorString();
+        }
+        file.cancelWriting();
+        return false;
+    }
+    if (!file.commit()) {
+        if (error) {
+            *error = file.errorString();
+        }
+        return false;
+    }
     return true;
+#else
+    // QSaveFile was introduced after Qt 4. Write beside the destination and
+    // replace only after the complete JSON payload has reached disk.
+    const QString temporaryPath = path + QString::fromLatin1(".tmp");
+    QFile::remove(temporaryPath);
+    QFile file(temporaryPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) || file.write(contents) != contents.size() ||
+        !file.flush()) {
+        if (error) {
+            *error = file.errorString();
+        }
+        file.close();
+        QFile::remove(temporaryPath);
+        return false;
+    }
+    file.close();
+
+#ifdef Q_OS_WIN
+    const QString nativePath = QDir::toNativeSeparators(path);
+    const QString nativeTemporaryPath = QDir::toNativeSeparators(temporaryPath);
+    BOOL replaced = FALSE;
+    if (QFileInfo(path).exists()) {
+        replaced = ReplaceFileW(reinterpret_cast<LPCWSTR>(nativePath.utf16()),
+                                reinterpret_cast<LPCWSTR>(nativeTemporaryPath.utf16()), nullptr,
+                                REPLACEFILE_WRITE_THROUGH, nullptr, nullptr);
+    } else {
+        replaced = MoveFileExW(reinterpret_cast<LPCWSTR>(nativeTemporaryPath.utf16()),
+                               reinterpret_cast<LPCWSTR>(nativePath.utf16()), MOVEFILE_WRITE_THROUGH);
+    }
+    if (!replaced) {
+        const DWORD lastError = GetLastError();
+        QFile::remove(temporaryPath);
+        if (error) {
+            *error = QString::fromLatin1("Unable to replace configuration file (Windows error %1).").arg(lastError);
+        }
+        return false;
+    }
+#else
+    const QString backupPath = path + QString::fromLatin1(".bak");
+    QFile::remove(backupPath);
+    const bool hadOriginal = QFileInfo(path).exists();
+    if (hadOriginal && !QFile::rename(path, backupPath)) {
+        QFile::remove(temporaryPath);
+        if (error) {
+            *error = QString::fromLatin1("Unable to preserve the existing configuration file.");
+        }
+        return false;
+    }
+    if (!QFile::rename(temporaryPath, path)) {
+        if (hadOriginal) {
+            QFile::rename(backupPath, path);
+        }
+        if (error) {
+            *error = QString::fromLatin1("Unable to replace the configuration file.");
+        }
+        return false;
+    }
+    QFile::remove(backupPath);
+#endif
+    return true;
+#endif
 }
 
 QVector<HotkeyRule> RuleStore::load(QString* error) const {
@@ -222,6 +333,9 @@ bool RuleStore::save(const QVector<HotkeyRule>& rules, QString* error) const {
 }
 
 QString RuleStore::configPath() const {
+    if (!m_configPathOverride.isEmpty()) {
+        return m_configPathOverride;
+    }
     return QDir(configDirectory()).filePath("rules.json");
 }
 
@@ -248,6 +362,7 @@ LauncherDocument RuleStore::createDefaultDocument() const {
     LauncherDocument document;
     ensureDefaultSections(&document);
     ensureDefaultRules(&document);
+    document.defaultRulesVersion = kDefaultRulesVersion;
     return document;
 }
 
@@ -308,14 +423,14 @@ void RuleStore::ensureDefaultRules(LauncherDocument* document) const {
                 return true;
             }
             return rule.action.target.compare(expected.action.target, Qt::CaseInsensitive) == 0 &&
-                   rule.action.arguments.trimmed().compare(expected.action.arguments.trimmed(), Qt::CaseInsensitive) == 0;
+                   rule.action.arguments.trimmed().compare(expected.action.arguments.trimmed(), Qt::CaseInsensitive) ==
+                       0;
         });
     };
 
     auto hasRuleId = [document](const QString& id) {
-        return std::any_of(document->rules.begin(), document->rules.end(), [&id](const HotkeyRule& rule) {
-            return rule.id == id;
-        });
+        return std::any_of(document->rules.begin(), document->rules.end(),
+                           [&id](const HotkeyRule& rule) { return rule.id == id; });
     };
 
     auto uniqueRuleId = [&hasRuleId](const QString& preferredId) {
@@ -341,19 +456,19 @@ void RuleStore::ensureDefaultRules(LauncherDocument* document) const {
     if (!sectionHasRules(folderSection)) {
         document->rules.push_back(
             makeFolderRule(folderSection, "default-folder-documents", QString::fromUtf8("我的文档"),
-                           QDir::home().filePath("Documents")));
+                           standardFolderPath(QStandardPaths::DocumentsLocation, QString::fromLatin1("Documents"))));
         document->rules.push_back(
             makeFolderRule(folderSection, "default-folder-desktop", QString::fromUtf8("桌面"),
-                           QDir::home().filePath("Desktop")));
+                           standardFolderPath(QStandardPaths::DesktopLocation, QString::fromLatin1("Desktop"))));
         document->rules.push_back(
             makeFolderRule(folderSection, "default-folder-downloads", QString::fromUtf8("下载"),
-                           QDir::home().filePath("Downloads")));
+                           standardFolderPath(QStandardPaths::DownloadLocation, QString::fromLatin1("Downloads"))));
     }
 
     const QString websiteSection = defaultSectionId(LauncherCategory::Website, 0);
     if (!sectionHasRules(websiteSection)) {
-        document->rules.push_back(
-            makeWebsiteRule(websiteSection, "default-website-baidu", QString::fromUtf8("百度"), "https://www.baidu.com"));
+        document->rules.push_back(makeWebsiteRule(websiteSection, "default-website-baidu", QString::fromUtf8("百度"),
+                                                  "https://www.baidu.com"));
         document->rules.push_back(
             makeWebsiteRule(websiteSection, "default-website-bing", QString::fromUtf8("必应"), "https://www.bing.com"));
     }
@@ -372,9 +487,12 @@ QString RuleStore::defaultSectionId(LauncherCategory category, int index) const 
 }
 
 QString RuleStore::configDirectory() const {
+    if (!m_configPathOverride.isEmpty()) {
+        return QFileInfo(m_configPathOverride).absolutePath();
+    }
     const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     if (!appData.isEmpty()) {
         return appData;
     }
-    return QDir::home().filePath(".HotKeyManager");
+    return QDir::home().filePath(".WStart");
 }

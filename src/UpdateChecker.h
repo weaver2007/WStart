@@ -1,10 +1,11 @@
 #pragma once
 
+#include <QByteArray>
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QPointer>
-#include <QUrl>
 #include <QString>
+#include <QUrl>
 #include <QVector>
 
 class QNetworkReply;
@@ -50,8 +51,8 @@ public:
     static QString currentArchKey();
     static bool versionGreaterThan(const QString& left, const QString& right);
     static QString updateManifestAssetUrlFromReleasePayload(const QByteArray& payload);
-    static UpdateInfo parseManifest(const QByteArray& payload, const QString& manifestUrl, const QString& currentVersion,
-                                    bool preferPortable, QString* error = nullptr);
+    static UpdateInfo parseManifest(const QByteArray& payload, const QString& manifestUrl,
+                                    const QString& currentVersion, bool preferPortable, QString* error = nullptr);
     static UpdateAsset selectAsset(const QVector<UpdateAsset>& assets, bool preferPortable);
     static bool verifySha256(const QString& filePath, const QString& expectedSha256, QString* error = nullptr);
 
@@ -70,11 +71,13 @@ signals:
     void downloadFinished(QString filePath, UpdateAsset asset, QString error);
 
 private slots:
+    void onCheckReadyRead();
     void onCheckReplyFinished();
     void onDownloadReadyRead();
     void onDownloadReplyFinished();
 
 private:
+    void startCheckRequest(const QUrl& url);
     QString effectiveManifestUrl() const;
     QString inferredReleaseUrl(const QString& manifestUrl) const;
     QNetworkRequest makeRequest(const QUrl& url) const;
@@ -91,6 +94,10 @@ private:
     bool m_silent = false;
     bool m_downloadCancelled = false;
     bool m_preferPortable = false;
+    QByteArray m_checkPayload;
+    QString m_downloadWriteError;
+    bool m_checkPayloadTooLarge = false;
     int m_checkRedirectCount = 0;
     int m_manifestIndirectionCount = 0;
+    int m_downloadRedirectCount = 0;
 };

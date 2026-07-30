@@ -99,14 +99,29 @@ public:
     void enqueue(const QString& line) {
         {
             QMutexLocker locker(&m_mutex);
+            if (m_stopRequested) {
+                return;
+            }
             if (m_queue.size() >= kMaxQueuedLines) {
                 m_queue.dequeue();
             }
             m_queue.enqueue(line);
+            if (!m_started) {
+                m_started = true;
+                start();
+            }
         }
         m_wait.wakeOne();
-        if (!isRunning()) {
-            start();
+    }
+
+    void stopAndFlush() {
+        {
+            QMutexLocker locker(&m_mutex);
+            m_stopRequested = true;
+        }
+        m_wait.wakeOne();
+        if (isRunning()) {
+            wait();
         }
     }
 
@@ -114,10 +129,11 @@ protected:
     void run() override {
         for (;;) {
             QStringList batch;
+            bool finished = false;
             {
                 QMutexLocker locker(&m_mutex);
-                if (m_queue.isEmpty()) {
-                    m_wait.wait(&m_mutex, 1000);
+                while (m_queue.isEmpty() && !m_stopRequested) {
+                    m_wait.wait(&m_mutex);
                 }
                 while (!m_queue.isEmpty()) {
                     batch.append(m_queue.dequeue());
@@ -125,8 +141,12 @@ protected:
                         break;
                     }
                 }
+                finished = m_stopRequested && m_queue.isEmpty();
             }
             appendLines(batch);
+            if (finished) {
+                return;
+            }
         }
     }
 
@@ -134,6 +154,8 @@ private:
     QMutex m_mutex;
     QWaitCondition m_wait;
     QQueue<QString> m_queue;
+    bool m_started = false;
+    bool m_stopRequested = false;
 };
 
 LogWriterThread* writerThread() {
@@ -176,6 +198,20 @@ void AppLogger::install() {
 #endif
     *installedFlag() = true;
     writeLine(QString::fromLatin1("INFO"), QString::fromLatin1("logger installed path=%1").arg(logFilePath()));
+}
+
+void AppLogger::shutdown() {
+    if (!*installedFlag()) {
+        return;
+    }
+    writeLine(QString::fromLatin1("INFO"), QString::fromLatin1("logger shutting down"));
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    qInstallMsgHandler(nullptr);
+#else
+    qInstallMessageHandler(nullptr);
+#endif
+    *installedFlag() = false;
+    writerThread()->stopAndFlush();
 }
 
 bool AppLogger::isInstalled() {

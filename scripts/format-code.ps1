@@ -43,3 +43,7 @@ if ($Check) {
 } else {
     & $clangFormat -i --style=file @($files.FullName)
 }
+
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}

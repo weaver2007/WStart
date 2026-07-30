@@ -6,14 +6,28 @@
 
 class QStandardPaths {
 public:
-    enum StandardLocation { AppConfigLocation, AppLocalDataLocation };
+    enum StandardLocation {
+        AppConfigLocation,
+        AppLocalDataLocation,
+        DesktopLocation,
+        DocumentsLocation,
+        DownloadLocation
+    };
 
     static QString writableLocation(StandardLocation location) {
-        Q_UNUSED(location);
+        if (location == DesktopLocation) {
+            return QDesktopServices::storageLocation(QDesktopServices::DesktopLocation);
+        }
+        if (location == DocumentsLocation) {
+            return QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
+        }
+        if (location == DownloadLocation) {
+            return QDir::home().filePath(QString::fromLatin1("Downloads"));
+        }
         const QString data = QDesktopServices::storageLocation(QDesktopServices::DataLocation);
         if (!data.isEmpty()) {
             return data;
         }
-        return QDir::home().filePath(".HotKeyManager");
+        return QDir::home().filePath(".WStart");
     }
 };

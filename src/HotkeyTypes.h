@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QMetaType>
 #include <QString>
 #include <QVector>
 
@@ -97,6 +98,8 @@ struct HotkeyRule {
     static HotkeyRule fromJson(const QJsonObject& object);
 };
 
+Q_DECLARE_METATYPE(HotkeyRule)
+
 struct LauncherItemAppearance {
     int iconWidth = 48;
     int iconHeight = 48;
@@ -153,6 +156,7 @@ struct AppSettings {
 };
 
 struct LauncherDocument {
+    int defaultRulesVersion = 0;
     AppSettings settings;
     QVector<LauncherSection> sections;
     QVector<HotkeyRule> rules;

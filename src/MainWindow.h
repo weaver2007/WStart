@@ -30,6 +30,7 @@
 #include <QVBoxLayout>
 
 class QProgressDialog;
+class QThread;
 
 #if defined(Q_OS_WIN) && QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -46,6 +47,7 @@ class MainWindow : public QMainWindow, public LauncherWindowInterface {
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override;
     QString language() const override;
     bool hotkeysEnabled() const override;
 
@@ -92,6 +94,7 @@ private slots:
     void setPathStorageAbsolute();
     void setUpdatesEnabled(bool enabled);
     void setStartupEnabled(bool enabled);
+    void onStartupRegistrationFinished(bool enabled, bool success, QString error, bool userInitiated);
     void configureGithubToken();
     void checkForUpdates();
     void showAboutDialog();
@@ -131,14 +134,15 @@ private:
     void retranslateUi();
     void rebuildNavItems();
     void loadDocument();
-    void saveDocument();
-    void saveDocumentSilently();
+    bool saveDocument();
+    bool saveDocumentSilently();
     void refreshHooks();
     void rebuildSections();
     void setCurrentCategory(LauncherCategory category);
     void setLanguage(const QString& language);
     void setThemeMode(const QString& themeMode);
     void setPathStorageMode(const QString& mode);
+    void requestStartupRegistration(bool enabled, bool userInitiated);
     void applyTheme();
     void applyItemAppearanceChange();
     void applySectionAppearanceChange();
@@ -208,6 +212,8 @@ private:
     HotkeyHookService m_hookService;
     UpdateChecker m_updateChecker;
     LauncherDocument m_document;
+    LauncherDocument m_persistedDocument;
+    QThread* m_startupRegistrationThread = nullptr;
     LauncherCategory m_currentCategory = LauncherCategory::Program;
     QSet<QString> m_unlockedSectionIds;
     QHash<QString, QListWidget*> m_sectionLists;

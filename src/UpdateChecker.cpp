@@ -28,7 +28,9 @@
 namespace {
 
 const int kMaxCheckRedirects = 5;
+const int kMaxDownloadRedirects = 5;
 const int kMaxManifestIndirections = 3;
+const int kMaxManifestPayloadSize = 1024 * 1024;
 const char kDefaultUpdateManifestUrl[] = "https://api.github.com/repos/weaver2007/WStart/releases/latest";
 
 #if defined(Q_OS_WIN) && !defined(CALG_SHA_256)
@@ -37,8 +39,8 @@ const char kDefaultUpdateManifestUrl[] = "https://api.github.com/repos/weaver200
 
 QVector<int> parseVersionParts(const QString& version) {
     QVector<int> parts;
-    const QString cleaned = version.trimmed().startsWith('v', Qt::CaseInsensitive) ? version.trimmed().mid(1)
-                                                                                   : version.trimmed();
+    const QString cleaned =
+        version.trimmed().startsWith('v', Qt::CaseInsensitive) ? version.trimmed().mid(1) : version.trimmed();
     const QStringList tokens = cleaned.split('.');
     for (const QString& token : tokens) {
         QString digits;
@@ -131,18 +133,76 @@ QString fileNameFromUrl(const QString& urlText) {
     return name.isEmpty() ? QString::fromLatin1("WStart-update.bin") : name;
 }
 
+bool isSafeDownloadFileName(const QString& value) {
+    const QString name = value.trimmed();
+    if (name.isEmpty() || name == QLatin1String(".") || name == QLatin1String("..") || name.contains('/') ||
+        name.contains('\\') || name.contains(':')) {
+        return false;
+    }
+    for (int index = 0; index < name.size(); ++index) {
+        if (name.at(index).unicode() < 0x20) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool isValidUtf8(const QByteArray& value) {
+    const unsigned char* bytes = reinterpret_cast<const unsigned char*>(value.constData());
+    int index = 0;
+    while (index < value.size()) {
+        const unsigned char first = bytes[index++];
+        if (first <= 0x7f) {
+            continue;
+        }
+
+        int continuationCount = 0;
+        unsigned int codePoint = 0;
+        unsigned int minimumCodePoint = 0;
+        if (first >= 0xc2 && first <= 0xdf) {
+            continuationCount = 1;
+            codePoint = first & 0x1f;
+            minimumCodePoint = 0x80;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            continuationCount = 2;
+            codePoint = first & 0x0f;
+            minimumCodePoint = 0x800;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            continuationCount = 3;
+            codePoint = first & 0x07;
+            minimumCodePoint = 0x10000;
+        } else {
+            return false;
+        }
+
+        if (index + continuationCount > value.size()) {
+            return false;
+        }
+        for (int offset = 0; offset < continuationCount; ++offset) {
+            const unsigned char continuation = bytes[index++];
+            if ((continuation & 0xc0) != 0x80) {
+                return false;
+            }
+            codePoint = (codePoint << 6) | (continuation & 0x3f);
+        }
+        if (codePoint < minimumCodePoint || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 UpdateAsset assetFromJson(const QJsonObject& object) {
     UpdateAsset asset;
     asset.platform = normalizedPlatform(object.value("platform").toString());
     asset.arch = normalizedArch(object.value("arch").toString());
     asset.type = object.value("type").toString(object.value("packageType").toString()).trimmed().toLower();
-    asset.url = object.value("apiUrl")
-                    .toString(object.value("url").toString(object.value("downloadUrl").toString()))
-                    .trimmed();
+    const QString browserUrl = object.value("url").toString(object.value("downloadUrl").toString()).trimmed();
+    asset.url = object.value("apiUrl").toString(browserUrl).trimmed();
     asset.sha256 = object.value("sha256").toString().trimmed();
     asset.fileName = object.value("fileName").toString().trimmed();
     if (asset.fileName.isEmpty() && !asset.url.isEmpty()) {
-        asset.fileName = fileNameFromUrl(asset.url);
+        asset.fileName = fileNameFromUrl(browserUrl.isEmpty() ? asset.url : browserUrl);
     }
     return asset;
 }
@@ -173,9 +233,28 @@ bool isGithubUrl(const QUrl& url) {
            url.host().compare("raw.githubusercontent.com", Qt::CaseInsensitive) == 0;
 }
 
+bool isSecureHttpUrl(const QUrl& url) {
+    return url.isValid() && url.scheme().compare(QString::fromLatin1("https"), Qt::CaseInsensitive) == 0 &&
+           !url.host().isEmpty();
+}
+
 bool isGithubReleaseAssetApiUrl(const QUrl& url) {
     return url.host().compare("api.github.com", Qt::CaseInsensitive) == 0 &&
            url.path().contains("/releases/assets/", Qt::CaseInsensitive);
+}
+
+bool isSha256Text(const QString& value) {
+    const QString normalized = value.trimmed();
+    if (normalized.size() != 64) {
+        return false;
+    }
+    for (int index = 0; index < normalized.size(); ++index) {
+        const QChar character = normalized.at(index).toLower();
+        if (!character.isDigit() && (character < QLatin1Char('a') || character > QLatin1Char('f'))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 QUrl redirectedUrl(QNetworkReply* reply) {
@@ -194,7 +273,8 @@ QUrl redirectedUrl(QNetworkReply* reply) {
 } // namespace
 
 bool UpdateAsset::isValid() const {
-    return !url.trimmed().isEmpty();
+    const QUrl parsedUrl(url.trimmed());
+    return isSecureHttpUrl(parsedUrl) && isSafeDownloadFileName(fileName);
 }
 
 UpdateChecker::UpdateChecker(QObject* parent) : QObject(parent) {
@@ -309,10 +389,34 @@ QString UpdateChecker::updateManifestAssetUrlFromReleasePayload(const QByteArray
 UpdateInfo UpdateChecker::parseManifest(const QByteArray& payload, const QString& manifestUrl,
                                         const QString& currentVersion, bool preferPortable, QString* error) {
     UpdateInfo info;
-    const QJsonDocument document = QJsonDocument::fromJson(maybeDecodeGithubContents(payload));
+    if (payload.size() > kMaxManifestPayloadSize) {
+        if (error) {
+            *error = QString::fromUtf8("Update manifest exceeds the 1 MB size limit.");
+        }
+        return info;
+    }
+
+    const QByteArray decodedPayload = maybeDecodeGithubContents(payload);
+    if (!isValidUtf8(decodedPayload)) {
+        if (error) {
+            *error = QString::fromUtf8("Update manifest is not valid UTF-8.");
+        }
+        return info;
+    }
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(decodedPayload, &parseError);
+#else
+    const QJsonDocument document = QJsonDocument::fromJson(decodedPayload);
+#endif
     if (!document.isObject()) {
         if (error) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+            *error = QString::fromUtf8("Invalid update manifest: %1").arg(parseError.errorString());
+#else
             *error = QString::fromUtf8("Invalid update manifest.");
+#endif
         }
         return info;
     }
@@ -360,6 +464,11 @@ UpdateInfo UpdateChecker::parseManifest(const QByteArray& payload, const QString
             *error = QString::fromUtf8("Update manifest does not contain a downloadable asset for this platform.");
         }
         info.updateAvailable = false;
+    } else if (info.updateAvailable && !isSha256Text(info.asset.sha256)) {
+        if (error) {
+            *error = QString::fromUtf8("Update manifest does not contain a valid SHA256 for the selected asset.");
+        }
+        info.updateAvailable = false;
     }
     return info;
 }
@@ -392,8 +501,11 @@ UpdateAsset UpdateChecker::selectAsset(const QVector<UpdateAsset>& assets, bool 
 
 bool UpdateChecker::verifySha256(const QString& filePath, const QString& expectedSha256, QString* error) {
     const QString expected = expectedSha256.trimmed().toLower();
-    if (expected.isEmpty()) {
-        return true;
+    if (!isSha256Text(expected)) {
+        if (error) {
+            *error = QString::fromUtf8("A valid SHA256 checksum is required.");
+        }
+        return false;
     }
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
@@ -475,8 +587,8 @@ void UpdateChecker::checkNow(bool silent) {
 
     const QString urlText = effectiveManifestUrl();
     const QUrl url(urlText);
-    if (!url.isValid() || url.scheme().isEmpty()) {
-        const QString error = QString::fromUtf8("Update manifest URL is empty.");
+    if (!isSecureHttpUrl(url)) {
+        const QString error = QString::fromUtf8("Update manifest URL must use HTTPS.");
         emit checkFinished(false, QString(), QString(), QString(), error, silent);
         emit updateInfoReady(UpdateInfo(), error, silent);
         return;
@@ -485,8 +597,7 @@ void UpdateChecker::checkNow(bool silent) {
     m_silent = silent;
     m_checkRedirectCount = 0;
     m_manifestIndirectionCount = 0;
-    m_reply = m_network.get(makeRequest(url));
-    connect(m_reply, SIGNAL(finished()), this, SLOT(onCheckReplyFinished()));
+    startCheckRequest(url);
 }
 
 void UpdateChecker::downloadSelectedUpdate() {
@@ -494,8 +605,9 @@ void UpdateChecker::downloadSelectedUpdate() {
         return;
     }
     const QUrl url(m_lastUpdateInfo.asset.url);
-    if (!url.isValid() || url.scheme().isEmpty()) {
-        emit downloadFinished(QString(), m_lastUpdateInfo.asset, QString::fromUtf8("Update download URL is invalid."));
+    if (!isSecureHttpUrl(url)) {
+        emit downloadFinished(QString(), m_lastUpdateInfo.asset,
+                              QString::fromUtf8("Update download URL must use HTTPS."));
         return;
     }
 
@@ -512,10 +624,32 @@ void UpdateChecker::downloadSelectedUpdate() {
     }
 
     m_downloadCancelled = false;
+    m_downloadRedirectCount = 0;
+    m_downloadWriteError.clear();
     m_downloadReply = m_network.get(makeRequest(url));
     connect(m_downloadReply, SIGNAL(readyRead()), this, SLOT(onDownloadReadyRead()));
     connect(m_downloadReply, SIGNAL(downloadProgress(qint64, qint64)), this, SIGNAL(downloadProgress(qint64, qint64)));
     connect(m_downloadReply, SIGNAL(finished()), this, SLOT(onDownloadReplyFinished()));
+}
+
+void UpdateChecker::startCheckRequest(const QUrl& url) {
+    m_checkPayload.clear();
+    m_checkPayloadTooLarge = false;
+    m_reply = m_network.get(makeRequest(url));
+    m_reply->setReadBufferSize(kMaxManifestPayloadSize + 1);
+    connect(m_reply, SIGNAL(readyRead()), this, SLOT(onCheckReadyRead()));
+    connect(m_reply, SIGNAL(finished()), this, SLOT(onCheckReplyFinished()));
+}
+
+void UpdateChecker::onCheckReadyRead() {
+    if (!m_reply || m_checkPayloadTooLarge) {
+        return;
+    }
+    m_checkPayload.append(m_reply->readAll());
+    if (m_checkPayload.size() > kMaxManifestPayloadSize) {
+        m_checkPayloadTooLarge = true;
+        m_reply->abort();
+    }
 }
 
 void UpdateChecker::cancelDownload() {
@@ -527,30 +661,34 @@ void UpdateChecker::cancelDownload() {
 
 void UpdateChecker::onCheckReplyFinished() {
     QNetworkReply* reply = m_reply;
-    m_reply = nullptr;
     if (!reply) {
         return;
     }
+    onCheckReadyRead();
+    m_reply = nullptr;
 
     const bool silent = m_silent;
     const QString manifestUrlText = reply->url().toString();
     const QUrl redirect = redirectedUrl(reply);
     QString error;
     QByteArray payload;
-    if (redirect.isValid()) {
+    if (m_checkPayloadTooLarge) {
+        error = QString::fromUtf8("Update manifest exceeds the 1 MB size limit.");
+    } else if (redirect.isValid() && !isSecureHttpUrl(redirect)) {
+        error = QString::fromUtf8("Update manifest redirect must use HTTPS.");
+    } else if (redirect.isValid()) {
         if (m_checkRedirectCount >= kMaxCheckRedirects) {
             error = QString::fromUtf8("Too many update manifest redirects.");
         } else {
             ++m_checkRedirectCount;
             reply->deleteLater();
-            m_reply = m_network.get(makeRequest(redirect));
-            connect(m_reply, SIGNAL(finished()), this, SLOT(onCheckReplyFinished()));
+            startCheckRequest(redirect);
             return;
         }
     } else if (reply->error() != QNetworkReply::NoError) {
         error = reply->errorString();
     } else {
-        payload = reply->readAll();
+        payload = m_checkPayload;
     }
     reply->deleteLater();
 
@@ -568,9 +706,14 @@ void UpdateChecker::onCheckReplyFinished() {
             emit updateInfoReady(UpdateInfo(), error, silent);
             return;
         }
+        if (!isSecureHttpUrl(QUrl(manifestAssetUrl))) {
+            error = QString::fromUtf8("Update manifest asset URL must use HTTPS.");
+            emit checkFinished(false, QString(), QString(), QString(), error, silent);
+            emit updateInfoReady(UpdateInfo(), error, silent);
+            return;
+        }
         ++m_manifestIndirectionCount;
-        m_reply = m_network.get(makeRequest(QUrl(manifestAssetUrl)));
-        connect(m_reply, SIGNAL(finished()), this, SLOT(onCheckReplyFinished()));
+        startCheckRequest(QUrl(manifestAssetUrl));
         return;
     }
 
@@ -588,27 +731,46 @@ void UpdateChecker::onCheckReplyFinished() {
 
 void UpdateChecker::onDownloadReadyRead() {
     if (m_downloadReply && m_downloadFile) {
-        m_downloadFile->write(m_downloadReply->readAll());
+        const QByteArray contents = m_downloadReply->readAll();
+        if (m_downloadCancelled || !m_downloadWriteError.isEmpty()) {
+            return;
+        }
+        if (!contents.isEmpty() && m_downloadFile->write(contents) != contents.size()) {
+            m_downloadWriteError = m_downloadFile->errorString();
+            if (m_downloadWriteError.isEmpty()) {
+                m_downloadWriteError = QString::fromUtf8("Unable to write the downloaded update to disk.");
+            }
+            m_downloadReply->abort();
+        }
     }
 }
 
 void UpdateChecker::onDownloadReplyFinished() {
     QNetworkReply* reply = m_downloadReply;
     QFile* file = m_downloadFile;
-    m_downloadReply = nullptr;
-    m_downloadFile = nullptr;
     if (!reply) {
         return;
     }
+    onDownloadReadyRead();
+    m_downloadReply = nullptr;
+    m_downloadFile = nullptr;
     const QUrl redirect = reply ? redirectedUrl(reply) : QUrl();
-    if (redirect.isValid() && !m_downloadCancelled) {
+    if (redirect.isValid() && !isSecureHttpUrl(redirect)) {
+        m_downloadWriteError = QString::fromUtf8("Update download redirect must use HTTPS.");
+    }
+    if (redirect.isValid() && !m_downloadCancelled && m_downloadWriteError.isEmpty()) {
         if (file) {
             file->close();
             file->remove();
             delete file;
         }
         reply->deleteLater();
-        m_downloadReply = m_network.get(makeRequest(redirect));
+        if (m_downloadRedirectCount >= kMaxDownloadRedirects) {
+            emit downloadFinished(QString(), m_lastUpdateInfo.asset,
+                                  QString::fromUtf8("Too many update download redirects."));
+            return;
+        }
+        ++m_downloadRedirectCount;
         m_downloadFile = new QFile(downloadFilePath(m_lastUpdateInfo.asset), this);
         if (!m_downloadFile->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
             const QString error = m_downloadFile->errorString();
@@ -617,6 +779,7 @@ void UpdateChecker::onDownloadReplyFinished() {
             emit downloadFinished(QString(), m_lastUpdateInfo.asset, error);
             return;
         }
+        m_downloadReply = m_network.get(makeRequest(redirect));
         connect(m_downloadReply, SIGNAL(readyRead()), this, SLOT(onDownloadReadyRead()));
         connect(m_downloadReply, SIGNAL(downloadProgress(qint64, qint64)), this,
                 SIGNAL(downloadProgress(qint64, qint64)));
@@ -625,13 +788,14 @@ void UpdateChecker::onDownloadReplyFinished() {
     }
 
     if (file) {
-        file->write(reply->readAll());
         file->close();
     }
 
     QString error;
     const QString filePath = file ? file->fileName() : QString();
-    if (m_downloadCancelled) {
+    if (!m_downloadWriteError.isEmpty()) {
+        error = m_downloadWriteError;
+    } else if (m_downloadCancelled) {
         error = QString::fromUtf8("Download cancelled.");
     } else if (reply->error() != QNetworkReply::NoError) {
         error = reply->errorString();
@@ -672,7 +836,7 @@ QNetworkRequest UpdateChecker::makeRequest(const QUrl& url) const {
     } else {
         request.setRawHeader("Accept", "application/vnd.github+json, application/json");
     }
-    if (!m_githubToken.isEmpty() && isGithubUrl(url)) {
+    if (!m_githubToken.isEmpty() && isSecureHttpUrl(url) && isGithubUrl(url)) {
         request.setRawHeader("Authorization", QByteArray("Bearer ") + m_githubToken.toUtf8());
         request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
     }

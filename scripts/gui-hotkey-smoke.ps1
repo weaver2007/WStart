@@ -2,13 +2,41 @@ param(
     [string]$ExePath = (Join-Path $PSScriptRoot '..\out\build\qt6.8.3-msvc2022-dynamic-x64\WStart.exe'),
     [string]$ConfigPath = (Join-Path $env:LOCALAPPDATA 'WStart\WStart\rules.json'),
     [switch]$StrictStartMenuCheck,
-    [switch]$KeepWStartRunning
+    [switch]$KeepWStartRunning,
+    [switch]$NoElevation
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Write-Step([string]$Message) { Write-Host "[WStart GUI smoke] $Message" }
+
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if (-not (Test-IsAdministrator)) {
+    if ($NoElevation) {
+        throw 'The GUI smoke test must run elevated because WStart installs an administrator-level keyboard hook.'
+    }
+
+    $arguments = @(
+        '-NoProfile'
+        '-ExecutionPolicy', 'Bypass'
+        '-File', ('"{0}"' -f $PSCommandPath)
+        '-ExePath', ('"{0}"' -f $ExePath)
+        '-ConfigPath', ('"{0}"' -f $ConfigPath)
+        '-NoElevation'
+    )
+    if ($StrictStartMenuCheck) { $arguments += '-StrictStartMenuCheck' }
+    if ($KeepWStartRunning) { $arguments += '-KeepWStartRunning' }
+
+    Write-Step 'Requesting administrator privileges for input injection'
+    $process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $arguments -Wait -PassThru
+    exit $process.ExitCode
+}
 
 function Add-NativeApis {
     if ('WStartSmoke.Native' -as [type]) { return }
@@ -17,8 +45,17 @@ using System;
 using System.Runtime.InteropServices;
 namespace WStartSmoke {
   public static class Native {
-    [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public KEYBDINPUT ki; }
+    [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public INPUTUNION data; }
+    [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION {
+      [FieldOffset(0)] public MOUSEINPUT mi;
+      [FieldOffset(0)] public KEYBDINPUT ki;
+      [FieldOffset(0)] public HARDWAREINPUT hi;
+    }
+    [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT {
+      public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo;
+    }
     [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)] public struct HARDWAREINPUT { public uint uMsg; public ushort wParamL; public ushort wParamH; }
     [DllImport("user32.dll", SetLastError=true)] public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
     public const uint INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
@@ -26,8 +63,8 @@ namespace WStartSmoke {
     public static void SendKey(ushort vk, bool up, bool ext) {
       INPUT[] inputs = new INPUT[1];
       inputs[0].type = INPUT_KEYBOARD;
-      inputs[0].ki.wVk = vk;
-      inputs[0].ki.dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (ext ? KEYEVENTF_EXTENDEDKEY : 0);
+      inputs[0].data.ki.wVk = vk;
+      inputs[0].data.ki.dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (ext ? KEYEVENTF_EXTENDEDKEY : 0);
       uint sent = SendInput(1, inputs, Marshal.SizeOf(typeof(INPUT)));
       if (sent != 1) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     }

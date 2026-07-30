@@ -2,8 +2,8 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QFileInfo>
 #include <QFile>
+#include <QFileInfo>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QUuid>
@@ -33,13 +33,13 @@ QString updaterPath() {
 } // namespace
 
 bool SelfUpdater::isPortableMode() {
-    return QFileInfo::exists(portableMarkerPath());
+    return QFileInfo(portableMarkerPath()).exists();
 }
 
 bool SelfUpdater::startPortableUpdate(const QString& packagePath, QString* error) {
 #ifdef Q_OS_WIN
     const QString helper = updaterPath();
-    if (!QFileInfo::exists(helper)) {
+    if (!QFileInfo(helper).exists()) {
         if (error) {
             *error = QString::fromUtf8("WStartUpdater.exe was not found.");
         }

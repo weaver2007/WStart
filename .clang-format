@@ -11,7 +11,7 @@ AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 PointerAlignment: Left
 ReferenceAlignment: Left
-SortIncludes: CaseSensitive
+SortIncludes: Never
 SpaceAfterCStyleCast: false
 SpacesInParentheses: false
 NamespaceIndentation: None

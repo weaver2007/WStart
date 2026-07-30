@@ -1,8 +1,8 @@
 #include "MainWindow.h"
 
 #include "AppIcon.h"
-#include "PathUtils.h"
 #include "CredentialStore.h"
+#include "PathUtils.h"
 #include "QtCompat.h"
 #include "RuleDialog.h"
 #include "SelfUpdater.h"
@@ -22,8 +22,8 @@
 #include <QContextMenuEvent>
 #include <QCryptographicHash>
 #include <QCursor>
-#include <QDate>
 #include <QDataStream>
+#include <QDate>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -68,6 +68,7 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTextOption>
+#include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QUuid>
@@ -89,11 +90,11 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <windows.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <wincrypt.h>
-#include <windows.h>
 #endif
 
 #ifdef Q_OS_WIN
@@ -151,7 +152,8 @@ void applyHotkeyFeedbackWindowOptions(QWidget* overlay) {
     HWND hwnd = reinterpret_cast<HWND>(overlay->winId());
     if (hwnd) {
         const LONG_PTR style = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE,
+                         style | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT);
     }
 #endif
 }
@@ -191,14 +193,30 @@ bool removeLegacyWstartRunRegistration(QString* error) {
 
 bool runSchtasks(const QStringList& arguments, QString* error) {
     QProcess process;
-    process.start(QString::fromLatin1("schtasks.exe"), arguments);
+    wchar_t systemDirectory[MAX_PATH + 1] = {};
+    const UINT systemDirectoryLength = GetSystemDirectoryW(systemDirectory, MAX_PATH + 1);
+    if (systemDirectoryLength == 0 || systemDirectoryLength > MAX_PATH) {
+        if (error) {
+            *error = QString::fromLatin1("Unable to locate the Windows system directory.");
+        }
+        return false;
+    }
+    const QString executable = QDir(QString::fromWCharArray(systemDirectory)).filePath("schtasks.exe");
+    process.start(executable, arguments);
     if (!process.waitForStarted()) {
         if (error) {
             *error = QString::fromLatin1("Failed to start schtasks.exe.");
         }
         return false;
     }
-    process.waitForFinished(-1);
+    if (!process.waitForFinished(15000)) {
+        process.kill();
+        process.waitForFinished(2000);
+        if (error) {
+            *error = QString::fromLatin1("schtasks.exe timed out.");
+        }
+        return false;
+    }
     const int exitCode = process.exitCode();
     const QString output = QString::fromLocal8Bit(process.readAllStandardOutput()).trimmed();
     const QString stderrText = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
@@ -231,15 +249,15 @@ bool setWstartStartupRegistration(bool enabled, QString* error) {
             return true;
         }
         return runSchtasks(QStringList() << QString::fromLatin1("/Delete") << QString::fromLatin1("/TN") << taskName
-                                        << QString::fromLatin1("/F"),
+                                         << QString::fromLatin1("/F"),
                            error);
     }
 
     return runSchtasks(QStringList() << QString::fromLatin1("/Create") << QString::fromLatin1("/TN") << taskName
-                                    << QString::fromLatin1("/SC") << QString::fromLatin1("ONLOGON")
-                                    << QString::fromLatin1("/RL") << QString::fromLatin1("HIGHEST")
-                                    << QString::fromLatin1("/TR") << wstartStartupCommandLine()
-                                    << QString::fromLatin1("/F"),
+                                     << QString::fromLatin1("/SC") << QString::fromLatin1("ONLOGON")
+                                     << QString::fromLatin1("/RL") << QString::fromLatin1("HIGHEST")
+                                     << QString::fromLatin1("/TR") << wstartStartupCommandLine()
+                                     << QString::fromLatin1("/F"),
                        error);
 #else
     if (enabled) {
@@ -251,6 +269,28 @@ bool setWstartStartupRegistration(bool enabled, QString* error) {
     return true;
 #endif
 }
+
+class StartupRegistrationThread final : public QThread {
+public:
+    StartupRegistrationThread(MainWindow* receiver, bool enabled, bool userInitiated)
+        : m_receiver(receiver), m_enabled(enabled), m_userInitiated(userInitiated) {}
+
+protected:
+    void run() override {
+        QString error;
+        const bool success = setWstartStartupRegistration(m_enabled, &error);
+        if (m_receiver) {
+            QMetaObject::invokeMethod(m_receiver.data(), "onStartupRegistrationFinished", Qt::QueuedConnection,
+                                      Q_ARG(bool, m_enabled), Q_ARG(bool, success), Q_ARG(QString, error),
+                                      Q_ARG(bool, m_userInitiated));
+        }
+    }
+
+private:
+    QPointer<MainWindow> m_receiver;
+    bool m_enabled = false;
+    bool m_userInitiated = false;
+};
 
 class IconGridDelegate final : public QStyledItemDelegate {
 public:
@@ -726,7 +766,6 @@ bool shellExecutePath(const QString& path, const wchar_t* verb, const QString& p
     info.nShow = SW_SHOWNORMAL;
     return ShellExecuteExW(&info);
 }
-
 
 bool revealInExplorer(const QString& path) {
     const QFileInfo info(PathUtils::toAbsolutePath(path));
@@ -1204,6 +1243,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     }
 }
 
+MainWindow::~MainWindow() {
+    if (m_startupRegistrationThread && m_startupRegistrationThread->isRunning()) {
+        // schtasks has a bounded timeout. Waiting here prevents QObject child
+        // destruction from tearing down a live QThread during application exit.
+        m_startupRegistrationThread->wait();
+    }
+}
+
 void MainWindow::buildUi() {
     auto* root = new QWidget(this);
     root->setObjectName("root");
@@ -1599,8 +1646,8 @@ void MainWindow::showStartupMinimized() {
     if (!screenGeometry.isNull()) {
         QRect shownGeometry = geometry();
         shownGeometry.moveTop(screenGeometry.top());
-        shownGeometry.moveLeft(qBound(screenGeometry.left(), shownGeometry.left(),
-                                      screenGeometry.right() - shownGeometry.width() + 1));
+        shownGeometry.moveLeft(
+            qBound(screenGeometry.left(), shownGeometry.left(), screenGeometry.right() - shownGeometry.width() + 1));
         setGeometry(shownGeometry);
     }
 
@@ -1664,40 +1711,69 @@ void MainWindow::setUpdatesEnabled(bool enabled) {
         m_document.settings.updatesEnabled = enabled;
         saveDocumentSilently();
     }
-    if (m_updatesEnabledAction && m_updatesEnabledAction->isChecked() != enabled) {
+    const bool effectiveEnabled = m_document.settings.updatesEnabled;
+    if (m_updatesEnabledAction && m_updatesEnabledAction->isChecked() != effectiveEnabled) {
         const QSignalBlocker blocker(m_updatesEnabledAction);
-        m_updatesEnabledAction->setChecked(enabled);
+        m_updatesEnabledAction->setChecked(effectiveEnabled);
     }
 }
 
 void MainWindow::setStartupEnabled(bool enabled) {
-    QString error;
-    if (!setWstartStartupRegistration(enabled, &error)) {
+    requestStartupRegistration(enabled, true);
+}
+
+void MainWindow::requestStartupRegistration(bool enabled, bool userInitiated) {
+    if (m_startupRegistrationThread) {
+        return;
+    }
+    if (m_startupEnabledAction) {
+        m_startupEnabledAction->setEnabled(false);
+    }
+    auto* thread = new StartupRegistrationThread(this, enabled, userInitiated);
+    m_startupRegistrationThread = thread;
+    connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
+    thread->start();
+}
+
+void MainWindow::onStartupRegistrationFinished(bool enabled, bool success, QString error, bool userInitiated) {
+    m_startupRegistrationThread = nullptr;
+    if (m_startupEnabledAction) {
+        m_startupEnabledAction->setEnabled(true);
+    }
+
+    if (!success) {
         if (m_startupEnabledAction) {
             const QSignalBlocker blocker(m_startupEnabledAction);
             m_startupEnabledAction->setChecked(m_document.settings.startupEnabled);
         }
-        showWarning(this, language(), uiText(UiText::Key::Settings),
-                    uiText(UiText::Key::StartupSettingFailed).arg(error));
+        const QString message = uiText(UiText::Key::StartupSettingFailed).arg(error);
+        if (userInitiated) {
+            showWarning(this, language(), uiText(UiText::Key::Settings), message);
+        } else {
+            setStatus(message);
+        }
         return;
     }
 
     if (m_document.settings.startupEnabled != enabled) {
         m_document.settings.startupEnabled = enabled;
-        saveDocumentSilently();
+        if (!saveDocumentSilently()) {
+            requestStartupRegistration(m_document.settings.startupEnabled, false);
+        }
     }
-    if (m_startupEnabledAction && m_startupEnabledAction->isChecked() != enabled) {
+    const bool effectiveEnabled = m_document.settings.startupEnabled;
+    if (m_startupEnabledAction && m_startupEnabledAction->isChecked() != effectiveEnabled) {
         const QSignalBlocker blocker(m_startupEnabledAction);
-        m_startupEnabledAction->setChecked(enabled);
+        m_startupEnabledAction->setChecked(effectiveEnabled);
     }
 }
 
 void MainWindow::configureGithubToken() {
     bool ok = false;
     const QString currentToken = CredentialStore::githubToken();
-    QString value = QInputDialog::getText(this, uiText(UiText::Key::GithubTokenTitle),
-                                          uiText(UiText::Key::GithubTokenPrompt), QLineEdit::Password, currentToken,
-                                          &ok);
+    QString value =
+        QInputDialog::getText(this, uiText(UiText::Key::GithubTokenTitle), uiText(UiText::Key::GithubTokenPrompt),
+                              QLineEdit::Password, currentToken, &ok);
     if (!ok) {
         return;
     }
@@ -1720,8 +1796,7 @@ void MainWindow::checkForUpdates() {
 
 void MainWindow::showAboutDialog() {
     QMessageBox box(QMessageBox::Information, uiText(UiText::Key::AboutTitle),
-                    uiText(UiText::Key::AboutMessage).arg(QString::fromLatin1(HKM_APP_VERSION)), QMessageBox::Ok,
-                    this);
+                    uiText(UiText::Key::AboutMessage).arg(QString::fromLatin1(HKM_APP_VERSION)), QMessageBox::Ok, this);
     if (QAbstractButton* button = box.button(QMessageBox::Ok)) {
         button->setText(uiText(UiText::Key::Ok));
     }
@@ -1768,15 +1843,14 @@ void MainWindow::onUpdateInfoReady(UpdateInfo info, QString error, bool silent) 
         QMessageBox::Information, uiText(UiText::Key::UpdateAvailableTitle),
         uiText(UiText::Key::UpdateAvailableMessage).arg(info.latestVersion, m_updateChecker.currentVersion(), notes),
         QMessageBox::NoButton, this);
-    QPushButton* openButton =
-        box.addButton(SelfUpdater::isPortableMode() ? uiText(UiText::Key::UpdateDownloadAndUpdate)
-                                                    : uiText(UiText::Key::UpdateDownloadInstall),
-                      QMessageBox::AcceptRole);
+    QPushButton* openButton = box.addButton(SelfUpdater::isPortableMode() ? uiText(UiText::Key::UpdateDownloadAndUpdate)
+                                                                          : uiText(UiText::Key::UpdateDownloadInstall),
+                                            QMessageBox::AcceptRole);
     QPushButton* cancelButton = box.addButton(uiText(UiText::Key::Cancel), QMessageBox::RejectRole);
     box.exec();
     if (box.clickedButton() == openButton && info.asset.isValid()) {
-        m_updateProgressDialog = new QProgressDialog(uiText(UiText::Key::UpdateDownloading), uiText(UiText::Key::Cancel),
-                                                     0, 0, this);
+        m_updateProgressDialog =
+            new QProgressDialog(uiText(UiText::Key::UpdateDownloading), uiText(UiText::Key::Cancel), 0, 0, this);
         m_updateProgressDialog->setWindowTitle(uiText(UiText::Key::UpdateAvailableTitle));
         m_updateProgressDialog->setWindowModality(Qt::WindowModal);
         connect(m_updateProgressDialog.data(), SIGNAL(canceled()), &m_updateChecker, SLOT(cancelDownload()));
@@ -1838,13 +1912,14 @@ void MainWindow::applyHotkeysEnabled(bool enabled) {
         saveDocumentSilently();
     }
 
-    m_hookService.setPaused(!enabled);
-    if (m_hotkeysEnabledAction && m_hotkeysEnabledAction->isChecked() != enabled) {
+    const bool effectiveEnabled = m_document.settings.hotkeysEnabled;
+    m_hookService.setPaused(!effectiveEnabled);
+    if (m_hotkeysEnabledAction && m_hotkeysEnabledAction->isChecked() != effectiveEnabled) {
         const QSignalBlocker blocker(m_hotkeysEnabledAction);
-        m_hotkeysEnabledAction->setChecked(enabled);
+        m_hotkeysEnabledAction->setChecked(effectiveEnabled);
     }
-    emit hotkeysEnabledChanged(enabled);
-    setStatus(enabled ? uiText(UiText::Key::HotkeysResumed) : uiText(UiText::Key::HotkeysPaused));
+    emit hotkeysEnabledChanged(effectiveEnabled);
+    setStatus(effectiveEnabled ? uiText(UiText::Key::HotkeysResumed) : uiText(UiText::Key::HotkeysPaused));
 }
 
 void MainWindow::showSectionContextMenu(const QPoint& pos) {
@@ -1895,6 +1970,11 @@ void MainWindow::enablePointerTracking(QWidget* widget) {
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop) {
         auto* widget = qobject_cast<QWidget*>(watched);
+        const bool isLauncherDropTarget = widget && widget->window() == this && m_sectionsContainer &&
+                                          (widget == m_sectionsContainer || m_sectionsContainer->isAncestorOf(widget));
+        if (!isLauncherDropTarget) {
+            return QMainWindow::eventFilter(watched, event);
+        }
         auto* dropBaseEvent = static_cast<QDropEvent*>(event);
         const QPoint globalDropPos = widget ? widget->mapToGlobal(eventPosition(dropBaseEvent)) : QCursor::pos();
         const QStringList draggedRuleIds = ruleIdsFromMimeData(dropBaseEvent->mimeData());
@@ -2401,14 +2481,12 @@ void MainWindow::loadDocument() {
     QString error;
     m_document = m_store.loadDocument(&error);
     m_document.settings.language = UiText::normalizeLanguage(m_document.settings.language);
+    m_persistedDocument = m_document;
     applyFixedLauncherWidth();
     if (!error.isEmpty()) {
         setStatus(error);
     }
-    QString startupError;
-    if (!setWstartStartupRegistration(m_document.settings.startupEnabled, &startupError) && !startupError.isEmpty()) {
-        setStatus(uiText(UiText::Key::StartupSettingFailed).arg(startupError));
-    }
+    requestStartupRegistration(m_document.settings.startupEnabled, false);
     refreshHooks();
     m_hookService.setPaused(!m_document.settings.hotkeysEnabled);
     retranslateUi();
@@ -2416,26 +2494,36 @@ void MainWindow::loadDocument() {
     emit languageChanged(language());
 }
 
-void MainWindow::saveDocument() {
+bool MainWindow::saveDocument() {
     QString error;
     if (!m_store.saveDocument(m_document, &error)) {
+        m_document = m_persistedDocument;
+        refreshHooks();
+        refreshLauncher();
         showWarning(this, language(), uiText(UiText::Key::SaveFailed), error);
         setStatus(error);
-        return;
+        return false;
     }
+    m_persistedDocument = m_document;
     refreshHooks();
     refreshLauncher();
     setStatus(uiText(UiText::Key::SavedItems).arg(m_document.rules.size()));
+    return true;
 }
 
-void MainWindow::saveDocumentSilently() {
+bool MainWindow::saveDocumentSilently() {
     QString error;
     if (!m_store.saveDocument(m_document, &error)) {
+        m_document = m_persistedDocument;
+        refreshHooks();
+        refreshLauncher();
         showWarning(this, language(), uiText(UiText::Key::SaveFailed), error);
         setStatus(error);
-        return;
+        return false;
     }
+    m_persistedDocument = m_document;
     refreshHooks();
+    return true;
 }
 
 void MainWindow::refreshHooks() {
@@ -2709,7 +2797,7 @@ void MainWindow::setLanguage(const QString& language) {
     m_document.settings.language = normalized;
     saveDocumentSilently();
     retranslateUi();
-    emit languageChanged(normalized);
+    emit languageChanged(this->language());
 }
 
 void MainWindow::setThemeMode(const QString& themeMode) {
@@ -2733,7 +2821,10 @@ void MainWindow::setPathStorageMode(const QString& mode) {
     }
 
     m_document.settings.pathStorageMode = normalized;
-    saveDocumentSilently();
+    if (!saveDocumentSilently()) {
+        retranslateUi();
+        return;
+    }
     retranslateUi();
     setStatus(uiText(useAbsolute ? UiText::Key::PathsConvertedAbsolute : UiText::Key::PathsConvertedRelative));
 }
@@ -3433,8 +3524,9 @@ void MainWindow::deleteSection(const QString& sectionId) {
     m_document.rules.erase(std::remove_if(m_document.rules.begin(), m_document.rules.end(),
                                           [&sectionId](const HotkeyRule& rule) { return rule.sectionId == sectionId; }),
                            m_document.rules.end());
-    m_unlockedSectionIds.remove(sectionId);
-    saveDocument();
+    if (saveDocument()) {
+        m_unlockedSectionIds.remove(sectionId);
+    }
 }
 
 void MainWindow::encryptSection(const QString& sectionId) {
@@ -3457,12 +3549,15 @@ void MainWindow::encryptSection(const QString& sectionId) {
 
     section.encrypted = !password.isEmpty();
     section.passwordHash = password.isEmpty() ? QString() : passwordHash(password);
-    if (section.encrypted) {
-        m_unlockedSectionIds.insert(sectionId);
-    } else {
-        m_unlockedSectionIds.remove(sectionId);
+    const bool keepUnlocked = section.encrypted;
+    if (saveDocument()) {
+        if (keepUnlocked) {
+            m_unlockedSectionIds.insert(sectionId);
+        } else {
+            m_unlockedSectionIds.remove(sectionId);
+        }
+        refreshLauncher();
     }
-    saveDocument();
 }
 
 void MainWindow::expandSectionOnly(const QString& sectionId) {
@@ -3524,8 +3619,8 @@ void MainWindow::toggleSectionCollapsed(const QString& sectionId) {
     if (current.collapsed) {
         targetSectionId = sectionId;
     } else if (sections.size() > 1) {
-        targetSectionId = visibleIndex + 1 < sections.size() ? sections[visibleIndex + 1].id
-                                                         : sections[visibleIndex - 1].id;
+        targetSectionId =
+            visibleIndex + 1 < sections.size() ? sections[visibleIndex + 1].id : sections[visibleIndex - 1].id;
     } else {
         return;
     }
@@ -3709,11 +3804,13 @@ bool MainWindow::moveRuleToSection(const QString& ruleId, const QString& section
 
     reorderedRules.insert(insertIndex, movedRule);
     m_document.rules = reorderedRules;
+    if (!saveDocument()) {
+        return false;
+    }
+
     if (!copy && m_ruleClipboardCut && m_ruleClipboardSourceRuleId == sourceRule.id) {
         m_ruleClipboard = movedRule;
     }
-
-    saveDocument();
     setStatus(uiText(copy ? UiText::Key::PastedItem : UiText::Key::MovedItem).arg(ruleTitle(movedRule)));
     return true;
 }
@@ -3903,22 +4000,30 @@ void MainWindow::pasteRuleToSection(const QString& sectionId) {
     pasted.sectionId = section.id;
 
     const int sourceIndex = m_ruleClipboardCut ? ruleIndexById(m_ruleClipboardSourceRuleId) : -1;
-    if (m_ruleClipboardCut && sourceIndex >= 0) {
+    const bool moveExistingRule = m_ruleClipboardCut && sourceIndex >= 0;
+    if (moveExistingRule) {
         pasted.id = m_ruleClipboardSourceRuleId;
         m_document.rules[sourceIndex] = pasted;
-        m_hasRuleClipboard = false;
-        m_ruleClipboardCut = false;
-        m_ruleClipboardSourceRuleId.clear();
     } else {
         pasted.id = QtCompat::uuidWithoutBraces();
         pasted.hotkey = HotkeyCombination();
         m_document.rules.push_back(pasted);
+    }
+
+    if (!saveDocument()) {
+        return;
+    }
+
+    if (moveExistingRule) {
+        m_hasRuleClipboard = false;
+        m_ruleClipboardCut = false;
+        m_ruleClipboardSourceRuleId.clear();
+    } else {
         m_ruleClipboard = pasted;
         m_ruleClipboardSourceRuleId = pasted.id;
         m_ruleClipboardCut = false;
     }
 
-    saveDocument();
     setStatus(uiText(UiText::Key::PastedItem).arg(ruleTitle(pasted)));
 }
 
@@ -4104,7 +4209,9 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
         const QString title = rule.description.toLower();
         const auto hasTitle = [&title](const char* text) { return title.contains(QString::fromUtf8(text)); };
         const auto hasLatinTitle = [&title](const char* text) { return title.contains(QString::fromLatin1(text)); };
-        const auto hasArgument = [&arguments](const char* text) { return arguments.contains(QString::fromLatin1(text)); };
+        const auto hasArgument = [&arguments](const char* text) {
+            return arguments.contains(QString::fromLatin1(text));
+        };
         const auto nativeOrFallback = [this](const QString& path, QStyle::StandardPixmap fallback) {
 #ifdef Q_OS_WIN
             const QIcon native = SystemIconProvider::fileIcon(path);
@@ -4318,19 +4425,18 @@ QIcon MainWindow::themedIcon(const QString& key) const {
     if (normalized == "globe" || normalized == "network") {
         return style()->standardIcon(QStyle::SP_DriveNetIcon);
     }
-    if (normalized == "control-panel" || normalized == "program" || normalized == "system" ||
-        normalized == "display" || normalized == "remote-desktop") {
+    if (normalized == "control-panel" || normalized == "program" || normalized == "system" || normalized == "display" ||
+        normalized == "remote-desktop") {
         return style()->standardIcon(QStyle::SP_ComputerIcon);
     }
     if (normalized == "task-manager" || normalized == "services" || normalized == "system-info") {
         return style()->standardIcon(QStyle::SP_FileDialogInfoView);
     }
     if (normalized == "terminal" || normalized == "registry" || normalized == "calculator" ||
-        normalized == "device-manager" || normalized == "printer" || normalized == "recycle" ||
-        normalized == "power" || normalized == "clock" || normalized == "keyboard" || normalized == "mouse" ||
-        normalized == "sound" || normalized == "shield" || normalized == "screenshot" || normalized == "disk" ||
-        normalized == "notepad" || normalized == "shutdown" || normalized == "restart" ||
-        normalized == "monitor-off") {
+        normalized == "device-manager" || normalized == "printer" || normalized == "recycle" || normalized == "power" ||
+        normalized == "clock" || normalized == "keyboard" || normalized == "mouse" || normalized == "sound" ||
+        normalized == "shield" || normalized == "screenshot" || normalized == "disk" || normalized == "notepad" ||
+        normalized == "shutdown" || normalized == "restart" || normalized == "monitor-off") {
         return style()->standardIcon(QStyle::SP_FileIcon);
     }
     return AppIcon::launcherIcon();

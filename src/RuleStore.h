@@ -10,6 +10,7 @@ class RuleStore : public QObject {
 
 public:
     explicit RuleStore(QObject* parent = nullptr);
+    explicit RuleStore(const QString& configPathOverride, QObject* parent = nullptr);
 
     LauncherDocument loadDocument(QString* error = nullptr) const;
     bool saveDocument(const LauncherDocument& document, QString* error = nullptr) const;
@@ -26,4 +27,6 @@ private:
     void ensureDefaultRules(LauncherDocument* document) const;
     QString defaultSectionId(LauncherCategory category, int index = 0) const;
     QString configDirectory() const;
+
+    QString m_configPathOverride;
 };

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity
-    version="0.2.0.0"
+    version="1.0.0.0"
     processorArchitecture="*"
-    name="HotKeyManager"
+    name="WStart"
     type="win32" />
-  <description>HotKeyManager</description>
+  <description>WStart launcher and global hotkey manager</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>

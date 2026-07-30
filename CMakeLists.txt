@@ -1,21 +1,41 @@
 cmake_minimum_required(VERSION 3.21)
 
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" HKM_BASE_VERSION LIMIT_COUNT 1)
+if(NOT HKM_BASE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "VERSION must contain one semantic version such as 0.3.46.")
+endif()
+
 if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
-project(HotKeyManager VERSION 0.3.0 LANGUAGES CXX)
+project(WStart VERSION ${HKM_BASE_VERSION} LANGUAGES CXX)
+
+# Newer localized MSVC toolsets can report /showIncludes text in an encoding
+# that CMake misdetects. Ninja then misses header dependencies and may link
+# stale object files. Repair only the known VS 2026 Chinese mojibake value;
+# English CI runners and correctly detected locales retain CMake's value.
+if(MSVC AND CMAKE_GENERATOR MATCHES "Ninja")
+    string(HEX "${CMAKE_CXX_CL_SHOWINCLUDES_PREFIX}" HKM_MSVC_SHOWINCLUDES_PREFIX_HEX)
+    if(HKM_MSVC_SHOWINCLUDES_PREFIX_HEX STREQUAL
+       "e5a889e384a6e589b03a20e98d96e591ade68388e98f82e59ba6e6aca23a2020")
+        string(ASCII 230 179 168 230 132 143 58 32 229 140 133 229 144 171 230 150 135 228 187 182 58 32 32
+               CMAKE_CXX_CL_SHOWINCLUDES_PREFIX)
+        set(CMAKE_CL_SHOWINCLUDES_PREFIX "${CMAKE_CXX_CL_SHOWINCLUDES_PREFIX}")
+    endif()
+endif()
 
 option(HKM_DEPLOY_QT_RUNTIME "Run windeployqt and copy MSVC runtime DLLs after building WStart on Windows." ON)
 option(HKM_DEPLOY_QT_RUNTIME_MANUAL "Copy a minimal Qt runtime set manually instead of running windeployqt." OFF)
-option(HKM_STATIC_RUNTIME "Link HotKeyManager targets with the static MSVC runtime (/MT or /MTd)." OFF)
+option(HKM_STATIC_RUNTIME "Link WStart targets with the static MSVC runtime (/MT or /MTd)." OFF)
 option(HKM_REQUIRE_STATIC_QT "Fail configuration unless the selected Qt installation is static." OFF)
 set(HKM_WINVER "0x0601" CACHE STRING "Windows target version macro, for example 0x0601 for Windows 7 or 0x0501 for Windows XP.")
 set_property(CACHE HKM_WINVER PROPERTY STRINGS 0x0501 0x0601 0x0A00)
 set(HKM_NTDDI_VERSION "" CACHE STRING "Windows NTDDI_VERSION macro. Leave empty to derive it from HKM_WINVER.")
 set(HKM_QT_MAJOR "AUTO" CACHE STRING "Qt major version to use: AUTO, 6, 5, or 4.")
 set_property(CACHE HKM_QT_MAJOR PROPERTY STRINGS AUTO 6 5 4)
-set(HKM_CXX_STANDARD "17" CACHE STRING "C++ standard used by HotKeyManager targets.")
+set(HKM_CXX_STANDARD "17" CACHE STRING "C++ standard used by WStart targets.")
 set_property(CACHE HKM_CXX_STANDARD PROPERTY STRINGS 14 17)
 set(HKM_APP_VERSION_OVERRIDE "" CACHE STRING "Override the application version embedded in binaries.")
 set(HKM_UPDATE_MANIFEST_URL "" CACHE STRING "HTTPS URL of the update manifest JSON used by the in-app update checker.")
@@ -258,10 +278,12 @@ set(HKM_SOURCES
     src/CredentialStore.cpp
     src/HotkeyConflictDetector.cpp
     src/HotkeyHookService.cpp
+    src/HotkeyState.cpp
     src/HotkeyTypes.cpp
     src/PathUtils.cpp
     src/RuleStore.cpp
     src/SelfUpdater.cpp
+    src/SingleInstanceServer.cpp
     src/SystemIconProvider.cpp
     src/TrayController.cpp
     src/UiText.cpp
@@ -275,10 +297,12 @@ set(HKM_HEADERS
     src/CredentialStore.h
     src/HotkeyConflictDetector.h
     src/HotkeyHookService.h
+    src/HotkeyState.h
     src/LauncherWindowInterface.h
     src/HotkeyTypes.h
     src/RuleStore.h
     src/SelfUpdater.h
+    src/SingleInstanceServer.h
     src/SystemIconProvider.h
     src/TrayController.h
     src/UiText.h
@@ -292,12 +316,10 @@ else()
 endif()
 
 list(APPEND HKM_SOURCES
-    src/HotkeyEdit.cpp
     src/RuleDialog.cpp
     src/MainWindow.cpp
 )
 list(APPEND HKM_HEADERS
-    src/HotkeyEdit.h
     src/RuleDialog.h
     src/MainWindow.h
 )
@@ -486,6 +508,11 @@ elseif(WIN32 AND HKM_DEPLOY_QT_RUNTIME AND NOT HKM_QT_IS_STATIC)
 endif()
 
 if(MSVC)
+    if(QT_VERSION_MAJOR EQUAL 5 AND MSVC_VERSION GREATER_EQUAL 1950)
+        target_compile_options(HotKeyManager PRIVATE
+            "/FI${CMAKE_CURRENT_SOURCE_DIR}/src/compat/MsvcQt5Compat.h"
+        )
+    endif()
     target_compile_options(HotKeyManager PRIVATE /W4 /utf-8)
     if(MSVC_VERSION GREATER_EQUAL 1910)
         target_compile_options(HotKeyManager PRIVATE /permissive-)
@@ -512,6 +539,7 @@ add_executable(HotKeyManagerTests
     tests/test_core.cpp
     ${HKM_QT4_COMPAT_SOURCES}
     src/HotkeyConflictDetector.cpp
+    src/HotkeyState.cpp
     src/HotkeyTypes.cpp
     src/PathUtils.cpp
     src/RuleStore.cpp
@@ -556,6 +584,11 @@ if(WIN32 AND HKM_QT_IS_STATIC AND QT_VERSION_MAJOR EQUAL 5)
 endif()
 
 if(MSVC)
+    if(QT_VERSION_MAJOR EQUAL 5 AND MSVC_VERSION GREATER_EQUAL 1950)
+        target_compile_options(HotKeyManagerTests PRIVATE
+            "/FI${CMAKE_CURRENT_SOURCE_DIR}/src/compat/MsvcQt5Compat.h"
+        )
+    endif()
     target_compile_options(HotKeyManagerTests PRIVATE /utf-8)
 endif()
 

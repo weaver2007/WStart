@@ -50,8 +50,7 @@ QPixmap paintLauncherPixmap(int size) {
 
     painter.setPen(QPen(ink, qMax<qreal>(2.0, s * 0.15), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter.drawPath(wPath);
-    painter.setPen(QPen(QColor("#ffffff"), qMax<qreal>(1.5, s * 0.095), Qt::SolidLine, Qt::RoundCap,
-                        Qt::RoundJoin));
+    painter.setPen(QPen(QColor("#ffffff"), qMax<qreal>(1.5, s * 0.095), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter.drawPath(wPath);
 
     const QPointF badgeCenter(s * 0.75, s * 0.27);
