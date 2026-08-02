@@ -48,6 +48,10 @@ private:
     void updatePressedModifierState(int virtualKey, bool pressed);
     void resetKeyboardState(const QString& reason);
     void synchronizePhysicalModifierState();
+    void recoverStaleWinKeys(quint32 currentTime);
+    void releaseForwardedWinKeys(const QString& reason, quint32 currentTime);
+    void releaseStaleSystemWinKeysAtStartup();
+    void synchronizeWinStateFlags();
     void queueDiagnostic(const QString& message);
 
     HHOOK m_hook = nullptr;
@@ -60,6 +64,7 @@ private:
     mutable QMutex m_rulesMutex;
 #ifdef Q_OS_WIN
     HotkeyState m_state;
+    WinKeyState m_winState;
     bool m_leftWinPhysicallyDown = false;
     bool m_rightWinPhysicallyDown = false;
 #endif

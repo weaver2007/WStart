@@ -78,14 +78,13 @@ function Send-Key([ushort]$Vk, [bool]$Up = $false, [bool]$Extended = $false) {
     Start-Sleep -Milliseconds 45
 }
 
-function Send-WinShiftF24 {
+function Send-WinShiftF24WithoutWinRelease {
     Add-NativeApis
     Send-Key 0x5B $false $true
     Send-Key 0xA0 $false $false
     Send-Key 0x87 $false $false
     Send-Key 0x87 $true $false
     Send-Key 0xA0 $true $false
-    Send-Key 0x5B $true $true
 }
 
 function Send-BareWinAndCheckStartMenu {
@@ -124,13 +123,18 @@ function Send-BareWinAndCheckStartMenu {
     return [pscustomobject]@{ Visible = $false; Name = ''; ClassName = '' }
 }
 
-function Write-TestConfig([string]$Path, [string]$MarkerPath) {
-    $directory = Split-Path -Parent $Path
-    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+function New-MarkerArguments([string]$MarkerPath) {
     $markerForPowerShell = $MarkerPath -replace "'", "''"
     $payload = "Set-Content -LiteralPath '$markerForPowerShell' -Value triggered -Encoding UTF8"
     $encodedPayload = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($payload))
-    $arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encodedPayload"
+    return "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encodedPayload"
+}
+
+function Write-TestConfig([string]$Path, [string]$MarkerPath, [string]$StaleWinMarkerPath) {
+    $directory = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    $arguments = New-MarkerArguments -MarkerPath $MarkerPath
+    $staleWinArguments = New-MarkerArguments -MarkerPath $StaleWinMarkerPath
 
     $document = [ordered]@{
         version = 2
@@ -169,6 +173,22 @@ function Write-TestConfig([string]$Path, [string]$MarkerPath) {
                     singleInstance = $false
                 }
                 description = 'GUI hotkey smoke'
+            },
+            [ordered]@{
+                id = 'gui-stale-win-trap'
+                enabled = $true
+                category = 'Program'
+                sectionId = 'program-user'
+                hotkey = [ordered]@{ modifiers = 8; key = 134; displayText = 'Win+F23' }
+                action = [ordered]@{
+                    type = 'Application'
+                    target = 'powershell.exe'
+                    arguments = $staleWinArguments
+                    workingDirectory = ''
+                    windowState = 'Minimized'
+                    singleInstance = $false
+                }
+                description = 'Stale Win state trap'
             }
         )
     }
@@ -178,6 +198,7 @@ function Write-TestConfig([string]$Path, [string]$MarkerPath) {
 if (-not (Test-Path -LiteralPath $ExePath)) { throw "WStart.exe not found: $ExePath" }
 
 $markerPath = Join-Path $env:TEMP ('wstart-hotkey-smoke-{0}.txt' -f ([guid]::NewGuid().ToString('N')))
+$staleWinMarkerPath = Join-Path $env:TEMP ('wstart-stale-win-{0}.txt' -f ([guid]::NewGuid().ToString('N')))
 $backupPath = $null
 $configExisted = Test-Path -LiteralPath $ConfigPath
 if ($configExisted) {
@@ -195,14 +216,14 @@ try {
     }
 
     Write-Step "Writing temporary config: Win+Shift+F24 -> marker file"
-    Write-TestConfig -Path $ConfigPath -MarkerPath $markerPath
+    Write-TestConfig -Path $ConfigPath -MarkerPath $markerPath -StaleWinMarkerPath $staleWinMarkerPath
 
     Write-Step "Starting $ExePath"
     $process = Start-Process -FilePath $ExePath -PassThru
     Start-Sleep -Seconds 3
 
-    Write-Step 'Sending Win+Shift+F24'
-    Send-WinShiftF24
+    Write-Step 'Sending Win+Shift+F24 with its Win-up intentionally omitted'
+    Send-WinShiftF24WithoutWinRelease
 
     $deadline = (Get-Date).AddSeconds(10)
     while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $markerPath)) {
@@ -212,6 +233,18 @@ try {
         throw "Hotkey action marker was not created: $markerPath"
     }
     Write-Step "Hotkey action marker created: $markerPath"
+
+    Write-Step 'Sending plain F23 to detect a stale Win modifier'
+    Send-Key 0x86 $false $false
+    Send-Key 0x86 $true $false
+    Start-Sleep -Seconds 1
+    if (Test-Path -LiteralPath $staleWinMarkerPath) {
+        throw 'Plain F23 incorrectly triggered Win+F23; the Win modifier remained active.'
+    }
+    Write-Step 'Plain F23 did not inherit Win state'
+
+    Write-Step 'Sending the deliberately delayed Win-up'
+    Send-Key 0x5B $true $true
 
     Write-Step 'Sending bare Win for best-effort Start menu check'
     $startMenu = Send-BareWinAndCheckStartMenu
@@ -238,5 +271,8 @@ try {
     }
     if (Test-Path -LiteralPath $markerPath) {
         Remove-Item -LiteralPath $markerPath -Force
+    }
+    if (Test-Path -LiteralPath $staleWinMarkerPath) {
+        Remove-Item -LiteralPath $staleWinMarkerPath -Force
     }
 }

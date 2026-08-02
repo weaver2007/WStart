@@ -24,6 +24,10 @@ private slots:
     void hotkeyDisplayText();
     void hotkeyStateRequiresExactModifiers();
     void hotkeyStateSuppressesOneChordLifecycle();
+    void winKeyStateForwardsNormalLifecycle();
+    void winKeyStateClaimsHandledChordLifecycle();
+    void winKeyStateRecoversMissingRelease();
+    void winKeyStateHandlesReleaseFailureAndTickWrap();
     void launchActionWindowOptionsRoundTrip();
     void launchActionWindowOptionsDefaultsAndFallback();
     void portablePathConversion();
@@ -111,6 +115,83 @@ void CoreTests::hotkeyStateSuppressesOneChordLifecycle() {
     QVERIFY(!state.isSuppressed('E'));
     QVERIFY(!state.isTriggerActive(triggerId));
     QVERIFY(state.claimTrigger('E', triggerId));
+}
+
+void CoreTests::winKeyStateForwardsNormalLifecycle() {
+    const int leftWin = 0x5B;
+    WinKeyState state;
+
+    QVERIFY(state.handleKeyDown(leftWin, 100) == WinKeyState::EventDisposition::Forward);
+    QVERIFY(state.isPhysicallyDown(leftWin));
+    QVERIFY(state.isForwardedDown(leftWin));
+    QVERIFY(!state.isClaimed(leftWin));
+
+    QVERIFY(state.handleKeyDown(leftWin, 130) == WinKeyState::EventDisposition::Forward);
+    QVERIFY(state.handleKeyUp(leftWin, 160) == WinKeyState::EventDisposition::Forward);
+    QVERIFY(!state.isPhysicallyDown(leftWin));
+    QVERIFY(!state.isForwardedDown(leftWin));
+}
+
+void CoreTests::winKeyStateClaimsHandledChordLifecycle() {
+    const int leftWin = 0x5B;
+    WinKeyState state;
+
+    QVERIFY(state.handleKeyDown(leftWin, 100) == WinKeyState::EventDisposition::Forward);
+    const QVector<int> releases = state.claimPressedKeys(150);
+    QCOMPARE(releases.size(), 1);
+    QCOMPARE(releases.first(), leftWin);
+    QVERIFY(state.isPhysicallyDown(leftWin));
+    QVERIFY(!state.isForwardedDown(leftWin));
+    QVERIFY(state.isClaimed(leftWin));
+
+    // Auto-repeat must not press Win in Windows again after WStart supplied
+    // the matching system key-up.
+    QVERIFY(state.handleKeyDown(leftWin, 180) == WinKeyState::EventDisposition::Suppress);
+    QVERIFY(state.handleKeyUp(leftWin, 220) == WinKeyState::EventDisposition::Suppress);
+    QVERIFY(!state.isPhysicallyDown(leftWin));
+}
+
+void CoreTests::winKeyStateRecoversMissingRelease() {
+    const int leftWin = 0x5B;
+    WinKeyState state;
+    QVERIFY(state.handleKeyDown(leftWin, 100) == WinKeyState::EventDisposition::Forward);
+
+    QVERIFY(state.expireStaleKeys(1599, 1500, 500).isEmpty());
+    const QVector<WinKeyRecoveryAction> recovery = state.expireStaleKeys(1600, 1500, 500);
+    QCOMPARE(recovery.size(), 1);
+    QCOMPARE(recovery.first().key, leftWin);
+    QVERIFY(recovery.first().releaseSystemKey);
+    QVERIFY(!state.isPhysicallyDown(leftWin));
+
+    // A delayed hardware up must be swallowed because recovery already sent it.
+    QVERIFY(state.handleKeyUp(leftWin, 1700) == WinKeyState::EventDisposition::Suppress);
+
+    // Claimed keys use a shorter timeout because Windows has already received
+    // the synthetic release and only WStart's internal modifier can be stale.
+    QVERIFY(state.handleKeyDown(leftWin, 2000) == WinKeyState::EventDisposition::Forward);
+    state.claimPressedKeys(2050);
+    QVERIFY(state.expireStaleKeys(2549, 1500, 500).isEmpty());
+    const QVector<WinKeyRecoveryAction> claimedRecovery = state.expireStaleKeys(2550, 1500, 500);
+    QCOMPARE(claimedRecovery.size(), 1);
+    QVERIFY(!claimedRecovery.first().releaseSystemKey);
+}
+
+void CoreTests::winKeyStateHandlesReleaseFailureAndTickWrap() {
+    const int leftWin = 0x5B;
+    WinKeyState state;
+
+    QVERIFY(state.handleKeyDown(leftWin, 100) == WinKeyState::EventDisposition::Forward);
+    state.claimPressedKeys(120);
+    state.markSystemReleaseFailed(leftWin, 130);
+    QVERIFY(state.isForwardedDown(leftWin));
+    // If SendInput failed, the real up must reach Windows.
+    QVERIFY(state.handleKeyUp(leftWin, 160) == WinKeyState::EventDisposition::Forward);
+
+    const quint32 nearWrap = 0xFFFFFFF0u;
+    state.synchronizeKey(leftWin, true, nearWrap);
+    const QVector<WinKeyRecoveryAction> recovery = state.expireStaleKeys(0x00000010u, 32, 16);
+    QCOMPARE(recovery.size(), 1);
+    QVERIFY(recovery.first().releaseSystemKey);
 }
 
 void CoreTests::ruleStoreAtomicSaveRoundTrip() {
