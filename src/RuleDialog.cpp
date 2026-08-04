@@ -1,5 +1,6 @@
 #include "RuleDialog.h"
 
+#include "BuiltInActions.h"
 #include "HotkeyConflictDetector.h"
 #include "PathUtils.h"
 #include "QtCompat.h"
@@ -484,14 +485,17 @@ QString RuleDialog::uiText(UiText::Key key) const {
 void RuleDialog::updateUiForCategory() {
     QString title;
     QString placeholder;
+    const bool builtInAction = BuiltInActions::isBuiltInTarget(m_rule.action.target);
+    m_targetEdit->setReadOnly(builtInAction);
+    m_windowStateCombo->setEnabled(!builtInAction);
     switch (m_category) {
     case LauncherCategory::Program:
         title = uiText(UiText::Key::RuleDialogProgramTitle);
         placeholder = uiText(UiText::Key::ProgramTargetPlaceholder);
-        m_browseButton->setVisible(true);
-        m_argumentsRow->setVisible(true);
-        m_workingDirectoryRow->setVisible(true);
-        m_singleInstanceRow->setVisible(true);
+        m_browseButton->setVisible(!builtInAction);
+        m_argumentsRow->setVisible(!builtInAction);
+        m_workingDirectoryRow->setVisible(!builtInAction);
+        m_singleInstanceRow->setVisible(!builtInAction);
         break;
     case LauncherCategory::Folder:
         title = uiText(UiText::Key::RuleDialogFolderTitle);

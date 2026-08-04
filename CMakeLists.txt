@@ -294,6 +294,7 @@ set(HKM_HEADERS
     src/AppIcon.h
     src/AppLogger.h
     src/ActionRunner.h
+    src/BuiltInActions.h
     src/CredentialStore.h
     src/HotkeyConflictDetector.h
     src/HotkeyHookService.h

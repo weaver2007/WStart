@@ -1,5 +1,6 @@
 #include "RuleStore.h"
 
+#include "BuiltInActions.h"
 #include "HotkeyConflictDetector.h"
 #include "PathUtils.h"
 #include "UiText.h"
@@ -23,7 +24,7 @@
 
 namespace {
 
-const int kDefaultRulesVersion = 1;
+const int kDefaultRulesVersion = 2;
 
 QString standardFolderPath(QStandardPaths::StandardLocation location, const QString& fallbackName) {
     const QString path = QStandardPaths::writableLocation(location);
@@ -126,6 +127,9 @@ QVector<HotkeyRule> RuleStore::defaultSystemProgramRules() {
                                         QString::fromUtf8(spec.name), QString::fromLatin1(spec.target),
                                         QString::fromLatin1(spec.arguments)));
     }
+    rules.push_back(makeProgramRule(systemSection, QString::fromLatin1("default-program-system-move-window-monitor"),
+                                    QString::fromUtf8("活动窗口移至另一屏幕"),
+                                    BuiltInActions::moveActiveWindowToNextMonitorTarget()));
     return rules;
 }
 

@@ -1,5 +1,6 @@
 #include "ActionRunner.h"
 
+#include "BuiltInActions.h"
 #include "PathUtils.h"
 
 #include <QDesktopServices>
@@ -8,10 +9,14 @@
 #include <QHash>
 #include <QUrl>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
 #ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #define PSAPI_VERSION 1
 #include <psapi.h>
@@ -26,6 +31,12 @@ struct WindowSearch {
     HWND window = nullptr;
     int score = -1;
     QHash<DWORD, QString> processPaths;
+};
+
+struct MonitorEntry {
+    HMONITOR handle = nullptr;
+    RECT monitor = {};
+    RECT workArea = {};
 };
 
 QString fromWideString(const wchar_t* value, int length = -1) {
@@ -212,6 +223,126 @@ bool activateExistingApplicationWindow(const QString& target) {
     return applicationProcessExists(targetPath);
 }
 
+BOOL CALLBACK collectMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM parameter) {
+    auto* monitors = reinterpret_cast<std::vector<MonitorEntry>*>(parameter);
+    if (!monitors) {
+        return FALSE;
+    }
+
+    MONITORINFO info = {};
+    info.cbSize = sizeof(info);
+    if (!GetMonitorInfoW(monitor, &info)) {
+        return TRUE;
+    }
+
+    MonitorEntry entry;
+    entry.handle = monitor;
+    entry.monitor = info.rcMonitor;
+    entry.workArea = info.rcWork;
+    monitors->push_back(entry);
+    return TRUE;
+}
+
+bool monitorPositionLess(const MonitorEntry& left, const MonitorEntry& right) {
+    if (left.monitor.left != right.monitor.left) {
+        return left.monitor.left < right.monitor.left;
+    }
+    if (left.monitor.top != right.monitor.top) {
+        return left.monitor.top < right.monitor.top;
+    }
+    if (left.monitor.right != right.monitor.right) {
+        return left.monitor.right < right.monitor.right;
+    }
+    return left.monitor.bottom < right.monitor.bottom;
+}
+
+bool moveActiveWindowToNextMonitor(QString* error) {
+    HWND window = GetForegroundWindow();
+    if (!window || !IsWindow(window)) {
+        if (error) {
+            *error = QString::fromLatin1("No active window is available.");
+        }
+        return false;
+    }
+
+    if (HWND root = GetAncestor(window, GA_ROOT)) {
+        window = root;
+    }
+    if (window == GetDesktopWindow() || window == GetShellWindow()) {
+        if (error) {
+            *error = QString::fromLatin1("The desktop cannot be moved to another monitor.");
+        }
+        return false;
+    }
+
+    std::vector<MonitorEntry> monitors;
+    EnumDisplayMonitors(nullptr, nullptr, collectMonitor, reinterpret_cast<LPARAM>(&monitors));
+    if (monitors.size() < 2) {
+        if (error) {
+            *error = QString::fromLatin1("At least two active monitors are required.");
+        }
+        return false;
+    }
+    std::sort(monitors.begin(), monitors.end(), monitorPositionLess);
+
+    const HMONITOR currentMonitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+    const auto current = std::find_if(monitors.begin(), monitors.end(), [currentMonitor](const MonitorEntry& entry) {
+        return entry.handle == currentMonitor;
+    });
+    if (current == monitors.end()) {
+        if (error) {
+            *error = QString::fromLatin1("Unable to determine the active window's monitor.");
+        }
+        return false;
+    }
+
+    const size_t currentIndex = static_cast<size_t>(std::distance(monitors.begin(), current));
+    const MonitorEntry& targetMonitor = monitors[(currentIndex + 1) % monitors.size()];
+
+    if (IsIconic(window) || IsZoomed(window)) {
+        ShowWindow(window, SW_RESTORE);
+    }
+
+    RECT windowRect = {};
+    if (!GetWindowRect(window, &windowRect)) {
+        if (error) {
+            *error = QString::fromLatin1("GetWindowRect failed with Windows error %1.").arg(GetLastError());
+        }
+        return false;
+    }
+
+    const RECT targetArea = targetMonitor.workArea.right > targetMonitor.workArea.left &&
+                                    targetMonitor.workArea.bottom > targetMonitor.workArea.top
+                                ? targetMonitor.workArea
+                                : targetMonitor.monitor;
+    const LONG targetWidth = targetArea.right - targetArea.left;
+    const LONG targetHeight = targetArea.bottom - targetArea.top;
+    const LONG windowWidth = std::min(std::max<LONG>(windowRect.right - windowRect.left, 1), targetWidth);
+    const LONG windowHeight = std::min(std::max<LONG>(windowRect.bottom - windowRect.top, 1), targetHeight);
+    const LONG x = targetArea.left + (targetWidth - windowWidth) / 2;
+    const LONG y = targetArea.top + (targetHeight - windowHeight) / 2;
+
+    SetLastError(ERROR_SUCCESS);
+    if (!SetWindowPos(window, nullptr, x, y, windowWidth, windowHeight, SWP_NOACTIVATE | SWP_NOZORDER)) {
+        if (error) {
+            *error = QString::fromLatin1("SetWindowPos failed with Windows error %1.").arg(GetLastError());
+        }
+        return false;
+    }
+
+    if (MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST) != targetMonitor.handle) {
+        if (error) {
+            *error = QString::fromLatin1("The active window refused to move to the target monitor.");
+        }
+        return false;
+    }
+
+    if (!ShowWindowAsync(window, SW_MAXIMIZE)) {
+        ShowWindow(window, SW_MAXIMIZE);
+    }
+    return true;
+}
+
 } // namespace
 #endif
 
@@ -224,6 +355,17 @@ bool ActionRunner::run(const LaunchAction& action, QString* error) const {
             *error = "Action target is empty.";
         }
         return false;
+    }
+
+    if (BuiltInActions::isMoveActiveWindowToNextMonitor(resolvedAction.target)) {
+#ifdef Q_OS_WIN
+        return moveActiveWindowToNextMonitor(error);
+#else
+        if (error) {
+            *error = QString::fromLatin1("Moving the active window between monitors is supported on Windows only.");
+        }
+        return false;
+#endif
     }
 
 #ifdef Q_OS_WIN

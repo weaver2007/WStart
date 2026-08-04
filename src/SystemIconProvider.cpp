@@ -1,5 +1,6 @@
 #include "SystemIconProvider.h"
 
+#include "BuiltInActions.h"
 #include "PathUtils.h"
 
 #include <QDir>
@@ -240,6 +241,9 @@ QIcon loadSystemToolIcon(const HotkeyRule& rule) {
     }
 
     const LaunchAction action = PathUtils::toAbsoluteAction(rule.action);
+    if (BuiltInActions::isMoveActiveWindowToNextMonitor(action.target)) {
+        return loadFileIcon(knownWindowsFilePath(QString::fromLatin1("DisplaySwitch.exe")));
+    }
     const QString target = QFileInfo(action.target).fileName().toLower();
     const QString arguments = action.arguments.toLower();
     const QString title = rule.description.toLower();

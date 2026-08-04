@@ -1,6 +1,7 @@
 #include "../src/HotkeyConflictDetector.h"
 #include "../src/HotkeyState.h"
 #include "../src/HotkeyTypes.h"
+#include "../src/BuiltInActions.h"
 #include "../src/PathUtils.h"
 #include "../src/RuleStore.h"
 #include "../src/UpdateChecker.h"
@@ -34,6 +35,7 @@ private slots:
     void ruleStoreAtomicSaveRoundTrip();
     void corruptConfigurationIsBackedUp();
     void defaultRulesAreMigratedOnlyOnce();
+    void newBuiltInRuleIsMigratedOnlyOnce();
     void jsonRoundTrip();
     void sectionJsonRoundTrip();
     void ruleCanBeValidWithoutHotkey();
@@ -267,6 +269,45 @@ void CoreTests::defaultRulesAreMigratedOnlyOnce() {
     for (const HotkeyRule& rule : reloaded.rules) {
         QVERIFY(rule.id != removedId);
     }
+}
+
+void CoreTests::newBuiltInRuleIsMigratedOnlyOnce() {
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    RuleStore store(temporaryDirectory.filePath(QString::fromLatin1("rules.json")));
+
+    LauncherDocument document = store.loadDocument();
+    document.rules.erase(std::remove_if(document.rules.begin(), document.rules.end(),
+                                        [](const HotkeyRule& rule) {
+                                            return BuiltInActions::isMoveActiveWindowToNextMonitor(rule.action.target);
+                                        }),
+                         document.rules.end());
+    document.defaultRulesVersion = 1;
+
+    QString error;
+    QVERIFY2(store.saveDocument(document, &error), qPrintable(error));
+    LauncherDocument migrated = store.loadDocument(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+
+    int migratedCount = 0;
+    for (const HotkeyRule& rule : migrated.rules) {
+        if (BuiltInActions::isMoveActiveWindowToNextMonitor(rule.action.target)) {
+            ++migratedCount;
+            QVERIFY(!rule.hotkey.isValid());
+        }
+    }
+    QCOMPARE(migratedCount, 1);
+
+    QVERIFY2(store.saveDocument(migrated, &error), qPrintable(error));
+    const LauncherDocument reloaded = store.loadDocument(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    int reloadedCount = 0;
+    for (const HotkeyRule& rule : reloaded.rules) {
+        if (BuiltInActions::isMoveActiveWindowToNextMonitor(rule.action.target)) {
+            ++reloadedCount;
+        }
+    }
+    QCOMPARE(reloadedCount, 1);
 }
 
 void CoreTests::launchActionWindowOptionsRoundTrip() {
@@ -653,12 +694,18 @@ void CoreTests::defaultSystemToolsAreSeededWithoutHotkeys() {
                   << QString::fromUtf8("屏幕键盘") << QString::fromUtf8("声音") << QString::fromUtf8("音量")
                   << QString::fromUtf8("电源选项") << QString::fromUtf8("防火墙") << QString::fromUtf8("UAC")
                   << QString::fromUtf8("关闭计算机") << QString::fromUtf8("重启计算机")
-                  << QString::fromUtf8("关闭显示器");
+                  << QString::fromUtf8("关闭显示器") << QString::fromUtf8("活动窗口移至另一屏幕");
 
     for (const QString& name : expectedNames) {
         QVERIFY2(actualNames.contains(name), qPrintable(QString("Missing default system tool: %1").arg(name)));
     }
     QCOMPARE(rulesByName.value(QString::fromUtf8("截图")).action.target, QString("ms-screenclip:"));
+    QCOMPARE(rulesByName.value(QString::fromUtf8("活动窗口移至另一屏幕")).action.target,
+             BuiltInActions::moveActiveWindowToNextMonitorTarget());
+
+    const LaunchAction builtInAction = rulesByName.value(QString::fromUtf8("活动窗口移至另一屏幕")).action;
+    QCOMPARE(PathUtils::toPortableAction(builtInAction).target, builtInAction.target);
+    QCOMPARE(PathUtils::toAbsoluteAction(builtInAction).target, builtInAction.target);
 }
 
 void CoreTests::conflictWarnings() {

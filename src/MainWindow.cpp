@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AppIcon.h"
+#include "BuiltInActions.h"
 #include "CredentialStore.h"
 #include "PathUtils.h"
 #include "QtCompat.h"
@@ -3355,8 +3356,11 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
     QAction* addAction = nullptr;
     QAction* pasteAction = nullptr;
     QString ruleId;
+    bool builtInAction = false;
     if (item) {
         ruleId = item->data(RuleIdRole).toString();
+        const int ruleIndex = ruleIndexById(ruleId);
+        builtInAction = ruleIndex >= 0 && BuiltInActions::isBuiltInTarget(m_document.rules[ruleIndex].action.target);
         runAction = menu.addAction(uiText(UiText::Key::Run));
 #ifdef Q_OS_WIN
         runAsAdminAction = menu.addAction(uiText(UiText::Key::RunAsAdmin));
@@ -3373,6 +3377,21 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
         menu.addSeparator();
         editAction = menu.addAction(uiText(UiText::Key::Edit));
         deleteAction = menu.addAction(uiText(UiText::Key::Delete));
+        if (builtInAction) {
+            if (runAsAdminAction) {
+                runAsAdminAction->setEnabled(false);
+            }
+            if (explorerMenuAction) {
+                explorerMenuAction->setEnabled(false);
+            }
+            browseAction->setEnabled(false);
+            if (desktopShortcutAction) {
+                desktopShortcutAction->setEnabled(false);
+            }
+            if (startupAction) {
+                startupAction->setEnabled(false);
+            }
+        }
     } else {
         addAction = menu.addAction(uiText(UiText::Key::AddItem));
         pasteAction = menu.addAction(uiText(UiText::Key::Paste));
@@ -4049,6 +4068,10 @@ void MainWindow::runRuleAsAdmin(const QString& ruleId) {
 
 #ifdef Q_OS_WIN
     const HotkeyRule& rule = m_document.rules[index];
+    if (BuiltInActions::isBuiltInTarget(rule.action.target)) {
+        runRule(ruleId);
+        return;
+    }
     if (!confirmDangerousRule(rule)) {
         return;
     }
@@ -4198,6 +4221,9 @@ QIcon MainWindow::iconForRule(const HotkeyRule& rule) const {
     const LaunchAction action = PathUtils::toAbsoluteAction(rule.action);
     switch (rule.category) {
     case LauncherCategory::Program: {
+        if (BuiltInActions::isMoveActiveWindowToNextMonitor(action.target)) {
+            return themedIcon("display");
+        }
 #ifdef Q_OS_WIN
         const QIcon systemIcon = SystemIconProvider::systemToolIcon(rule);
         if (!systemIcon.isNull()) {
