@@ -256,21 +256,64 @@ bool monitorPositionLess(const MonitorEntry& left, const MonitorEntry& right) {
     return left.monitor.bottom < right.monitor.bottom;
 }
 
-bool moveActiveWindowToNextMonitor(QString* error) {
-    HWND window = GetForegroundWindow();
+HWND topLevelWindow(HWND window) {
     if (!window || !IsWindow(window)) {
-        if (error) {
-            *error = QString::fromLatin1("No active window is available.");
-        }
+        return nullptr;
+    }
+    const HWND root = GetAncestor(window, GA_ROOT);
+    return root ? root : window;
+}
+
+bool isExternalApplicationWindow(HWND window, bool requireInteractiveWindow) {
+    window = topLevelWindow(window);
+    if (!window || window == GetDesktopWindow() || window == GetShellWindow() || !IsWindowVisible(window)) {
         return false;
     }
 
-    if (HWND root = GetAncestor(window, GA_ROOT)) {
-        window = root;
+    DWORD processId = 0;
+    GetWindowThreadProcessId(window, &processId);
+    if (processId == 0 || processId == GetCurrentProcessId()) {
+        return false;
     }
-    if (window == GetDesktopWindow() || window == GetShellWindow()) {
+
+    if (requireInteractiveWindow) {
+        const LONG_PTR extendedStyle = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        if ((extendedStyle & (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)) != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+HWND findExternalWindowBehind(HWND foreground, bool requireInteractiveWindow) {
+    HWND candidate = foreground ? GetWindow(foreground, GW_HWNDNEXT) : GetTopWindow(nullptr);
+    while (candidate) {
+        if (isExternalApplicationWindow(candidate, requireInteractiveWindow)) {
+            return topLevelWindow(candidate);
+        }
+        candidate = GetWindow(candidate, GW_HWNDNEXT);
+    }
+    return nullptr;
+}
+
+HWND windowToMove() {
+    const HWND foreground = topLevelWindow(GetForegroundWindow());
+    if (isExternalApplicationWindow(foreground, false)) {
+        return foreground;
+    }
+
+    // Clicking the launcher makes WStart the foreground process. In that case,
+    // use the nearest normal application behind it in the top-level Z order.
+    // Never move a WStart-owned window: its fixed-width/auto-hide constraints
+    // are incompatible with native maximization.
+    return findExternalWindowBehind(foreground, true);
+}
+
+bool moveActiveWindowToNextMonitor(QString* error) {
+    HWND window = windowToMove();
+    if (!window) {
         if (error) {
-            *error = QString::fromLatin1("The desktop cannot be moved to another monitor.");
+            *error = QString::fromLatin1("No external application window is available.");
         }
         return false;
     }

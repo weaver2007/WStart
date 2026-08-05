@@ -2441,6 +2441,14 @@ void MainWindow::onHotkeyTriggered(const HotkeyRule& rule) {
         return;
     }
 
+    if (BuiltInActions::isMoveActiveWindowToNextMonitor(rule.action.target) && (isMaximized() || isFullScreen())) {
+        // Older builds could accidentally maximize WStart itself when this
+        // action was clicked. Normalize the launcher before running the fixed
+        // action so Qt's visual and mouse hit-test geometry agree again.
+        showNormal();
+        applyFixedLauncherWidth();
+    }
+
     showHotkeyVisualFeedback();
 
     QString error;
