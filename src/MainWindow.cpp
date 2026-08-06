@@ -1453,27 +1453,29 @@ void MainWindow::buildSettingsMenu() {
     if (m_settingsMenu) {
         m_settingsMenu->deleteLater();
     }
+    m_appearanceMenu = nullptr;
     m_languageMenu = nullptr;
     m_themeMenu = nullptr;
     m_pathStorageMenu = nullptr;
     m_settingsMenu = new QMenu(this);
+    m_settingsMenu->setObjectName(QString::fromLatin1("settingsMenu"));
+    m_settingsMenu->setMinimumWidth(QtCompat::scaleInt(220));
+    m_settingsMenu->setSeparatorsCollapsible(true);
+
     m_hotkeysEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeysEnabled));
     m_hotkeysEnabledAction->setCheckable(true);
     connect(m_hotkeysEnabledAction, SIGNAL(toggled(bool)), this, SLOT(applyHotkeysEnabled(bool)));
-    m_updatesEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::UpdatesEnabled));
-    m_updatesEnabledAction->setCheckable(true);
-    connect(m_updatesEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setUpdatesEnabled(bool)));
     m_startupEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::StartupEnabled));
     m_startupEnabledAction->setCheckable(true);
     connect(m_startupEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setStartupEnabled(bool)));
-    m_githubTokenAction = m_settingsMenu->addAction(uiText(UiText::Key::GithubToken));
-    connect(m_githubTokenAction, SIGNAL(triggered()), this, SLOT(configureGithubToken()));
-    m_checkUpdatesAction = m_settingsMenu->addAction(uiText(UiText::Key::CheckForUpdates));
-    connect(m_checkUpdatesAction, SIGNAL(triggered()), this, SLOT(checkForUpdates()));
-    m_aboutAction = m_settingsMenu->addAction(uiText(UiText::Key::About));
-    connect(m_aboutAction, SIGNAL(triggered()), this, SLOT(showAboutDialog()));
-    m_hotkeyListAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeyList));
-    connect(m_hotkeyListAction, SIGNAL(triggered()), this, SLOT(showHotkeyListDialog()));
+    m_updatesEnabledAction = m_settingsMenu->addAction(uiText(UiText::Key::UpdatesEnabled));
+    m_updatesEnabledAction->setCheckable(true);
+    connect(m_updatesEnabledAction, SIGNAL(toggled(bool)), this, SLOT(setUpdatesEnabled(bool)));
+
+    m_settingsMenu->addSeparator();
+
+    m_appearanceMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Appearance));
+    m_appearanceMenu->setMinimumWidth(QtCompat::scaleInt(190));
 
     m_languageMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Language));
     auto* languageGroup = new QActionGroup(m_languageMenu);
@@ -1489,7 +1491,7 @@ void MainWindow::buildSettingsMenu() {
     connect(m_chineseAction, SIGNAL(triggered()), this, SLOT(setLanguageChinese()));
     connect(m_englishAction, SIGNAL(triggered()), this, SLOT(setLanguageEnglish()));
 
-    m_themeMenu = m_settingsMenu->addMenu(uiText(UiText::Key::Theme));
+    m_themeMenu = m_appearanceMenu->addMenu(uiText(UiText::Key::Theme));
     auto* themeGroup = new QActionGroup(m_themeMenu);
     themeGroup->setExclusive(true);
     m_themeSystemAction = m_themeMenu->addAction(uiText(UiText::Key::ThemeSystem));
@@ -1505,6 +1507,14 @@ void MainWindow::buildSettingsMenu() {
     connect(m_themeLightAction, SIGNAL(triggered()), this, SLOT(setThemeLight()));
     connect(m_themeDarkAction, SIGNAL(triggered()), this, SLOT(setThemeDark()));
 
+    m_appearanceMenu->addSeparator();
+    m_itemAppearanceAction = m_appearanceMenu->addAction(uiText(UiText::Key::ItemAppearance));
+    connect(m_itemAppearanceAction, SIGNAL(triggered()), this, SLOT(showItemAppearanceDialog()));
+    m_sectionAppearanceAction = m_appearanceMenu->addAction(uiText(UiText::Key::SectionAppearance));
+    connect(m_sectionAppearanceAction, SIGNAL(triggered()), this, SLOT(showSectionAppearanceDialog()));
+    m_categoryAppearanceAction = m_appearanceMenu->addAction(uiText(UiText::Key::CategoryAppearance));
+    connect(m_categoryAppearanceAction, SIGNAL(triggered()), this, SLOT(showCategoryAppearanceDialog()));
+
     m_pathStorageMenu = m_settingsMenu->addMenu(uiText(UiText::Key::PathStorage));
     auto* pathStorageGroup = new QActionGroup(m_pathStorageMenu);
     pathStorageGroup->setExclusive(true);
@@ -1519,12 +1529,22 @@ void MainWindow::buildSettingsMenu() {
     connect(m_pathRelativeAction, SIGNAL(triggered()), this, SLOT(setPathStorageRelative()));
     connect(m_pathAbsoluteAction, SIGNAL(triggered()), this, SLOT(setPathStorageAbsolute()));
 
-    m_itemAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::ItemAppearance));
-    connect(m_itemAppearanceAction, SIGNAL(triggered()), this, SLOT(showItemAppearanceDialog()));
-    m_sectionAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::SectionAppearance));
-    connect(m_sectionAppearanceAction, SIGNAL(triggered()), this, SLOT(showSectionAppearanceDialog()));
-    m_categoryAppearanceAction = m_settingsMenu->addAction(uiText(UiText::Key::CategoryAppearance));
-    connect(m_categoryAppearanceAction, SIGNAL(triggered()), this, SLOT(showCategoryAppearanceDialog()));
+    m_settingsMenu->addSeparator();
+
+    m_hotkeyListAction = m_settingsMenu->addAction(uiText(UiText::Key::HotkeyList));
+    connect(m_hotkeyListAction, SIGNAL(triggered()), this, SLOT(showHotkeyListDialog()));
+    m_checkUpdatesAction = m_settingsMenu->addAction(uiText(UiText::Key::CheckForUpdates));
+    connect(m_checkUpdatesAction, SIGNAL(triggered()), this, SLOT(checkForUpdates()));
+    m_githubTokenAction = m_settingsMenu->addAction(uiText(UiText::Key::GithubToken));
+    connect(m_githubTokenAction, SIGNAL(triggered()), this, SLOT(configureGithubToken()));
+
+    m_settingsMenu->addSeparator();
+
+    m_aboutAction = m_settingsMenu->addAction(uiText(UiText::Key::About));
+    connect(m_aboutAction, SIGNAL(triggered()), this, SLOT(showAboutDialog()));
+    m_settingsMenu->addSeparator();
+    m_exitAction = m_settingsMenu->addAction(uiText(UiText::Key::Exit));
+    connect(m_exitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
 
     retranslateUi();
 }
@@ -1570,6 +1590,9 @@ void MainWindow::retranslateUi() {
     if (m_hotkeyListAction) {
         m_hotkeyListAction->setText(uiText(UiText::Key::HotkeyList));
     }
+    if (m_appearanceMenu) {
+        m_appearanceMenu->setTitle(uiText(UiText::Key::Appearance));
+    }
     if (m_languageMenu) {
         m_languageMenu->setTitle(uiText(UiText::Key::Language));
     }
@@ -1587,6 +1610,9 @@ void MainWindow::retranslateUi() {
     }
     if (m_categoryAppearanceAction) {
         m_categoryAppearanceAction->setText(uiText(UiText::Key::CategoryAppearance));
+    }
+    if (m_exitAction) {
+        m_exitAction->setText(uiText(UiText::Key::Exit));
     }
     if (m_chineseAction) {
         const QSignalBlocker blocker(m_chineseAction);

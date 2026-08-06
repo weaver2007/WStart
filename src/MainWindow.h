@@ -230,6 +230,7 @@ private:
     QToolButton* m_minButton = nullptr;
     QToolButton* m_closeButton = nullptr;
     QMenu* m_settingsMenu = nullptr;
+    QMenu* m_appearanceMenu = nullptr;
     QMenu* m_languageMenu = nullptr;
     QMenu* m_themeMenu = nullptr;
     QMenu* m_pathStorageMenu = nullptr;
@@ -239,6 +240,7 @@ private:
     QAction* m_githubTokenAction = nullptr;
     QAction* m_checkUpdatesAction = nullptr;
     QAction* m_aboutAction = nullptr;
+    QAction* m_exitAction = nullptr;
     QAction* m_chineseAction = nullptr;
     QAction* m_englishAction = nullptr;
     QAction* m_themeSystemAction = nullptr;

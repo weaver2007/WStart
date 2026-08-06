@@ -38,6 +38,7 @@ enum class Key {
     GithubTokenSaveFailed,
     OpenDownloadPage,
     Language,
+    Appearance,
     Theme,
     ThemeSystem,
     ThemeLight,

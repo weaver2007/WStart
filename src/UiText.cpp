@@ -86,6 +86,8 @@ QString text(const QString& language, Key key) {
         return en ? "Open download page" : QString::fromUtf8("打开下载页面");
     case Key::Language:
         return en ? "Language" : QString::fromUtf8("语言");
+    case Key::Appearance:
+        return en ? "Appearance" : QString::fromUtf8("外观");
     case Key::Theme:
         return en ? "Theme" : QString::fromUtf8("皮肤");
     case Key::ThemeSystem:
