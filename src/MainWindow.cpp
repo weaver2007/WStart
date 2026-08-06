@@ -1944,7 +1944,13 @@ void MainWindow::runClickedRule(QListWidgetItem* item) {
     if (!item) {
         return;
     }
-    runRule(item->data(RuleIdRole).toString());
+    QPointer<QListWidget> list = item->listWidget();
+    const QString ruleId = item->data(RuleIdRole).toString();
+    runRule(ruleId);
+    if (list) {
+        list->clearSelection();
+        list->setCurrentRow(-1);
+    }
 }
 
 void MainWindow::clearDragLaunchSuppression() {
@@ -2190,7 +2196,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
         if (QListWidget* list = ancestorListWidget(widget)) {
             const QPoint viewportPos = list->viewport()->mapFromGlobal(eventGlobalPosition(mouseEvent));
             if (QListWidgetItem* item = list->itemAt(viewportPos)) {
-                runRule(item->data(RuleIdRole).toString());
+                runClickedRule(item);
                 return true;
             }
         }
