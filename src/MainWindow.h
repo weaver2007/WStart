@@ -177,7 +177,7 @@ private:
     void runRuleAsAdmin(const QString& ruleId);
     bool confirmDangerousRule(const HotkeyRule& rule);
     void showExplorerContextMenuForRule(const QString& ruleId, const QPoint& globalPos);
-    void browseRuleTarget(const QString& ruleId);
+    void openRuleContainingFolder(const QString& ruleId);
     void createDesktopShortcutForRule(const QString& ruleId);
     void setRuleStartupShortcut(const QString& ruleId);
     void resetPendingContextMenu();

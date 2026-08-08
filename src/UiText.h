@@ -89,7 +89,7 @@ enum class Key {
     Run,
     RunAsAdmin,
     ExplorerContextMenu,
-    BrowseTarget,
+    OpenContainingFolder,
     CreateDesktopShortcut,
     SetStartup,
     Edit,

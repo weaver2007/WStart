@@ -188,8 +188,8 @@ QString text(const QString& language, Key key) {
         return en ? "Run as administrator" : QString::fromUtf8("以管理员权限运行");
     case Key::ExplorerContextMenu:
         return en ? "Explorer context menu" : QString::fromUtf8("显示资源管理器菜单");
-    case Key::BrowseTarget:
-        return en ? "Browse" : QString::fromUtf8("浏览");
+    case Key::OpenContainingFolder:
+        return en ? "Open containing folder" : QString::fromUtf8("打开所在目录");
     case Key::CreateDesktopShortcut:
         return en ? "Desktop shortcut" : QString::fromUtf8("桌面快捷方式");
     case Key::SetStartup:

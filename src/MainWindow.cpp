@@ -3386,7 +3386,7 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
     QAction* runAction = nullptr;
     QAction* runAsAdminAction = nullptr;
     QAction* explorerMenuAction = nullptr;
-    QAction* browseAction = nullptr;
+    QAction* openContainingFolderAction = nullptr;
     QAction* desktopShortcutAction = nullptr;
     QAction* startupAction = nullptr;
     QAction* cutAction = nullptr;
@@ -3406,7 +3406,10 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
         runAsAdminAction = menu.addAction(uiText(UiText::Key::RunAsAdmin));
         explorerMenuAction = menu.addAction(uiText(UiText::Key::ExplorerContextMenu));
 #endif
-        browseAction = menu.addAction(uiText(UiText::Key::BrowseTarget));
+        openContainingFolderAction = menu.addAction(uiText(UiText::Key::OpenContainingFolder));
+        const QString absoluteTarget =
+            ruleIndex >= 0 ? PathUtils::toAbsolutePath(m_document.rules[ruleIndex].action.target) : QString();
+        openContainingFolderAction->setEnabled(ruleIndex >= 0 && !builtInAction && QFileInfo(absoluteTarget).exists());
 #ifdef Q_OS_WIN
         desktopShortcutAction = menu.addAction(uiText(UiText::Key::CreateDesktopShortcut));
         startupAction = menu.addAction(uiText(UiText::Key::SetStartup));
@@ -3424,7 +3427,7 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
             if (explorerMenuAction) {
                 explorerMenuAction->setEnabled(false);
             }
-            browseAction->setEnabled(false);
+            openContainingFolderAction->setEnabled(false);
             if (desktopShortcutAction) {
                 desktopShortcutAction->setEnabled(false);
             }
@@ -3448,8 +3451,8 @@ void MainWindow::showListMenu(const QString& sectionId, QListWidget* list, const
         runRuleAsAdmin(ruleId);
     } else if (selected == explorerMenuAction) {
         showExplorerContextMenuForRule(ruleId, globalPos);
-    } else if (selected == browseAction) {
-        browseRuleTarget(ruleId);
+    } else if (selected == openContainingFolderAction) {
+        openRuleContainingFolder(ruleId);
     } else if (selected == desktopShortcutAction) {
         createDesktopShortcutForRule(ruleId);
     } else if (selected == startupAction) {
@@ -4150,7 +4153,7 @@ void MainWindow::showExplorerContextMenuForRule(const QString& ruleId, const QPo
 #endif
 }
 
-void MainWindow::browseRuleTarget(const QString& ruleId) {
+void MainWindow::openRuleContainingFolder(const QString& ruleId) {
     const int index = ruleIndexById(ruleId);
     if (index < 0) {
         return;
