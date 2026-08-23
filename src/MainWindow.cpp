@@ -3886,7 +3886,7 @@ QString MainWindow::ruleIdBeforeDrop(QListWidget* list, const QPoint& viewportPo
     QListWidgetItem* item = list->itemAt(viewportPos);
     if (!item) {
         int nearestRow = -1;
-        int nearestDistance = std::numeric_limits<int>::max();
+        int nearestDistance = (std::numeric_limits<int>::max)();
         for (int i = 0; i < list->count(); ++i) {
             QListWidgetItem* candidate = list->item(i);
             if (!candidate || candidate->data(RuleIdRole).toString() == draggedRuleId) {
@@ -3896,7 +3896,8 @@ QString MainWindow::ruleIdBeforeDrop(QListWidget* list, const QPoint& viewportPo
             if (!rect.isValid()) {
                 continue;
             }
-            const int distance = qAbs(viewportPos.y() - rect.center().y()) +`n                                 qAbs(viewportPos.x() - rect.center().x());
+            const int distance = qAbs(viewportPos.y() - rect.center().y()) +
+                                 qAbs(viewportPos.x() - rect.center().x());
             if (distance < nearestDistance) {
                 nearestDistance = distance;
                 nearestRow = i;
@@ -3911,7 +3912,8 @@ QString MainWindow::ruleIdBeforeDrop(QListWidget* list, const QPoint& viewportPo
     int row = list->row(item);
     const QRect itemRect = list->visualItemRect(item);
     const bool sameVisualRow = viewportPos.y() >= itemRect.top() && viewportPos.y() <= itemRect.bottom();
-    const bool afterItem = sameVisualRow ? viewportPos.x() > itemRect.center().x()`n                                         : viewportPos.y() > itemRect.center().y();
+    const bool afterItem = sameVisualRow ? viewportPos.x() > itemRect.center().x()
+                                         : viewportPos.y() > itemRect.center().y();
     if (afterItem) {
         ++row;
     }
