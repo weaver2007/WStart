@@ -74,6 +74,7 @@
 #include <QUrl>
 #include <QUuid>
 #include <QVBoxLayout>
+#include <limits>
 
 #include <algorithm>
 #include <memory>
@@ -2712,7 +2713,7 @@ void MainWindow::rebuildSections() {
             } else {
                 auto* list = new QListWidget(body);
                 list->setObjectName("ruleGrid");
-                list->setMovement(QListView::Static);
+                list->setMovement(QListView::Snap);
                 list->setResizeMode(QListView::Adjust);
                 list->setSelectionMode(QAbstractItemView::SingleSelection);
                 list->setSpacing(0);
@@ -3884,13 +3885,33 @@ QString MainWindow::ruleIdBeforeDrop(QListWidget* list, const QPoint& viewportPo
 
     QListWidgetItem* item = list->itemAt(viewportPos);
     if (!item) {
-        return QString();
+        int nearestRow = -1;
+        int nearestDistance = std::numeric_limits<int>::max();
+        for (int i = 0; i < list->count(); ++i) {
+            QListWidgetItem* candidate = list->item(i);
+            if (!candidate || candidate->data(RuleIdRole).toString() == draggedRuleId) {
+                continue;
+            }
+            const QRect rect = list->visualItemRect(candidate);
+            if (!rect.isValid()) {
+                continue;
+            }
+            const int distance = qAbs(viewportPos.y() - rect.center().y()) +`n                                 qAbs(viewportPos.x() - rect.center().x());
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestRow = i;
+            }
+        }
+        if (nearestRow < 0) {
+            return QString();
+        }
+        item = list->item(nearestRow);
     }
 
     int row = list->row(item);
     const QRect itemRect = list->visualItemRect(item);
-    const bool afterItem = viewportPos.y() > itemRect.center().y() ||
-                           (viewportPos.y() == itemRect.center().y() && viewportPos.x() > itemRect.center().x());
+    const bool sameVisualRow = viewportPos.y() >= itemRect.top() && viewportPos.y() <= itemRect.bottom();
+    const bool afterItem = sameVisualRow ? viewportPos.x() > itemRect.center().x()`n                                         : viewportPos.y() > itemRect.center().y();
     if (afterItem) {
         ++row;
     }
